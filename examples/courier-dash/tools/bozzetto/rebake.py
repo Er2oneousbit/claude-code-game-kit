@@ -29,6 +29,7 @@
 #           (render_sprites.py) never needed the floor: the waiver is the honest way through for them too.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the policy text for --rebake auto (#203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --png and each map's format in the record and the evidence line (#303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -124,7 +125,7 @@ def rebake_line(rb):
     check = rb.get("check") or {}
     lit = rb.get("check_lit") or {}
     bake = rb.get("bake") or {}
-    maps = ", ".join(f"{m['source']} ({m['kind']})" for m in rb.get("maps") or []) or "no textures"
+    maps = ", ".join(f"{m['source']} ({m['kind']}{map_format_text(m)})" for m in rb.get("maps") or []) or "no textures"
     return (f"UV coverage {rb['uv_coverage_before']:.0%} ({rb['uv_islands_before']} islands) -> "
             f"{rb['uv_coverage_after']:.0%} ({rb['uv_islands_after']} islands), texture {rb['texture_px']} px, "
             f"{maps}; Smart UV Project {bake.get('uv_angle_deg', '?')} degrees, island gap "
@@ -132,6 +133,14 @@ def rebake_line(rb):
             f"samples, normals tangent space; check: mean {check.get('mean_levels')} levels flat, "
             f"{lit.get('mean_levels')} lit (max {check.get('max_levels')}) over {check.get('views')} views; "
             f"{rb.get('seconds')} s")
+
+
+def map_format_text(m):
+    """', JPEG 90' / ', PNG' for a map entry of a rebake report; '' for a report from before #303 (no format)."""
+    fmt = m.get("format")
+    if not fmt:
+        return ""
+    return f", {fmt}" + (f" {m['quality']}" if m.get("quality") else "")
 
 
 # ---- the subcommand ------------------------------------------------------------------------------------------
@@ -208,7 +217,8 @@ def cmd_rebake(args):
         if stale.exists():
             stale.unlink()                     # an older run's result never stands in for this one
     t0 = time.monotonic()
-    argv = [base, "--out", rebaked, "--json", report, "--overwrite"] + (["--texture", texture] if texture else [])
+    argv = ([base, "--out", rebaked, "--json", report, "--overwrite"] + (["--texture", texture] if texture else [])
+            + (["--png"] if args.png else []))
     rc, _ = bz.run_bpy(blender, SCRIPT, argv + (["--debug"] if bz.DEBUG else []), "rebake")
     rb = json.loads(report.read_text(encoding="utf-8")) if report.is_file() else {}
     if rc == 2:
@@ -336,6 +346,9 @@ def add_parser(sub, common):
                    help="budget class to validate against (default: the make record's, else any)")
     p.add_argument("--accept-uv", action="store_true",
                    help="ship a model that fails the UV coverage floor alone; the waiver goes on its asset log row")
+    p.add_argument("--png", action="store_true",
+                   help="every baked map as PNG (default: a colour map whose source was JPEG, as Tripo's are, stays "
+                        "JPEG; normal and data maps are always PNG)")
     p.add_argument("--out", help="models folder (default: the engine's, as for make)")
     p.add_argument("--project", default=".", help="the game's root folder (default: the current folder)")
     p.add_argument("--no-replace", action="store_true",

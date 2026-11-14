@@ -16,8 +16,13 @@
 #           from the new texture, the normal map is still flat and the metallic-roughness constants survive.
 #           #203: the local route's --rebake auto hands cleanup.py the class floor (--rebake-under) and rebakes only
 #           under it; part 2 runs it on the fixture (rebaked) and on the rebaked model (kept as it is).
+#           #303: the fixture again with a speckled colour map and the metallic-roughness map packed as JPEG (as
+#           Tripo's come; its normal map is PNG): the rebaked colour map is JPEG at prep_export.JPEG_QUALITY, the
+#           normal and metallic-roughness maps PNG, the file smaller than with --png, and the colour map still JPEG
+#           in prep_export's main file and LOD; the PNG fixture stays PNG.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG colour map stays JPEG, --png (#303)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -136,6 +141,18 @@ class RouteDefaults(TripoBase):
         self.assertFalse(self.record()["rebake"])
         self.assertNotIn("UV rebaked", self.row("assets/models/prop_crate.glb"))
 
+    def test_rebake_png_reaches_cleanup(self):
+        """#303: make --rebake-png hands cleanup.py --rebake-png (every baked map PNG); without it nothing extra."""
+        rc, out = self.make("--image", "art_src/crate.png")
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("--rebake-png", self.cleanup_argv())
+        rc, out = self.make("--image", "art_src/crate.png", "--rebake-png", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("--rebake-png", self.cleanup_argv())
+        self.assertTrue(cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake", "--rebake-png"]).rebake_png)
+        with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
+            cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake-png"])   # nothing to bake without --rebake
+
     def test_texture_override_reaches_the_rebake(self):
         rc, out = self.make("--image", "art_src/crate.png", "--texture", "512")
         self.assertEqual(rc, 0, out)
@@ -231,6 +248,14 @@ class Waiver(LocalBase):
         self.assertEqual(rebake.waiver_text(v, "npc", 0.55), "UV coverage waived: 54.6% under the npc floor 55% "
                                                                "(--accept-uv)")
 
+    def test_the_evidence_line_names_each_maps_format(self):
+        """#303: a map's format and JPEG quality in the rebake line; a record from before #303 reads as it did."""
+        old = rebake.rebake_line(REBAKE_REPORT)
+        self.assertIn("Color (transfer), Normal (normal);", old)
+        new = dict(REBAKE_REPORT, maps=[dict(REBAKE_REPORT["maps"][0], format="JPEG", quality=90),
+                                        dict(REBAKE_REPORT["maps"][1], format="PNG", quality=None)])
+        self.assertIn("Color (transfer, JPEG 90), Normal (normal, PNG);", rebake.rebake_line(new))
+
     def test_waive_uv_is_a_pure_function(self):
         v = {"failures": [UV_FAIL]}
         self.assertTrue(rebake.waive_uv(v))
@@ -282,6 +307,11 @@ class Subcommand(LocalBase):
         self.assertIn("a re-run replaces the bake", out)
         self.assertEqual(Path(self.fake.calls[0][1][0]).name, "before_rebake.glb")
         self.assertEqual(self.row("assets/models/prop_crate.glb").count("rebaked: "), 1)
+        self.assertNotIn("--png", self.fake.calls[0][1])
+        self.fake.calls.clear()
+        rc, out = self.run_tool("rebake", "prop_crate", "--no-preview", "--png", url=False)
+        self.assertEqual(rc, 0, out)
+        self.assertIn("--png", self.fake.calls[0][1], "#303: --png reaches rebake_uvs.py")
         self.no_local_paths()
 
     def test_no_replace_and_a_failed_budget_leave_the_model_alone(self):
@@ -363,7 +393,7 @@ BUILD = textwrap.dedent('''
         axis = max(range(3), key=lambda i: abs(n[i]))
         return ("+" if n[axis] > 0 else "-") + "XYZ"[axis]
 
-    def image(name, px, data, fill):
+    def image(name, px, data, fill, jpeg=False):
         img = bpy.data.images.new(name, px, px, alpha=False, is_data=data)
         img.colorspace_settings.name = "Non-Color" if data else "sRGB"
         buf = [0.0] * (px * px * 4)
@@ -371,10 +401,21 @@ BUILD = textwrap.dedent('''
             c = fill(i % px, i // px)
             buf[4 * i:4 * i + 4] = [c[0], c[1], c[2], 1.0]
         img.pixels.foreach_set(buf)
+        if jpeg:   # saved as a .jpg and loaded back: JPEG bytes packed, as the glTF importer leaves a Tripo map
+            path = out_dir + "/" + name + ".jpg"
+            img.filepath_raw = path
+            img.file_format = "JPEG"
+            img.save(quality=90)
+            img = bpy.data.images.load(path)
+            img.colorspace_settings.name = "Non-Color" if data else "sRGB"
         img.pack()
         return img
 
-    def build(n_cubes, path):
+    def speckle(x, y):
+        # a fixed pseudo-random +-0.04 per texel: detail a photo-like colour map has, which PNG stores poorly
+        return (((x * 73856093) ^ (y * 19349663)) % 1009) / 1009 * 0.08 - 0.04
+
+    def build(n_cubes, path, jpeg=False):
         bpy.ops.wm.read_factory_settings(use_empty=True)
         objs = []
         for k in range(n_cubes):
@@ -394,8 +435,12 @@ BUILD = textwrap.dedent('''
             bm.to_mesh(obj.data); bm.free()
             objs.append(obj)
         px = 256
-        base = image("fixture_base", px, False, lambda x, y: COLOURS[(x // (px // 2), y // (px // 2))])
-        orm = image("fixture_orm", px, True, lambda x, y: (1.0, 0.6, 0.2))
+        if jpeg:
+            base = image("fixture_base", px, False, lambda x, y: tuple(c + speckle(x, y) for c in
+                                                                         COLOURS[(x // (px // 2), y // (px // 2))]), True)
+        else:
+            base = image("fixture_base", px, False, lambda x, y: COLOURS[(x // (px // 2), y // (px // 2))])
+        orm = image("fixture_orm", px, True, lambda x, y: (1.0, 0.6, 0.2), jpeg)
         nrm = image("fixture_normal", px, True, lambda x, y: (0.5, 0.5, 1.0))
         mat = bpy.data.materials.new("fixture_mat"); mat.use_nodes = True
         nodes, links = mat.node_tree.nodes, mat.node_tree.links
@@ -413,6 +458,7 @@ BUILD = textwrap.dedent('''
 
     build(1, out_dir + "/fixture.glb")
     build(2, out_dir + "/two.glb")
+    build(1, out_dir + "/fixture_jpeg.glb", jpeg=True)
 ''')
 
 # the probe: every face's colour from the base image at its UV centre against the quadrant its direction names;
@@ -465,6 +511,23 @@ PROBE = textwrap.dedent('''
 BLENDER = tb.part2_blender()
 
 
+def map_mimes(path):
+    """{"base", "orm", "normal": mime type} of a .glb's first material, from its JSON; the bytes must agree (a
+    mismatch reads as "?")."""
+    doc, binary = cl.read_glb(Path(path).read_bytes())
+    mat = doc["materials"][0]
+    refs = {"base": mat["pbrMetallicRoughness"].get("baseColorTexture"),
+            "orm": mat["pbrMetallicRoughness"].get("metallicRoughnessTexture"), "normal": mat.get("normalTexture")}
+    out = {}
+    for key, ref in refs.items():
+        im = doc["images"][doc["textures"][ref["index"]]["source"]]
+        view = doc["bufferViews"][im["bufferView"]]
+        head = binary[view.get("byteOffset", 0):view.get("byteOffset", 0) + 4]
+        kind = "image/png" if head == b"\x89PNG" else "image/jpeg" if head[:3] == b"\xff\xd8\xff" else None
+        out[key] = im.get("mimeType") if im.get("mimeType") == kind else "?"
+    return out
+
+
 def blender_run(script, argv, timeout=900):
     kind, path = BLENDER
     cmd = ([path, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(script), "--"] if kind == "blender"
@@ -481,8 +544,9 @@ class RealRebake(unittest.TestCase):
         (cls.d / "build.py").write_text(BUILD + END, encoding="utf-8")
         (cls.d / "probe.py").write_text(PROBE + END, encoding="utf-8")
         p = blender_run(cls.d / "build.py", [cls.d, str(bz.TOOLS / "blender")])
-        assert p.returncode == 0 and p.stdout.count("BUILT") == 2, p.stdout[-2000:] + p.stderr[-2000:]
+        assert p.returncode == 0 and p.stdout.count("BUILT") == 3, p.stdout[-2000:] + p.stderr[-2000:]
         cls.fixture = cls.d / "fixture.glb"
+        cls.fixture_jpeg = cls.d / "fixture_jpeg.glb"
 
     @classmethod
     def tearDownClass(cls):
@@ -578,6 +642,9 @@ class RealRebake(unittest.TestCase):
         self.assertEqual(rep["texture_px"], 256, "the largest source image, when --texture is not given")
         self.assertGreaterEqual(rep["uv_coverage_after"], 0.5)
         self.assertLessEqual(self.probe(out)["bad"], 2)
+        self.assertEqual(map_mimes(out), {"base": "image/png", "orm": "image/png", "normal": "image/png"},
+                         "#303: PNG sources stay PNG")
+        self.assertEqual({m["format"] for m in rep["maps"]}, {"PNG"})
         rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "rebake_uvs.py", [self.fixture, "--out", out], "rebake")
         self.assertEqual(rc, 2, "an existing --out needs --overwrite")
         rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "rebake_uvs.py",
@@ -587,6 +654,42 @@ class RealRebake(unittest.TestCase):
         rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "rebake_uvs.py",
                               [self.d / "two.glb", "--out", self.d / "two_out.glb", "--join", "--no-check"], "rebake")
         self.assertEqual(rc, 0, text)
+
+    def test_a_jpeg_colour_map_stays_jpeg(self):
+        """#303: Tripo's colour maps arrive as JPEG, and the rebake wrote them back as PNG (a character's main file 5.0
+        to 11.5 MB). The colour map stays JPEG at prep_export.JPEG_QUALITY; the normal and metallic-roughness maps
+        are PNG whatever their source (JPEG blocks dent normals); --png writes PNG; prep_export keeps the JPEG in the
+        main file and its LOD."""
+        tool = bz.TOOLS / "blender" / "rebake_uvs.py"
+        jpg, png = self.d / "rebaked_jpeg.glb", self.d / "rebaked_png.glb"
+        rc, text = bz.run_bpy(BLENDER, tool, [self.fixture_jpeg, "--out", jpg, "--texture", "512", "--json",
+                                              self.d / "rebaked_jpeg.json"], "rebake")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(map_mimes(self.fixture_jpeg)["base"], "image/jpeg", "the fixture is what Tripo ships")
+        self.assertEqual(map_mimes(jpg), {"base": "image/jpeg", "orm": "image/png", "normal": "image/png"})
+        rep = json.loads((self.d / "rebaked_jpeg.json").read_text(encoding="utf-8"))
+        fmt = {m["source"]: (m["format"], m["quality"]) for m in rep["maps"]}
+        self.assertEqual(fmt, {"fixture_base": ("JPEG", 90), "fixture_orm": ("PNG", None),
+                               "fixture_normal": ("PNG", None)})
+        self.assertEqual(rep["bake"]["jpeg_quality"], 90)
+        self.assertIn("JPEG 90", rebake.rebake_line(rep), "the evidence line names the format")
+        self.assertLessEqual(rep["check"]["mean_levels"], 4.0, "the JPEG colour map still matches the original")
+        self.assertLessEqual(self.probe(jpg)["bad"], 2)
+        rc, text = bz.run_bpy(BLENDER, tool, [self.fixture_jpeg, "--out", png, "--texture", "512", "--no-check",
+                                              "--png"], "rebake")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(map_mimes(png), {"base": "image/png", "orm": "image/png", "normal": "image/png"}, "--png")
+        self.assertLess(jpg.stat().st_size, png.stat().st_size * 0.8,
+                        f"JPEG {jpg.stat().st_size} bytes against PNG {png.stat().st_size}")
+        # prep_export (make and rebake run it next): the main file and its LOD keep the JPEG colour map
+        export = self.d / "export" / "rebaked_jpeg.glb"
+        rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "prep_export.py",
+                              [jpg, "--out", export, "--lods", "0.5", "--no-validate", "--overwrite"], "prep_export")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(map_mimes(export)["base"], "image/jpeg")
+        lod = export.with_name("rebaked_jpeg_LOD1.glb")
+        self.assertEqual(map_mimes(lod), {"base": "image/jpeg", "orm": "image/png", "normal": "image/png"})
+        self.assertLess(lod.stat().st_size, export.stat().st_size)
 
     def test_the_subcommand_on_a_real_model(self):
         root = self.d / "game"

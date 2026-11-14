@@ -24,6 +24,8 @@
 #           (default) gives LOD n its images at 1/2^n of their size (longest edge never under LOD_TEXTURE_MIN), so a
 #           set of LODs adds about a third of the textures' bytes instead of a full copy each. A rebaked 2048 px
 #           character: 11.5 + 10.8 + 10.3 MB before, 11.5 + 4.6 + 1.8 MB after; Godot 4.7 loads all three (K01).
+#           A JPEG image stays JPEG in its LODs (#303), encoded at JPEG_QUALITY (jpeg_copy, shared with
+#           rebake_uvs.py): a scaled copy is a generated image, and Blender packs those as PNG.
 #           Shared external images (.gltf) would save more but change what every engine import and record expects.
 #           Skinned meshes: rotation and scale are applied to armatures too; check the rig after export.
 #           Linked duplicates (objects sharing one mesh) get their own mesh copy each, so the export
@@ -39,6 +41,7 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the bpy module's exit crash, clip names, clips at
 #           30 fps (#292)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): LOD textures at half the size per level (#196)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG image's LOD copies stay JPEG (#303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -63,6 +66,9 @@ GLTF_PRESET = {  # the ONE export preset (SOP-11: never ad hoc)
     "export_cameras": False, "export_lights": False, "use_selection": False,
 }
 LOD_TEXTURE_MIN = 256   # px: --lod-textures half never takes a texture's longest edge below this
+JPEG_QUALITY = 90       # a JPEG source's copies (LOD textures, rebake_uvs.py's colour maps, #303): close to what
+                        # vendors ship (a Tripo colour map: 2048 px in 1.1 MB), far under PNG's 3+ MB for a photo-like map
+JPEG_MAGIC = b"\xff\xd8\xff"
 
 
 def dbg(msg):
@@ -224,6 +230,50 @@ def texture_nodes(scene):
     return found
 
 
+def is_jpeg(img):
+    """True when Blender's glTF exporter would write this image as JPEG (export_image_format AUTO): packed bytes
+    with the JPEG magic number, else a .jpg/.jpeg/.jpe file name (the exporter's own test, io_scene_gltf2
+    exp/material/image.py), else a file format Blender already knows is JPEG."""
+    packed = getattr(img, "packed_file", None)
+    if packed is not None:
+        return bytes(packed.data[:3]) == JPEG_MAGIC
+    path = (img.filepath_raw or "").lower()
+    if path.endswith((".jpg", ".jpeg", ".jpe")):
+        return True
+    return img.source == "FILE" and img.file_format == "JPEG"
+
+
+def jpeg_copy(bpy, img, name, quality=JPEG_QUALITY):
+    """A new image holding img's pixels as a packed JPEG at `quality`, which the glTF exporter (AUTO) writes as
+    image/jpeg byte for byte (a file image, packed, not changed since). A generated image packs as PNG, and an
+    image the exporter has to encode gets its export_image_quality (75), not ours. Colour space follows img;
+    JPEG has no alpha, so a caller keeps an image with alpha as PNG."""
+    import tempfile
+    from array import array
+    w, h = img.size
+    buf = array("f", bytes(4 * w * h * 4))
+    img.pixels.foreach_get(buf)
+    with tempfile.TemporaryDirectory(prefix="gamekit_jpeg_") as d:
+        path = Path(d) / "image.jpg"
+        # a fresh image with img's pixels (Image.copy drops unsaved pixels, the glTF exporter's own note), so img
+        # keeps its own file path and format
+        tmp = bpy.data.images.new("gamekit_jpeg_tmp", w, h, alpha=False, is_data=img.colorspace_settings.is_data)
+        try:
+            tmp.colorspace_settings.name = img.colorspace_settings.name
+            tmp.pixels.foreach_set(buf)
+            tmp.filepath_raw = str(path)
+            tmp.file_format = "JPEG"
+            tmp.save(quality=quality)
+        finally:
+            bpy.data.images.remove(tmp)
+        new = bpy.data.images.load(str(path))
+        new.colorspace_settings.name = img.colorspace_settings.name
+        new.pack()
+        new.filepath_raw = ""              # no temporary path left in the image (the exporter reads the packed bytes)
+    new.name = name
+    return new
+
+
 def lod_size(size, factor):
     """An image's (width, height) at `factor` of its size, the longest edge kept at LOD_TEXTURE_MIN or more; None when
     the image is already at or under that edge (it stays as it is)."""
@@ -239,7 +289,7 @@ def shrink_textures(bpy, found, factor):
     needs. The copy is a generated image: a scaled file image keeps its packed bytes and is not marked changed, and
     the glTF exporter would write those full-size bytes (its encode_image.py; T95616), so the scaled pixels go into a
     new image the exporter has to encode. Colour space and alpha follow the source. Every copy is made from the full
-    image, so LOD2 is not a resample of LOD1."""
+    image, so LOD2 is not a resample of LOD1. A JPEG image's copy is a JPEG at JPEG_QUALITY (jpeg_copy, #303)."""
     from array import array
     swaps = []
     for img, nodes in found.values():
@@ -257,7 +307,11 @@ def shrink_textures(bpy, found, factor):
         new.colorspace_settings.name = img.colorspace_settings.name
         new.alpha_mode = img.alpha_mode
         new.pixels.foreach_set(buf)
-        new.pack()
+        if is_jpeg(img):
+            gen, new = new, jpeg_copy(bpy, new, f"{img.name}_lod")
+            bpy.data.images.remove(gen)
+        else:
+            new.pack()
         name = img.name
         img.name = f"{name}_full"
         new.name = name                    # the LOD's image keeps the name the main file's has

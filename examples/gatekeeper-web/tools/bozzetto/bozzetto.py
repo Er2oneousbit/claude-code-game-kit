@@ -44,6 +44,7 @@
 #           Timing on a 16 GB RTX 5060 Ti: about 5 min per model at normal quality once warm, about 19 at high (K01).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png; a JPEG colour map stays JPEG (#303)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
 # ---------------------------------------------------------------------------
 #
@@ -631,6 +632,7 @@ def blender_steps(args, plan, blender, raw):
                     + {"on": ["--rebake", "--texture", plan.texture],
                        "auto": ["--rebake-under", plan.budget["min_uv_coverage"], "--texture", plan.texture],
                        "off": []}[plan.rebake]
+                    + (["--rebake-png"] if plan.rebake != "off" and getattr(args, "rebake_png", False) else [])
                     + (["--debug"] if DEBUG else []), "cleanup")
     if rc != 0:
         raise (JobError if rc == 1 else ToolError)(f"cleanup.py failed (exit {rc}); --debug shows Blender's output")
@@ -1083,6 +1085,9 @@ def build_parser():
                         "model's own atlas is under the class's UV coverage floor (default: on with Tripo, whose "
                         "atlas is the vendor's; auto on the local route): README 'UV coverage'")
     p.add_argument("--no-rebake", dest="rebake", action="store_const", const="off", help="keep the model's own atlas")
+    p.add_argument("--rebake-png", action="store_true",
+                   help="the rebake writes every map as PNG (default: a colour map whose source was JPEG, as "
+                        "Tripo's are, stays JPEG; normal and data maps are always PNG): README 'UV coverage'")
     p.add_argument("--accept-uv", action="store_true",
                    help="ship a model that fails the UV coverage floor alone (sprite sources, a rebake that lands "
                         "under the floor); the waiver goes on its asset log row")

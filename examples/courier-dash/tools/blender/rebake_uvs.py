@@ -26,10 +26,16 @@
 #           compares the pixels both cover: a mean difference over COLOUR_FAIL or LIT_FAIL (8-bit levels) is a
 #           failed bake (exit 1), over COLOUR_WARN or LIT_WARN a warning.
 #           Resampling blurs a little (the vendor's texels are not the new ones), so expect a few levels, never zero.
+#           Formats (#303): a colour map (sRGB, no alpha) whose source image was JPEG is written as JPEG at
+#           prep_export.JPEG_QUALITY (a Tripo character's three 2048 maps had come back as 9.7 MB of PNG, the main
+#           file 5.0 MB to 11.5 MB); normal, metallic-roughness(-occlusion) and other data maps stay PNG, since JPEG's
+#           blocks show as dents in a normal map and as noise in roughness; a map with alpha stays PNG (JPEG has none).
+#           --png writes every map as PNG. Each map's "format" and "quality" go into the report.
 #           What is not carried: a second UV map, images read through a Vector input of their own (they keep that
 #           input and are left alone, with a warning). Vertex colours stay as they are (nothing to bake).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the island gap is size/1024 px (1 at 1024, #203)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG source's colour map stays JPEG, --png (#303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -41,7 +47,7 @@
 #   every Image Texture reads through a UV Map node for the vendor layer; Normal Map nodes take it as tangent source
 #   per material, per image node: transfer rounds (EMIT of the node's Color [and Alpha] into a new image of the
 #     texture size, same colour space), normal round (bake NORMAL, tangent space, into a new image) -> swap the
-#     node's image for the new one, pack it into the file
+#     node's image for the new one (a JPEG copy for a colour map whose source was JPEG, unless --png), pack it
 #   remove the UV Map nodes and the vendor layer -> check render "after" -> mean and max difference -> report
 #   standalone: export .glb with the kit's preset, JSON report
 import argparse
@@ -114,6 +120,9 @@ def parse_args(argv):
                     help="keep vertices split at the old atlas's seams (default: weld them, as cleanup.py does, so "
                          "the new islands follow the surface instead of the old seams; custom normals are kept)")
     ap.add_argument("--no-check", action="store_true", help="skip the before/after check renders")
+    ap.add_argument("--png", action="store_true",
+                    help="write every baked map as PNG (default: a colour map whose source was JPEG stays JPEG, at "
+                         "prep_export.JPEG_QUALITY; normal and data maps are always PNG)")
     ap.add_argument("--json", dest="json_out", help="write the report (coverage, maps, settings, the check) here")
     ap.add_argument("--overwrite", action="store_true", help="replace --out if it exists")
     ap.add_argument("--debug", action="store_true", help="verbose output and full tracebacks")
@@ -319,8 +328,18 @@ def merge_alpha(colour, alpha_img):
     colour.update()
 
 
-def transfer_maps(bpy, obj, mats, size, report):
-    """Bake every image the materials read onto the new layout, swapping each node's image. Fills report['maps']."""
+def map_format(entry, png):
+    """JPEG for a colour map (sRGB transfer, no alpha) whose source image was JPEG, else PNG (#303): JPEG's
+    8x8 blocks dent a normal map and add noise to roughness and metallic, and JPEG has no alpha."""
+    if png or not entry["source_jpeg"] or entry["kind"] != "transfer" or entry["alpha"]:
+        return "PNG"
+    return "JPEG" if entry["colorspace"] == "sRGB" else "PNG"
+
+
+def transfer_maps(bpy, obj, mats, size, report, png=False):
+    """Bake every image the materials read onto the new layout, swapping each node's image. Fills report['maps'].
+    png: every map as PNG (else a JPEG source's colour map stays JPEG, map_format)."""
+    import prep_export as pe   # noqa: E402  (is_jpeg, jpeg_copy, JPEG_QUALITY: the LOD textures share them)
     px = BAKE_MARGIN_PX
     plan = {m.name: [n for n in image_nodes(m) if free_vector(n)] for m in mats}
     transfers = {m.name: [n for n in plan[m.name] if not feeds_normal_map(n)] for m in mats}
@@ -366,7 +385,8 @@ def transfer_maps(bpy, obj, mats, size, report):
                 else:
                     done.append({"node": src, "image": img, "material": mat.name, "source": src.image.name,
                                  "source_px": list(src.image.size), "kind": "transfer",
-                                 "colorspace": img.colorspace_settings.name, "alpha": False})
+                                 "colorspace": img.colorspace_settings.name, "alpha": False,
+                                 "source_jpeg": pe.is_jpeg(src.image)})
             for img in scratch:
                 bpy.data.images.remove(img)
     # The normal round: every material at once again; a material without a normal map gets a scratch target.
@@ -391,27 +411,36 @@ def transfer_maps(bpy, obj, mats, size, report):
         for mat, src, img in targets:
             done.append({"node": src, "image": img, "material": mat.name, "source": src.image.name,
                          "source_px": list(src.image.size), "kind": "normal", "colorspace": "Non-Color",
-                         "alpha": False})
+                         "alpha": False, "source_jpeg": pe.is_jpeg(src.image)})
         for img in scratch:
             bpy.data.images.remove(img)
         for mat in mats:
             for n in normals[mat.name][1:]:
                 print(f"[WARN] {mat.name}: a second normal map ({n.image.name}) is left on the old layout")
-    # Swap: the node reads the new image under the old image's name; the old image goes.
+    # Swap: the node reads the new image under the old image's name; the old image goes. A colour map whose source
+    # was JPEG becomes a packed JPEG first (before the after-check renders, so the check sees what ships).
     for d in done:
+        d["format"] = map_format(d, png)
+        d["quality"] = pe.JPEG_QUALITY if d["format"] == "JPEG" else None
+        if d["format"] == "JPEG":
+            baked = d["image"]
+            d["image"] = pe.jpeg_copy(bpy, baked, baked.name + "_jpeg")
+            bpy.data.images.remove(baked)
         old = d["node"].image
         name = old.name
         d["node"].image = d["image"]
         if old.users == 0:
             bpy.data.images.remove(old)
         d["image"].name = name
-        pack_image(bpy, d["image"])
+        if d["format"] == "PNG":
+            pack_image(bpy, d["image"])
         d["image"] = name
         del d["node"]
     report["maps"] = done
     report["bake"] = {"samples": SAMPLES, "margin_px": px, "margin_type": "EXTEND", "normal_space": "TANGENT",
                       "island_gap_px": padding_px(size), "uv_angle_deg": UV_ANGLE,
-                      "packer": "smart_project + pack_islands(rotate, CONCAVE)"}
+                      "packer": "smart_project + pack_islands(rotate, CONCAVE)",
+                      "formats": "png" if png else "jpeg colour maps from jpeg sources", "jpeg_quality": pe.JPEG_QUALITY}
 
 
 # ---------------------------------------------------------------- the check renders
@@ -507,9 +536,10 @@ def compare_renders(bpy, before, after):
 
 
 # ---------------------------------------------------------------- the step
-def rebake(bpy, va, obj, texture_px, report, check=True):
+def rebake(bpy, va, obj, texture_px, report, check=True, png=False):
     """Re-unwrap obj and bake its textures onto the new layout. Fills report (a dict); returns True when the
-    result passed the check (or no check could run). Raises RuntimeError on a Blender failure."""
+    result passed the check (or no check could run). png: every map as PNG (map_format). Raises RuntimeError on a
+    Blender failure."""
     t0 = time.monotonic()
     scene = bpy.context.scene
     mesh = obj.data
@@ -534,7 +564,7 @@ def rebake(bpy, va, obj, texture_px, report, check=True):
     if sources:
         undo, skipped = read_through(mats, VENDOR_UV)
         setup_render(bpy, scene)   # the bake runs in Cycles too
-        transfer_maps(bpy, obj, mats, size, report)
+        transfer_maps(bpy, obj, mats, size, report, png=png)
         undo()
         for name in skipped:
             print(f"[WARN] {name} is read through its own Vector input and was left on the old layout")
@@ -569,7 +599,8 @@ def rebake(bpy, va, obj, texture_px, report, check=True):
     else:
         report["check"] = report["check_lit"] = None
     report["seconds"] = round(time.monotonic() - t0, 1)
-    kinds = ", ".join(f"{m['source']} ({m['kind']}{', alpha' if m['alpha'] else ''})" for m in report["maps"]) or "no textures"
+    kinds = ", ".join(f"{m['source']} ({m['kind']}{', alpha' if m['alpha'] else ''}, {m['format']}"
+                      f"{' ' + str(m['quality']) if m['quality'] else ''})" for m in report["maps"]) or "no textures"
     print(f"[ OK ] rebake: UV coverage {report['uv_coverage_before']:.0%} ({report['uv_islands_before']} islands) -> "
           f"{report['uv_coverage_after']:.0%} ({report['uv_islands_after']} islands) at {size} px, {kinds}, "
           f"{report['seconds']} s" + (f", check mean {report['check']['mean_levels']} levels flat, "
@@ -619,7 +650,7 @@ def run(args):
     report = {"source": src.name, "tris": len(obj.data.loop_triangles)}
     if not args.no_weld:
         report["welded_vertices"] = weld(obj)
-    ok = rebake(bpy, va, obj, args.texture, report, check=not args.no_check)
+    ok = rebake(bpy, va, obj, args.texture, report, check=not args.no_check, png=args.png)
     if args.json_out:
         Path(args.json_out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json_out).write_text(json.dumps(report, indent=2), encoding="utf-8")

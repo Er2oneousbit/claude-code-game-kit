@@ -39,6 +39,7 @@
 //           context, F8 bug report, pseudo locale, juice demo screen (#275); data/ found next to the exe when the
 //           working directory has none (game_dir())
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): draw_credits keeps the clamped offset (#302)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and keep-or-revert confirm,
 //           counted in real time (#308); hud_scale() and play.hud_scale_changed for a game HUD (#309)
 // ---------------------------------------------------------------------------
@@ -302,8 +303,8 @@ private:
     void draw_main_menu(Screen& s);
     void draw_settings();
     void draw_display_confirm(core::SettingsMenu& menu);   // "Keep these display settings?" (#308)
-    void draw_credits(const Screen& s);
-    void credits_at_top();                // show:credits: the first lines in view (they roll up from below)
+    void draw_credits(Screen& s);
+    void credits_at_top();                // show:credits: the first lines in view, rolling or still (#302)
     void draw_loading(const Screen& s);
     void draw_play();
     void draw_pause(Screen& s);

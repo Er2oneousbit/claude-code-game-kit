@@ -6,7 +6,7 @@
 #           out clean, the LODs must really have fewer triangles, and the validator
 #           verdict and usage errors must reach the exit code. Linked duplicates (two
 #           objects sharing one mesh) must both come out with their transforms applied. LOD files carry their
-#           textures at half the size per level, the colour kept (#196).
+#           textures at half the size per level, the colour kept (#196); a JPEG texture's LOD copies stay JPEG (#303).
 # Usage   : With the bpy module:  python tools/blender/test_prep_export.py [--keep] [--debug]
 #           Inside Blender:       blender -b --python-exit-code 1 -P tools/blender/test_prep_export.py -- [--keep] [--debug]
 # Exit    : 0 all cases pass, 1 some case failed, 2 bpy not available
@@ -14,6 +14,7 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the exam ends through bpy_common with the bpy
 #           module (#292: its own exit crashed after the fixtures' glTF export); the 30 fps clip case
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the LOD texture sizes (#196)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG texture's LODs stay JPEG (#303)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -111,15 +112,21 @@ def build_clip30(bpy, path):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB", export_animations=True)
 
 
-def build_textured(bpy, path, size=1024, colour=(0.8, 0.25, 0.1, 1.0)):
+def build_textured(bpy, path, size=1024, colour=(0.8, 0.25, 0.1, 1.0), jpeg=False):
     """A sphere whose material reads one size x size image of a flat sRGB colour (packed into the .glb), for the LOD
-    texture sizes (#196)."""
+    texture sizes (#196). jpeg: the image is packed as a JPEG, as a Tripo model's colour map is (#303)."""
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.ops.mesh.primitive_uv_sphere_add(segments=48, ring_count=24, radius=0.5, location=(0, 0, 0.5))
     obj = bpy.context.active_object
     obj.name = "Painted"
     img = bpy.data.images.new("painted_colour", size, size, alpha=False)
     img.pixels.foreach_set(list(colour) * (size * size))
+    if jpeg:                               # saved as a .jpg and loaded back: a file image with JPEG bytes packed
+        jpg = Path(path).with_suffix(".jpg")
+        img.filepath_raw = str(jpg)
+        img.file_format = "JPEG"
+        img.save(quality=90)
+        img = bpy.data.images.load(str(jpg))
     img.pack()
     mat = bpy.data.materials.new("painted_mat")
     mat.use_nodes = True
@@ -131,8 +138,22 @@ def build_textured(bpy, path, size=1024, colour=(0.8, 0.25, 0.1, 1.0)):
     bpy.ops.export_scene.gltf(filepath=str(path), export_format="GLB")
 
 
+def jpeg_size(blob):
+    """(width, height) from a JPEG's start-of-frame marker, else (0, 0)."""
+    import struct
+    i = 2
+    while i + 9 < len(blob) and blob[i] == 0xFF:
+        marker, length = blob[i + 1], struct.unpack(">H", blob[i + 2:i + 4])[0]
+        if marker in (0xC0, 0xC1, 0xC2):
+            h, w = struct.unpack(">HH", blob[i + 5:i + 9])
+            return w, h
+        i += 2 + length
+    return 0, 0
+
+
 def glb_images(path):
-    """[(width, height, bytes)] of every PNG embedded in a .glb, read with the standard library."""
+    """[(width, height, bytes, mime type)] of every PNG or JPEG embedded in a .glb (the mime type as the file
+    says, checked against the bytes: '?' when they disagree), read with the standard library."""
     import json
     import struct
     data = Path(path).read_bytes()
@@ -143,8 +164,13 @@ def glb_images(path):
     for im in doc.get("images", []):
         view = doc["bufferViews"][im["bufferView"]]
         blob = data[start + view.get("byteOffset", 0):start + view.get("byteOffset", 0) + view["byteLength"]]
-        w, h = struct.unpack(">II", blob[16:24]) if blob[:4] == b"\x89PNG" else (0, 0)
-        out.append((w, h, len(blob)))
+        if blob[:4] == b"\x89PNG":
+            (w, h), kind = struct.unpack(">II", blob[16:24]), "image/png"
+        elif blob[:3] == b"\xff\xd8\xff":
+            (w, h), kind = jpeg_size(blob), "image/jpeg"
+        else:
+            (w, h), kind = (0, 0), None
+        out.append((w, h, len(blob), im.get("mimeType") if im.get("mimeType") == kind else "?"))
     return out
 
 
@@ -320,6 +346,23 @@ def main():
                        "--lod-textures", "keep")
     sizes = [im[:2] for im in glb_images(tmp / "painted_keep_LOD1.glb")] if rc == 0 else []
     case("--lod-textures keep gives an LOD the full-size textures", sizes == [(1024, 1024)], f"{sizes}; " + out[-300:])
+    # #303: a JPEG texture (Tripo's colour maps) came back as PNG in every LOD: the scaled copy is a generated image,
+    # and Blender packs those as PNG. Now its LOD copies are JPEG too, at prep_export.JPEG_QUALITY.
+    painted_jpg = tmp / "painted_jpg.glb"
+    build_textured(bpy, painted_jpg, jpeg=True)
+    rc, out = run_tool(painted_jpg, "--out", tmp / "painted_jpg_out.glb", "--lods", "0.5,0.25", "--no-validate")
+    found = [glb_images(tmp / f"painted_jpg_out{s}.glb") if rc == 0 else [] for s in ("", "_LOD1", "_LOD2")]
+    case("a JPEG texture stays JPEG in the main file and every LOD, halving per level (1024, 512, 256)",
+         [[(w, h, m) for w, h, _, m in ims] for ims in found]
+         == [[(1024, 1024, "image/jpeg")], [(512, 512, "image/jpeg")], [(256, 256, "image/jpeg")]],
+         f"{found}; " + out[-300:])
+    if rc == 0:
+        main_c, lod_c = image_colour(bpy, tmp / "painted_jpg_out.glb"), image_colour(bpy, tmp / "painted_jpg_out_LOD2.glb")
+        case("a JPEG LOD texture keeps the colour", all(abs(a - b) < 0.02 for a, b in zip(main_c, lod_c)),
+             (main_c, lod_c))
+    pngs = [m for ims in ([glb_images(tmp / f"painted_out{s}.glb") for s in ("", "_LOD1", "_LOD2")]
+                          if (tmp / "painted_out_LOD2.glb").is_file() else [[]]) for _, _, _, m in ims]
+    case("a PNG texture stays PNG in the main file and every LOD", pngs == ["image/png"] * 3, pngs)
 
     passed = sum(results)
     print(f"{passed}/{len(results)} cases passed")

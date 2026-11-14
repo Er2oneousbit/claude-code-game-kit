@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.15.4",
+  "kit_version": "0.15.5",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1714,6 +1714,12 @@
         "docs/ENGINE.md",
         "project.godot"
       ]
+    },
+    {
+      "version": "0.15.5",
+      "date": "2026-11-14",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {
@@ -1925,7 +1931,7 @@
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
     "docs/ENGINE.md": "80b619f4e37f888c219a6f9ca983fc818f48fb6bf88b8b88a1a2e5fdcc2ac72f",
     "docs/ENGINE_FLOW.md": "c42db3d2decacdf443348ba635338b55e25e95adaba68f7e3b42c3f4a7ab3918",
-    "docs/EVIDENCE.md": "d512391cb036701e3ed95c58a589664bce63fa4c6f66f985c5b5dd11891d9d3e",
+    "docs/EVIDENCE.md": "f706bbff152d8918494dd1baf6f11e161cc147fcaca64515d06fd8aed6c58df5",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
     "docs/GDD.md": "ce456e0d0ed2b560a30f90e16c8167fc90cedbb2d7d112013ce23fa4d7cff9d4",
     "docs/HANDOFF.md": "3124d0370759299ac022f9a08c1ddccfc85291b52be010fcffe1582dd4aa1945",
@@ -2205,7 +2211,7 @@
     "tools/art/dotwork/tests/test_dotwork.py": "246717332a2622bd86f2f9986f07b173c3a6087f2e32dacffbaa66440d3d3385",
     "tools/art/dotwork/tests/test_fonts.py": "1f5adf0fa58566578f930d989acf38399a90e0159808aac69fbae02c0536efd0",
     "tools/art/dotwork/tests/test_lighting.py": "e6c3d72dc5de07fb5995861d55b206b84e6780174f169d7c151ed40f7f609306",
-    "tools/art/dotwork/tests/test_pixelorama.py": "500ffebbbfc62497266c6361c3e146a631e85988dbd595b5a7302af2e95e80a5",
+    "tools/art/dotwork/tests/test_pixelorama.py": "4128e841491f2c835b6283b5c9bbe794a3bd02a3f2446e07d9158c8a4c4507f8",
     "tools/art/dotwork/tests/test_qapack.py": "16d299aa12c714cc6646104755f45bbd2c7bb842b1d7e29fdc234f782de57ca4",
     "tools/art/dotwork/tests/test_screens.py": "3e7c9c5b46494e37bd418885b73dfe371abed1c7b30ca8f640639cc99334cdb2",
     "tools/art/dotwork/tests/test_shipped.py": "e001f5aeef678e377af055ffc36c8db43d1bbbbc5d26d58936cda8b9da3d0efd",
@@ -2292,26 +2298,26 @@
     "tools/audio/wavfile.py": "0db5157ba8f15525767f0769f8af8b6a7384eeec6fc1d4dc3ffb1561691da7be",
     "tools/blender/bpy_common.py": "013200a1de906f8e37a87494deecb5aa26658bbf2bfdb9be2ae377222c6996cf",
     "tools/blender/golden_character.py": "5c452f807fb5834e1d31e0e715e78982725d47bed9dbc025cb8991886d244667",
-    "tools/blender/prep_export.py": "a25c4fc6b5351b2b78fe5edf7ba7d27e2938375dc73c5f0f2a0a8dce9917b46c",
-    "tools/blender/rebake_uvs.py": "92a5f6bc7ced7e24aaf58aa009922b00d946bdf0cf21e229a18b25ded57e3dc4",
+    "tools/blender/prep_export.py": "b882714ed67453d3178e3f48725042e254561727ee33cbfa07ead7c75f43efd2",
+    "tools/blender/rebake_uvs.py": "c258247fad10e7d9bca1cfd94325fc1c38722d11533d015f474e118c7999fc59",
     "tools/blender/render_sprites.py": "92470d39a98ee2975a7fb4d353e165d8cde039b8e61b01b32b2292bc0b1b1ca4",
     "tools/blender/test_golden_character.py": "87e07048a27a2a9933e519e4d410042be28c655b0fa6a15f672f160c6b7f1b0b",
-    "tools/blender/test_prep_export.py": "33b6625ee2301fd7e2db370e5bc1a7b7c553fdcab7a9a0a4085e269199489a70",
+    "tools/blender/test_prep_export.py": "54e7e18aa22bab301bf9b298d729116184af8b8a7e59f8eea37890587ddb1318",
     "tools/blender/test_render_sprites.py": "9251c1c7a759a2824dde01a371d5e81a8fc8b4865dfe4b2abf1aedc792a136dd",
     "tools/blender/test_render_sprites_manifest.py": "f2f4e2e1b0a993827d6449b9f7512753f55e7da1df2bf2e60e49174dbceb9fba",
     "tools/blender/test_validate_asset.py": "bba9994de9138a7e51d1ed6f48f9bf1eea96b22da087116b06c911ed14397387",
     "tools/blender/validate_asset.py": "e6e1c0b7cf46552dc5000fa39818a24ccc0adff24ddb9c077771a94fabcfd764",
     "tools/bozzetto/LICENSES.md": "e57063032f4a68e5addf22e553146f8fe3f0aa3912c196435df02159b8196324",
-    "tools/bozzetto/README.md": "3fae5e58edff1a2639a5994242e0144a7c2048167ebd30e388a86f677c6232c5",
+    "tools/bozzetto/README.md": "9641747a936a67383859e40ec75797a7894792fbbb96694490f59b072a8898b4",
     "tools/bozzetto/bone_map.py": "072ce4a3ecc58686f0ecf391c72ef452e71766caee6d98e0ffaf1159e222b79f",
-    "tools/bozzetto/bozzetto.py": "59fb3755c8be491b7591d4fecc0d62492017b20c9b709288687af870acd294e0",
+    "tools/bozzetto/bozzetto.py": "22ec847ac27cd47ee31b65fea0fd80ca78468d114975c792010dd12730575b24",
     "tools/bozzetto/chain.py": "2182825c3eaae909908631327151e4747e8950a3c59128a1715e3a8a15812dcd",
-    "tools/bozzetto/cleanup.py": "0c74bf04d5075e7730ef0382a779835a417f536c6ceae257d961347e4e3a839c",
+    "tools/bozzetto/cleanup.py": "56704a53a3b8a9a413afd8681f0d7d3649f880c4c3ae94652220534391dd4bff",
     "tools/bozzetto/licenses/BiRefNet-LICENSE.txt": "92a7089e0915fc32bc40067560b398f1e6a7a5958abd7d04eda393629a5acefb",
     "tools/bozzetto/licenses/DINOv3-LICENSE.md": "25d122eb8f5b880fd23c736fb6ea8018ee45c12237e00b8a86d14c653904999e",
     "tools/bozzetto/licenses/TRELLIS.2-LICENSE.txt": "d9a1b1e30d633d5732ea18e3cba9538d293ebc53e1a9e4e96ab739e0c5c4f1cb",
     "tools/bozzetto/models.lock.json": "c94054568f7739b37e5aa46cab1d301af992ce58c75a6cbdc7383fd50e449726",
-    "tools/bozzetto/rebake.py": "030e87527e77e982ff6c71ae879486e6eaefc23ba7a3a176cb1b466c6fd5f9a7",
+    "tools/bozzetto/rebake.py": "88496c71a2bb4ee5986237a06f538cf31725f98ce134d0edc858f9d64a34eec7",
     "tools/bozzetto/reference.py": "9b850b65e740c807ca6280e47bc51f719691e90b27633c4da16e9d9ff11fe779",
     "tools/bozzetto/refsheet.py": "85ba20ab960bdc8d1a935c355e9f811f0b30815658371bc164c39cd9add9e3ac",
     "tools/bozzetto/retarget.py": "1cb5bb133dace133c83da1dd7dfc771da6081d4a15b1064c9bc3165f80687a0e",
@@ -2326,7 +2332,7 @@
     "tools/bozzetto/test_bozzetto.py": "5a6ae79afa31323218e3e4cf515eb3dbeae4d554ea38261693acbd918857928b",
     "tools/bozzetto/test_bozzetto_live.py": "508e72a2143f5598070fb1dcf21b28697190e6ed1c9dd698f65dce6398e4daf6",
     "tools/bozzetto/test_chain.py": "3a8ab01267439b8a3f1b6cdc396ea8954da3f8ffd38264c2547ea7e506ef0473",
-    "tools/bozzetto/test_rebake.py": "e5debd817ca1e09fb953296d70bf9b8305aea81788a460e5760c7eaf0c583f52",
+    "tools/bozzetto/test_rebake.py": "2f2dd27505dd3c733f05268a3bf8adf7db5f3d6f83a8b80353b79b86c027da4b",
     "tools/bozzetto/test_reference.py": "1b27c509ebada485f5917a77badfd04416cfc230ec330d8c4f08718c1f1ac332",
     "tools/bozzetto/test_retarget.py": "306d63f4482d71dac14a9e951227872e95b12152dbb285c0c06a17dee9459490",
     "tools/bozzetto/test_rig.py": "c0b915c18cdec2cd1b07f47c0f194e794a454e4507041e9009091e8a41bb975c",
@@ -2398,7 +2404,7 @@
     "tools/token_audit.py": "553f9c7d4af332a45e11dc1ca9dadfd030cd841b9439b73b1f71a2bff2fbb048",
     "tools/yt_transcript.py": "7ae8657734eb805db92c7fc5b9dae3e99c6533a0083724da8df59206bd729e9f"
   },
-  "last_upgrade": "2026-11-13",
+  "last_upgrade": "2026-11-14",
   "slug": "coyote_hop",
   "kit_settings": {
     "permissions": {
