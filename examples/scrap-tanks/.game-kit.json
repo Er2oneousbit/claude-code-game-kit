@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.15.3",
+  "kit_version": "0.15.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1704,6 +1704,12 @@
         "data/i18n/en.json",
         "src/game/Game.cpp"
       ]
+    },
+    {
+      "version": "0.15.4",
+      "date": "2026-11-13",
+      "mode": "upgrade",
+      "unmerged": []
     }
   ],
   "files": {

@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.15.3",
+  "kit_version": "0.15.4",
   "author": "the user",
   "profile": {
     "author": "",
@@ -1688,6 +1688,14 @@
       "unmerged": [
         "docs/ENGINE.md"
       ]
+    },
+    {
+      "version": "0.15.4",
+      "date": "2026-11-13",
+      "mode": "upgrade",
+      "unmerged": [
+        "docs/ENGINE.md"
+      ]
     }
   ],
   "files": {
@@ -1897,7 +1905,7 @@
     "docs/ASSET_LOG.md": "88351348aca95381f08d8f6ef45f5fbdaf0e8521ec61c1d63a190426245e0bf6",
     "docs/BRIEFS.md": "de093b27f9d25a389052292a522c36d3db5611285656ce53054ab3abf141e326",
     "docs/CONCEPTS.md": "d58ca9426877811564a704ca240d797d22877e8ee5aadd3d052c652bcc188e9a",
-    "docs/ENGINE.md": "7a6d1b77dbb4e0f4945ff71c476ed7d201ed4ed63e0d4c0594b6fa0792c139f4",
+    "docs/ENGINE.md": "80b619f4e37f888c219a6f9ca983fc818f48fb6bf88b8b88a1a2e5fdcc2ac72f",
     "docs/ENGINE_FLOW.md": "c42db3d2decacdf443348ba635338b55e25e95adaba68f7e3b42c3f4a7ab3918",
     "docs/EVIDENCE.md": "d512391cb036701e3ed95c58a589664bce63fa4c6f66f985c5b5dd11891d9d3e",
     "docs/FIRST_HOUR.md": "e3c2b06bbdeea3b2e04be57de54b092bb749a4a45a13a5330c8819bd766e4f49",
@@ -1947,7 +1955,7 @@
     "docs/sop/SOP-23-marketing.md": "8d70dffbb5ba5ce486d5c93c2117880a8fd19cd651a0a1a7dfae29c65fb3fc9b",
     "docs/sop/SOP-24-shaders.md": "d8438acf84ec2c090b242175bf8dd8b8a45deb8c17ef68f7e638c979d2894bd6",
     "export_presets.cfg": "e04b980b47f5374ee1f2f15eb9f55c20283eaf69f4d884c5d886a3825d35e44e",
-    "project.godot": "79499422cc904d6f1e7a7e5d737aa96cde22d1196cee689f17148ee3a3f997b8",
+    "project.godot": "432fd8b7f2d6865ea9e7d0e0d66dda397fce8149c942427fa8c2bb526617f38a",
     "scenes/main.tscn": "8ce80130755dcee6c2cf203f837aae414628ef3f70ee8553b796c38f951b925b",
     "scenes/play.tscn": "88e1a611cc9de36ec0a5637a63f06ab2ff6bcb410d1d3ab87af4cb8842b67a89",
     "scripts/core/analog.gd": "0f066d9b57c971a3920e2f4d554832df66cb6ca63af4276901655cbf8063023c",
