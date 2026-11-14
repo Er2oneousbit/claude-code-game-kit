@@ -11,9 +11,13 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits lines follow the shared rule (#284)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and its confirm (#308), the
 //           HUD text factor and its watch (#309)
+// Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a tall CREDITS.md under reduce motion starts at the
+//           top and moves a row per press (#302)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <string>
 #include <vector>
 
@@ -460,6 +464,46 @@ TEST_CASE("CREDITS.md from tools/credits.py shows no HTML comment (#279)") {
     CHECK(core::credits_lines(md) ==
           std::vector<std::string>{"Credits", "", "Music", "", "Song by Zo\xC3\xAB (CC0)"});
     CHECK(core::credits_lines("<!-- nothing yet -->\n").empty());   // the screen shows its placeholder then
+}
+
+// A CREDITS.md much taller than the area (#302), with the shell's numbers: a 260 px area, 24 px per press (each press
+// adds a step to the offset, up stops at 0), the default row height (10) and a large text size (24)
+TEST_CASE("still credits start at the top and move a row per press (#302)") {
+    constexpr std::size_t kRows = 80;
+    constexpr double kArea = 260, kStep = 24;
+    for (const double lh : {10.0, 24.0}) {
+        CAPTURE(lh);
+        double offset = 0;   // the screen opens with offset 0
+        const auto first_y = [&] {
+            const core::CreditsScroll sc = core::credits_scroll(kRows, lh, kArea, kStep, offset, true);
+            offset = sc.offset;   // kept, as draw_credits keeps it
+            return sc.start;
+        };
+        const auto down = [&] { offset += kStep; };
+        const auto up = [&] { offset = std::max(0.0, offset - kStep); };
+        CHECK(first_y() == 0);   // the first line at the top of the area
+        up();
+        CHECK(first_y() == 0);   // up at the top stays at the top
+        down();
+        CHECK(first_y() == -lh);   // one press down moves one row
+        down();
+        CHECK(first_y() == -2 * lh);
+        up();
+        CHECK(first_y() == -lh);   // one press up moves one row back
+        const double last_first = static_cast<double>(kRows) - std::floor(kArea / lh);
+        for (std::size_t i = 0; i < kRows * 3; ++i) {
+            down();
+        }
+        CHECK(first_y() == -last_first * lh);   // the last row in view, no loop back to the start
+        up();
+        CHECK(first_y() == -(last_first - 1) * lh);   // the presses past the end are not saved up
+    }
+    // Shell::credits_at_top: offset 0 when still, the area's height when rolling; both put the first line at the top
+    CHECK(core::credits_scroll(kRows, 10, kArea, kStep, 0, true).start == 0);
+    CHECK(core::credits_scroll(kRows, 10, kArea, kStep, kArea, false).start == 0);
+    // a text that fits stands at the top in both modes
+    CHECK(core::credits_scroll(5, 10, kArea, kStep, 48, true).start == 0);
+    CHECK(core::credits_scroll(5, 10, kArea, kStep, 48, false).start == 0);
 }
 
 TEST_CASE("the dialogue history keeps the last 50 lines and feeds What now? (#167)") {

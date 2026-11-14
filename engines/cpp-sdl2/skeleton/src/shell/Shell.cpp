@@ -15,6 +15,8 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_at_top for show:credits (#284)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply, its hint line and the
 //           keep-or-revert confirm on a real-time clock (#308); hud_scale() and play.hud_scale_changed (#309)
+//           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): with reduce motion a tall CREDITS.md starts at the
+//           top and up/down move it a row at a time (#302)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -1576,7 +1578,7 @@ void Shell::draw_display_confirm(core::SettingsMenu& menu) {
     draw_list(list, px + pw * 0.26, py + 14 + text_h + 10, pw * 0.48, 0, 0, "settings.confirm", true);
 }
 
-void Shell::draw_credits(const Screen& s) {
+void Shell::draw_credits(Screen& s) {
     Draw& d = *draw_;
     TextOpts heading;
     heading.align = Align::Center;
@@ -1610,14 +1612,11 @@ void Shell::draw_credits(const Screen& s) {
     }
     rows.emplace_back("");
     rows.push_back(t("credits.engine"));
-    const double total = static_cast<double>(rows.size()) * lh;
-    double offset = s.offset;
-    if (total > kAreaH) {
-        offset = std::fmod(offset, total + kAreaH);   // loop: start again from below
-    } else {
-        offset = 0;
-    }
-    const double start = total > kAreaH ? kAreaH - offset : 0;
+    // reduce motion: the rows stand still from the top and up/down move a whole row (#302)
+    const bool still = access_flag("reduce_motion");
+    const core::CreditsScroll scroll = core::credits_scroll(rows.size(), lh, kAreaH, kStepPx, s.offset, still);
+    s.offset = scroll.offset;   // clamped or looped, so presses past either end are not saved up
+    const double start = scroll.start;
     d.clip(kAreaX, kAreaY, kAreaW, kAreaH);
     for (std::size_t i = 0; i < rows.size(); ++i) {
         const double y = kAreaY + start + static_cast<double>(i) * lh;
@@ -1629,7 +1628,7 @@ void Shell::draw_credits(const Screen& s) {
             o.align = Align::Center;
             o.raw = i + 1 != rows.size();   // CREDITS.md is content, not UI copy; the engine line is
             d.text("credits.line" + std::to_string(i), rows[i], kAreaX, y, kAreaW, lh, o);
-        } else {
+        } else if (!still) {
             // half scrolled out: drawn, not a layout problem (an empty id keeps it out of the record)
             TextOpts o;
             o.align = Align::Center;
@@ -1642,7 +1641,8 @@ void Shell::draw_credits(const Screen& s) {
 void Shell::credits_at_top() {
     Screen* s = top();
     if (s && s->id == ScreenId::Credits) {
-        s->offset = kAreaH;   // start = kAreaH - offset: the first row at the top of the area
+        // rolling: start = kAreaH - offset puts the first row at the top; still credits count presses from the top
+        s->offset = access_flag("reduce_motion") ? 0 : kAreaH;
     }
 }
 
