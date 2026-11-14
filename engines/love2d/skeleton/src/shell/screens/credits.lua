@@ -21,6 +21,7 @@ local FILE = "CREDITS.md"
 local SCROLL_PX_S = 18                   -- auto scroll speed
 local STEP_PX = 24                       -- one up/down press
 local AREA_X, AREA_Y, AREA_W, AREA_H = 60, 56, 520, 260
+Credits.AREA_H, Credits.STEP_PX = AREA_H, STEP_PX       -- for the tests
 
 local COMMENT_OPEN, COMMENT_CLOSE = "<!--", "-->"
 local LIST_ITEM = "^[-*+][ \t]"          -- a list marker, then a space or tab
@@ -90,6 +91,15 @@ function Credits.lines_from(markdown)
   return lines
 end
 
+-- Where the rows sit: start = the first row's y below the top of the area, and the offset to keep (looped). Rolling:
+-- the rows come up from below the area and start again once they have passed.
+function Credits.scroll(n_rows, lh, offset, still)
+  local total = n_rows * lh
+  if total <= AREA_H then return 0, 0 end
+  offset = offset % (total + AREA_H)                     -- loop: start again from below
+  return AREA_H - offset, offset
+end
+
 -- The first line at the top of the area, as smoke --drive show:credits pictures it (the text otherwise rolls up from
 -- below the area).
 function Credits:at_top()
@@ -140,13 +150,8 @@ function Credits:draw(ui)
   end
   rows[#rows + 1] = { text = "" }
   rows[#rows + 1] = { text = app:t("credits.engine") }
-  local total = #rows * lh
-  if total > AREA_H then
-    self.offset = self.offset % (total + AREA_H)          -- loop: start again from below
-  else
-    self.offset = 0
-  end
-  local start = (total > AREA_H) and (AREA_H - self.offset) or 0
+  local start
+  start, self.offset = Credits.scroll(#rows, lh, self.offset, app.settings.access.reduce_motion)
   ui:clip(AREA_X, AREA_Y, AREA_W, AREA_H)
   for i, row in ipairs(rows) do
     local y = AREA_Y + start + (i - 1) * lh
