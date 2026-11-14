@@ -3,6 +3,28 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.15.5 (2026-11-14): bug fixes: still credits, smaller rebaked models, C++ tests that never ran, exams that held under load (#302, #303, #305)
+- **Still credits start at the top (#302):** with reduce motion on, LÖVE and C++ started a CREDITS.md taller than the
+  text area a full area below the top: nothing showed until the player pressed down about a dozen times. They now
+  open at the first line and move one whole row per press, stopping at both ends, as Godot, web and Unity do
+  (`Credits.scroll` in LÖVE, `core::credits_scroll` in C++, each tested at two text sizes).
+- **Rebaked models keep JPEG colour maps (#303):** Bozzetto's rebake wrote Tripo's JPEG colour maps back as PNG, and
+  `prep_export.py --lod-textures half` turned a JPEG into PNG in every LOD. A colour map whose source was JPEG now
+  stays JPEG (quality 90, `JPEG_QUALITY`), in the main file and its LODs; normal, metallic-roughness and alpha maps
+  stay PNG. A Tripo character's main .glb went from 11.51 to 9.08 MB, its colour map from 3.52 MB to 1.09 MB.
+  `--png` (rebake) and `--rebake-png` (make) keep everything PNG; the records say each map's format and quality.
+- **C++ tests that never ran:** CMake reads `;` as a list separator, so a doctest name holding one was split by
+  `doctest_discover_tests` into filters that matched nothing, and CTest reported them as passed. The kit's own
+  Display-confirm test (0.15.3) had one. `dev.py check` now fails on such a name and says why.
+- **Exams that held only on an idle machine (#305):** `test_dev_py`'s orphan-timeout case allowed 1.5 s for Python
+  start-up and the kill, and failed at 3.6 to 5.3 s under load; its timeout now starts once the orphan exists, the
+  margins are explicit, the parent waits for the job instead of sleeping, and the orphan is held by a handle, so the
+  cleanup can never end another process that reused its id. Dotwork's Pixelorama hung-run case gets the same handle
+  wait and explicit margins. Under heavy load the orphan class went from 7 failures in 14 runs to none in 28.
+- **Upgrade notes:** a C++ game whose test names hold `;` renames them before `check` passes (`, and` works).
+- **Filed:** #312 (validate_asset.py crashes under the bpy 4.2 module), #313 (the metallic-roughness map as JPEG
+  too), #314 (C++ `--screenshot x.png` writes BMP bytes).
+
 ## 0.15.4 (2026-11-13): sharp text in Godot games (#311)
 - **Godot draws text at the window's resolution (#311):** the template's stretch mode `viewport` drew everything at the
   640x360 base and scaled it up, so menu and HUD text (the readable font included) became 3 to 6 px blocks at 1080p
