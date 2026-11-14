@@ -40,7 +40,8 @@ miss: kit code that leans on the starter's types or claims a common name, and fo
 Verify a change by scaffolding every affected engine into a scratch dir outside this repo, then inside each output run `python tools/doctor.py` (also runs the link check) and `python tools/dev.py -h` (paths relative to the generated project). A second `--adopt` run on the same output must produce no conflicts.
 
 Tool exams: `scripts/run_exams.py` runs every `test_*.py` under `core/tools` and `scripts` from one table (the source
-of truth for what each exam needs beyond the standard library: Pillow and numpy, bpy on uv's Python 3.13, git, GIMP 3,
+of truth for what each exam needs beyond the standard library: Pillow and numpy, bpy on uv's Python 3.13 (and the
+`_bpy42` rows: the bpy 4.2.0 floor on uv's Python 3.11, a skip when uv cannot get it), git, GIMP 3,
 Inkscape 1.x, a REAPER_BIN or ASEPRITE_BIN) and prints one line per exam: pass/fail/skipped (a missing tool is a skip
 naming the tool, never a fail), unique tests (never unittest's `Ran N`), time. Before a release, run it again on the
 oldest supported Python: `Path.write_text(newline=)` and `Path.resolve()` on missing relative paths behave differently
