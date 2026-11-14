@@ -34,7 +34,7 @@ NodePtr<Blackboard> make_tree() {
 
 }  // namespace
 
-TEST_CASE("the first branch whose conditions hold runs; its action is reported") {
+TEST_CASE("the first branch whose conditions hold runs and its action is reported") {
     auto tree = make_tree();
     Blackboard b;
     std::string active;
@@ -60,7 +60,7 @@ TEST_CASE("a higher-priority branch takes over on the next tick (reactive)") {
     CHECK(b.ran_attack == 1);  // attack did not run while fleeing
 }
 
-TEST_CASE("a sequence stops at the first failing condition; a failing action is not reported") {
+TEST_CASE("a sequence stops at the first failing condition, and a failing action is not reported") {
     Blackboard b;
     auto seq = sequence<Blackboard>("s", children<Blackboard>(
         condition<Blackboard>("no", [](Blackboard&) { return false; }),

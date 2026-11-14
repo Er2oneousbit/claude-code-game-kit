@@ -274,7 +274,7 @@ TEST_CASE("a Display change waits for Apply while the other tabs apply at once")
     CHECK(menu.focus_id() == "display.back");              // Apply is disabled again: focus moved on
 }
 
-TEST_CASE("a new window size asks to keep it; the real-time countdown puts back what Apply replaced") {
+TEST_CASE("a new window size asks to keep it, and the real-time countdown puts back what Apply replaced") {
     Harness h;
     core::SettingsMenu menu(h.settings, h.hooks);
     menu.open_tab("display", "resolution");

@@ -82,7 +82,7 @@ bool can_retreat(const tuning::TankSpec& spec) {
 }
 }  // namespace
 
-TEST_CASE("RETREAT is the heavy's; scouts fight to the end (#152)") {
+TEST_CASE("RETREAT is the heavy's, and scouts fight to the end (#152)") {
     // The docs once said every raider may retreat, but with the shipped numbers a scout (40 hp) is at 0.375 after
     // one player shell and dies to the next. Letting scouts retreat broke pillar 1 in every tuning tried (0.4:
     // cover 28/40, charging 25/40), so this is the design, pinned: a tuning change that makes the heavy unable to

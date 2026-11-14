@@ -35,6 +35,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): ship --target itch defaults to the web build (#86)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm on the
 #           Unity, C++/SDL3, Bevy and Unreal smoke help, Unity's drive names (#308)
+# Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CppTestNames, check refuses a doctest name with ';'
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -79,6 +80,29 @@ class TempRoot(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+
+# ---- C++ test names: ';' is CMake's list separator ---------------------------
+class CppTestNames(TempRoot):
+    """A doctest name holding ';' is split by doctest_discover_tests into filters that match nothing, and CTest
+    reports them as passed: such a test never runs. check refuses the name."""
+
+    def write(self, rel, text):
+        p = self.root / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text, encoding="utf-8")
+
+    def test_a_semicolon_in_a_test_name_is_reported(self):
+        dev = load("cpp-sdl2")
+        dev.ROOT = self.root
+        self.write("tests/test_a.cpp", 'TEST_CASE("fine, and fine") {}\nTEST_CASE("this; never runs") {}\n')
+        self.write("tests/sub/test_b.cpp", 'SCENARIO("also; split") {}\n')
+        self.assertEqual(dev.unrunnable_test_names(),
+                         ["tests/sub/test_b.cpp: also; split", "tests/test_a.cpp: this; never runs"])
+
+    def test_the_skeleton_has_none(self):
+        dev = load("cpp-sdl2")
+        self.assertEqual(dev.unrunnable_test_names(), [])
 
 
 # ---- #33: C++ smoke -----------------------------------------------------------

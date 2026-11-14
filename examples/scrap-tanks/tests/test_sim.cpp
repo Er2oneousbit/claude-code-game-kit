@@ -80,7 +80,7 @@ TEST_CASE("the first wave arrives after a short pause with three scouts") {
     CHECK(started.raiders_alive() == tuning::kWaves[0].scouts + tuning::kWaves[0].heavies);
 }
 
-TEST_CASE("cover stops shells; a clear shot hits") {
+TEST_CASE("cover stops shells and a clear shot hits") {
     Sim sim = with_first_wave(true);
     Tank& r = first_raider(sim);
     r.pos = {19.0, 12.5};                 // behind the center rock (19, 15.5) as seen from below
@@ -119,7 +119,7 @@ TEST_CASE("sight: a tank whose center is behind cover is seen when an edge of it
     CHECK(edge_only > 0);
 }
 
-TEST_CASE("a destroyed raider drops scrap; scrap repairs the player once") {
+TEST_CASE("a destroyed raider drops scrap and scrap repairs the player once") {
     Sim sim = with_first_wave(true);
     Tank& r = first_raider(sim);
     r.pos = {24.0, 21.0};
@@ -152,7 +152,7 @@ TEST_CASE("god mode takes hits but no damage") {
     CHECK(sim.player().hp == doctest::Approx(tuning::kPlayer.max_hp));
 }
 
-TEST_CASE("clearing every wave wins; losing the player ends the run") {
+TEST_CASE("clearing every wave wins and losing the player ends the run") {
     Sim sim(3, true);
     std::vector<core::Event> evs;
     for (int i = 0; i < 60 * 60 && sim.outcome() == core::Outcome::Playing; ++i) {
