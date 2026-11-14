@@ -40,6 +40,8 @@
 #           the parent waits for the job instead of sleeping, the timeout starts once the orphan exists,
 #           explicit margins, and the orphan is held by a handle (a stale-pid taskkill could end another process)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): GodotDummyAudio, windowed runs take no sound device
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): CppCaptureFormats, C++ smoke --screenshot is PNG for .png and
+#           BMP for .bmp, any other name refused before the build, BMP bytes in a .png fail, PNG frames (#314)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -142,17 +144,28 @@ class CppSmoke(TempRoot):
     FULL = "[INFO][core] BOOT_OK Test v0.1.0\n[INFO][core] smoke complete after 120 frames\n"
     EARLY = "[INFO][core] BOOT_OK Test v0.1.0\nRUN_WON\n[INFO][core] smoke ended early: the game quit after 40 of 120 frames\n"
 
+    MAGIC = {".png": b"\x89PNG\r\n\x1a\n fake", ".bmp": b"BM fake"}
+
     def smoke(self, out, rc=0, writes=(), **opts):
+        """cmd_smoke with the build and the game faked: `writes` are the files the game saves this run, each with
+        the first bytes its extension names, or (path, bytes) for other bytes."""
         dev = load("cpp-sdl2")
         dev.ROOT = self.root
-        dev.cmd_check = lambda args: 0
+        self.built = False
+
+        def fake_check(args):
+            self.built = True
+            return 0
+        dev.cmd_check = fake_check
         dev.find_exe = lambda preset: "game.exe"
 
         def fake_run(cmd, **kwargs):
-            for rel in writes:                  # what the game would save this run
+            self.cmd = cmd
+            for w in writes:                    # what the game would save this run
+                rel, data = w if isinstance(w, tuple) else (w, self.MAGIC[Path(w).suffix.lower()])
                 p = self.root / rel
                 p.parent.mkdir(parents=True, exist_ok=True)
-                p.write_bytes(b"BM fake")
+                p.write_bytes(data)
             return rc, out
         dev.run = fake_run
         args = argparse.Namespace(preset="debug", frames=120, screenshot=None, record=None, record_every=4,
@@ -179,7 +192,7 @@ class CppSmoke(TempRoot):
 
     def test_stale_screenshot_fails(self):
         shot = self.root / "captures" / "shot.bmp"
-        shot.parent.mkdir()
+        shot.parent.mkdir(exist_ok=True)
         shot.write_bytes(b"old picture")
         rc, text = self.smoke(self.FULL, screenshot="captures/shot.bmp")
         self.assertEqual(rc, 1)
@@ -190,9 +203,57 @@ class CppSmoke(TempRoot):
         rc, text = self.smoke(self.FULL, record="frames")
         self.assertEqual(rc, 1)
         self.assertIn("no frames recorded", text)
-        rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000000.bmp"])
+        rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000000.png"])
         self.assertEqual(rc, 0)
         self.assertIn("1 frame(s)", text)
+
+
+# ---- #314: C++ smoke --screenshot writes the format its name asks for ----------------
+class CppCaptureFormats(TempRoot):
+    """Before #314 the game saved BMP bytes whatever the name, and dev.py took any name: --screenshot x.png gave a
+    BMP called .png. Now .png is PNG, .bmp is BMP, anything else is refused before the build."""
+    FULL, MAGIC, smoke = CppSmoke.FULL, CppSmoke.MAGIC, CppSmoke.smoke   # CppSmoke's fake run, not its tests
+
+    def test_png_and_bmp_names_pass_with_their_own_bytes(self):
+        for name in ("captures/a.png", "captures/b.bmp", "captures/C.PNG"):
+            rc, text = self.smoke(self.FULL, screenshot=name, writes=[name])
+            self.assertEqual(rc, 0, text)
+            self.assertIn("screenshot:", text)
+            self.assertIn(str((self.root / name).resolve()), self.cmd)
+
+    def test_another_extension_is_refused_before_the_build(self):
+        for name in ("captures/a.jpg", "captures/shot", "captures/a.png.txt"):
+            rc, text = self.smoke(self.FULL, screenshot=name, writes=[(name, b"anything")])
+            self.assertEqual(rc, 2, name)
+            self.assertIn("[error] --screenshot " + name, text)
+            self.assertIn(".png (PNG) or .bmp (BMP)", text)
+            self.assertFalse(self.built, "refused before the build")
+
+    def test_bmp_bytes_under_a_png_name_fail(self):
+        # what a game whose main.cpp and Draw.cpp predate #314 writes
+        rc, text = self.smoke(self.FULL, screenshot="captures/a.png", writes=[("captures/a.png", b"BM old")])
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a PNG file", text)
+        rc, text = self.smoke(self.FULL, screenshot="captures/b.bmp", writes=[("captures/b.bmp", b"\x89PNG\r\n\x1a\n")])
+        self.assertEqual(rc, 1)
+        self.assertIn("is not a BMP file", text)
+
+    def test_record_frames_are_png(self):
+        rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000000.bmp"])
+        self.assertEqual(rc, 1)
+        self.assertIn("only BMP frames", text)
+        rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000000.png", "frames/frame_000004.png"])
+        self.assertEqual(rc, 0, text)
+        self.assertIn("2 frame(s)", text)
+
+    def test_an_earlier_runs_frames_are_removed_png_and_bmp(self):
+        rec = self.root / "frames"
+        rec.mkdir()
+        for name in ("frame_000000.bmp", "frame_000008.png", "notes.txt"):
+            (rec / name).write_bytes(b"old")
+        rc, text = self.smoke(self.FULL, record="frames", writes=["frames/frame_000004.png"])
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(sorted(p.name for p in rec.iterdir()), ["frame_000004.png", "notes.txt"])
 
 
 # ---- #269: C++ smoke --drive (the shell's screens) --------------------------------
