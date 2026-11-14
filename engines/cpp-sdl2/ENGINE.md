@@ -31,7 +31,9 @@
 - **Game options:** everything after `--` on the command line goes to `Game::configure()` (autoplay modes, cheats, seeds),
   so a game adds options without touching `main.cpp`. `dev.py smoke` passes them the same way:
   `python tools/dev.py smoke --frames 20000 --until RUN_WON --fail-on CAUGHT -- --autoplay careful`.
-  `--screenshot build/shot.bmp` and `--record build/frames` capture frames (BMP; `tools/art/frames_to_gif.py` reads them).
+  `--screenshot captures/shot.png` and `--record captures/frames` capture frames: a `.png` name is saved as PNG, a `.bmp`
+  name as BMP, any other name is refused before the run; `--record` frames are PNG (`tools/art/frames_to_gif.py` makes
+  the GIF).
 - **The shell (SOP-19, SOP-20):** `src/shell/` is the front end around the game: title (with the telemetry question), main
   menu, settings (Display, Audio, Controls with press-a-key rebinding and the one-handed layouts, Accessibility, Language),
   credits (`CREDITS.md`), loading, pause with "What now?" and "Dialogue history", subtitles and captions
@@ -62,7 +64,7 @@
   `crashes/crash_<UTC time>.txt` in the user-data folder (game, version, build, OS, screen, locale, seed from
   `shell_->set_run_seed()`, the error, the last 60 log lines, settings.json) and print `CRASH_WRITTEN <path>`; the run
   exits 1, and outside smoke runs a message box names the file. In a debug build (no `NDEBUG`: the `debug` preset) **F8**
-  saves `bug_<UTC time>/` there (a screenshot.bmp of that frame, log_tail.txt, settings.json, info.txt) and prints
+  saves `bug_<UTC time>/` there (a screenshot.png of that frame, log_tail.txt, settings.json, info.txt) and prints
   `BUG_REPORT <folder>`; nothing leaves the machine. The texts are `src/core/Report.hpp` (`tests/test_reports.cpp`).
 - **Pseudo locale (#275):** `--locale pseudo` (or Settings > Language > pseudo in a debug build) shows every string from
   `t()` bracketed and 40 % longer, in an **ASCII form without accents** (`core::pseudo_ascii`): the 8x8 font cannot draw
@@ -110,7 +112,7 @@
   fail on its planted label), `--drive bug` (F8 on the menu: `DRIVE_BUG <folder>`),
   `--drive display` (the Display tab's Apply: stage, Back warns, Apply, the 15 s confirm reverts on the wall clock,
   two Backs discard; `DRIVE_DISPLAY` lines),
-  `--drive show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm> --screenshot captures/x.bmp`, and
+  `--drive show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm> --screenshot captures/x.png`, and
   `--drive access` (the accessibility sweep's tour; `python tools/access/sweep.py` runs it five ways). `--data-dir` keeps
   settings.json in a folder of yours (default: a fresh `build/smoke-data/`, never the player's preferences folder;
   one inside a build tree such as `build/debug/` is refused, exit 2), `--locale` picks the language. Scenarios live in

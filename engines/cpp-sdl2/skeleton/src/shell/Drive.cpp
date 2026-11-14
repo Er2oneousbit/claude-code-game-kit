@@ -11,6 +11,7 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display (stage, warn, apply, the confirm reverts on
 //           the wall clock, discard; DRIVE_DISPLAY lines), show:apply and show:confirm, the pseudo drive checks the
 //           Display tab with a change waiting and the confirm (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bug drive looks for screenshot.png (#314)
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
@@ -42,7 +43,7 @@ namespace {
 const char* kAccessActions[] = {"ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"};
 const char* kPromptActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
 const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice, credits, apply, confirm";
-const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.bmp"};
+const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.png"};
 
 bool starts_with(const std::string& s, const std::string& prefix) {
     return s.compare(0, prefix.size(), prefix) == 0;

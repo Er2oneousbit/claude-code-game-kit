@@ -6,7 +6,7 @@
 //           guard (interact) held or toggled with hold_to_toggle; walking by the held move actions or the analog
 //           stick (Shell::move_vector, #274); a subtitle line, a bark and a caption; the accessibility settings live.
 // Usage   : the shell owns it: main menu > Juice demo, or python tools/dev.py smoke --drive show:juice --screenshot
-//           captures/juice.bmp. A game copies the parts it wants into its play screen (src/game/Game.cpp).
+//           captures/juice.png. A game copies the parts it wants into its play screen (src/game/Game.cpp).
 // Notes   : The same demo as the LOVE and Godot shells. Time: the hitstop and the flash limiter run on REAL time
 //           (the shell's dt); everything else (shake, follow, spring, input buffer, coyote) on GAME time = the
 //           hitstop-scaled dt times access.game_speed. The limiter is always on (at most 3 flashes per real
@@ -19,6 +19,7 @@
 //   walk by move_vector().x; fall; land; windows * timing_scale; (auto_repeat: held attack hits)
 //   coyote + buffer -> jump; guard held or toggled; camera follows; shake, spring, "hit" ring advance
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a .png capture (#314)
 // ---------------------------------------------------------------------------
 #pragma once
 

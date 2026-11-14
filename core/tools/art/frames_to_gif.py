@@ -17,10 +17,11 @@
 #           GIF frame delays are whole hundredths of a second, so --fps is rounded to the nearest one (15 fps is
 #           70 ms a frame) and capped at 50 fps with a warning: browsers play faster GIFs at 10 fps.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the C++ overlay records PNG frames now (#314); BMP frames still read
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
-#   list *.png and *.bmp in frames-dir (BMP: the C++ overlay's smoke --record), sorted; keep every Nth
+#   list *.png and *.bmp in frames-dir (BMP: the C++ overlay's smoke --record before kit #314), sorted; keep every Nth
 #   for each: open, convert to RGB, scale to --width (nearest), quantize to --colors
 #   save as an animated GIF, 100/fps cs per frame (rounded, at least 2 cs), loop forever
 import argparse
