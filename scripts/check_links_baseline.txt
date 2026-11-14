@@ -5,6 +5,7 @@
 .claude/skills/make-a-game/SKILL.md: path: tools/dev.py
 CHANGELOG.md: path: bozzetto.json
 CHANGELOG.md: path: src/core/follow.ts
+CHANGELOG.md: path: tests/test_capture_format.cpp
 CHANGELOG.md: path: tools/audio/babble.py
 CHANGELOG.md: path: tools/audio/eleven_audio.py
 CHANGELOG.md: path: tools/audio/fish_tts.py
