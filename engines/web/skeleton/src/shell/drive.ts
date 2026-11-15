@@ -26,7 +26,8 @@
 //           juice demo's subtitle (skipped while it types) is finished and checked again; the subtitle clock
 //           stands still for the tour (holdTime), so the count is the same on every run of a build, however
 //           long loading takes
-//   display: settings -> Display: mode one step on (staged) -> Back warns -> Apply -> the confirm (15 s of real
+//   display: settings -> Display: mode one step on (staged) -> Back warns -> a step back and on again (the warning
+//           goes with the change) -> Apply -> the confirm (15 s of real
 //           time; sooner than 14 s fails) runs out and reverts -> the mode and settings.json are back where they
 //           were -> a second staged change, Back twice: discarded, back on the menu
 //   show  : open one screen, settle, freeze the game (credits: the text at its top, standing still), SHOWN <screen>
@@ -37,6 +38,7 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 //           and the pseudo tour checks the Display tab's pending, warning and confirm states (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning goes once the mode is stepped back
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
@@ -211,6 +213,14 @@ async function display(shell: Shell, d: Driver): Promise<void> {
   await d.press("ui_cancel"); // the first Back warns and stays
   if (shell.topId !== "settings" || !shell.staging?.warned) throw new Error("Back with unapplied changes did not warn");
   Log.info("drive", "DRIVE_DISPLAY warned");
+  // stepping back to the applied mode leaves nothing to apply: the warning must go with it
+  await d.press("ui_left");
+  const status = shell.top?.root.querySelector(".status")?.textContent ?? "";
+  if (shell.staging?.dirty || status.includes(shell.i18n.t("settings.unapplied"))) {
+    throw new Error(`the unapplied warning stayed with nothing left to apply (status "${status}")`);
+  }
+  await d.press("ui_right"); // staged again
+  if (!shell.staging?.dirty) throw new Error("the mode change was not staged again");
   await d.focus("display.apply");
   const start = performance.now();
   await d.press("ui_accept");
