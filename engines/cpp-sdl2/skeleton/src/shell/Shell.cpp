@@ -18,6 +18,9 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): with reduce motion a tall CREDITS.md starts at the
 //           top and up/down move it a row at a time (#302)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png, a PNG like every engine's (#314)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a windowed size fits the usable screen and is centred
+//           (core::fit_window); a first run takes the window's own size as display.resolution, so a revert puts
+//           back the window that was on screen (#308, seen on a real window)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -33,6 +36,7 @@
 #include "core/Bindings.hpp"
 #include "core/Log.hpp"
 #include "core/Settings.hpp"
+#include "core/WindowFit.hpp"
 #include "shell/Drive.hpp"
 #include "shell/JuiceDemo.hpp"
 
@@ -255,6 +259,12 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
     apply_settings();
     if (settings_existed_) {
         apply_display();
+    } else if (!opts_.automated && window_) {
+        // first run: the setting is the window main.cpp opened, so the Display tab and a revert match the screen
+        int w = 0, h = 0;
+        if (SDL_GetWindowSize(window_, &w, &h) && w > 0 && h > 0) {
+            settings_["display"]["resolution"] = json::array({w, h});
+        }
     }
     LOG_INFO("shell", "data folder " << core::path_to_utf8(data_dir_) << ", locale " << locale_
                                      << (opts_.automated ? ", automated" : ""));
@@ -280,7 +290,18 @@ void Shell::apply_display() {
     if (mode == "windowed") {
         SDL_SetWindowFullscreen(window_, false);
         if (d["resolution"].is_array() && d["resolution"].size() == 2) {
-            SDL_SetWindowSize(window_, d["resolution"][0].get<int>(), d["resolution"][1].get<int>());
+            const int want_w = d["resolution"][0].get<int>(), want_h = d["resolution"][1].get<int>();
+            SDL_Rect usable{};
+            if (SDL_GetDisplayUsableBounds(SDL_GetDisplayForWindow(window_), &usable)) {
+                core::FrameSize frame{0, 0, 0, 0};
+                SDL_GetWindowBordersSize(window_, &frame.top, &frame.left, &frame.bottom, &frame.right);
+                const core::WindowPlace p =
+                    core::fit_window(want_w, want_h, {usable.x, usable.y, usable.w, usable.h}, frame);
+                SDL_SetWindowSize(window_, p.w, p.h);
+                SDL_SetWindowPosition(window_, p.x, p.y);
+            } else {
+                SDL_SetWindowSize(window_, want_w, want_h);
+            }
         }
     } else {
         SDL_SetWindowFullscreen(window_, true);   // SDL3: borderless desktop fullscreen unless a mode is set
