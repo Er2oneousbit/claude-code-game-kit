@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 #include "GameKitShellSubsystem.h"
 
+#include "ComponentRecreateRenderStateContext.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/GameUserSettings.h"
@@ -208,10 +209,14 @@ void UGameKitShellSubsystem::ApplyWindow()
 	User->SetScreenResolution(GameKit::SettingResolution(*Model->Settings));
 	User->SetVSyncEnabled(Model->Flag(TEXT("display"), TEXT("vsync")));
 	User->SetFrameRateLimit(static_cast<float>(Model->Num(TEXT("display"), TEXT("frame_cap"))));   // 0 = no limit
-	// ApplySettings would also write GameUserSettings.ini, which Unreal reads at start: while the keep-or-revert
-	// confirm is open the window changes but the file waits (Keep sends "display_kept", a revert "display_applied")
-	User->ApplyResolutionSettings(/*bCheckForCommandLineOverrides*/ false);
-	User->ApplyNonResolutionSettings();
+	// UGameUserSettings::ApplySettings, less its SaveSettings: GameUserSettings.ini, which Unreal reads at start, waits
+	// while the keep-or-revert confirm is open (Keep sends "display_kept", a revert "display_applied") (verify)
+	{
+		FGlobalComponentRecreateRenderStateContext Context;   // one render-state recreate, as ApplySettings does
+		User->ApplyResolutionSettings(/*bCheckForCommandLineOverrides*/ false);
+		User->ApplyNonResolutionSettings();
+	}
+	User->RequestUIUpdate();
 	if (!Model->DisplayConfirming())
 	{
 		User->SaveSettings();

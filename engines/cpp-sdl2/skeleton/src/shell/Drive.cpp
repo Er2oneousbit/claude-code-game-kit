@@ -568,6 +568,12 @@ void Drive::build_display() {
         }
         std::cout << "DRIVE_DISPLAY warned: " << shell_.message_ << "\n";
     });
+    frames(kWarningHoldFrames);                           // longer than a settings message lasts
+    then("the warning stays", [this] {
+        if (shell_.message_ != shell_.t("settings.unapplied")) {
+            fail("the unapplied warning went while the next Back still discards (status \"" + shell_.message_ + "\")");
+        }
+    });
     focus("display.apply");
     press("ui_accept");
     then("applied, the confirm open", [this, setting, saved, shown] {
