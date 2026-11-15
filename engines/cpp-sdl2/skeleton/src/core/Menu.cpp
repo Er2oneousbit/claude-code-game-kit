@@ -8,6 +8,8 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Display rows stage through core::DisplayStaging, the
 //           Apply row, the keep-or-revert confirm, Back that warns once about unapplied Display changes (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): set_display saves only once no confirm is open, and
+//           Keep saves: an Apply waiting for Keep never reaches settings.json
 // ---------------------------------------------------------------------------
 #include "core/Menu.hpp"
 
@@ -382,7 +384,8 @@ void SettingsMenu::set_display(const DisplayStaging::Calls& calls) {
         s_["display"][field] = v;
     }
     changed("display");
-    if (hooks_.save) {
+    // an Apply that waits for Keep is not saved: a game killed on a black screen must start with the old values
+    if (hooks_.save && !staging_.confirming()) {
         hooks_.save();
     }
 }
@@ -405,6 +408,9 @@ void SettingsMenu::tick(double real_dt) {
 
 void SettingsMenu::keep_display() {
     staging_.keep();
+    if (hooks_.save) {
+        hooks_.save();   // the values the confirm held back from settings.json
+    }
 }
 
 void SettingsMenu::revert_display() {

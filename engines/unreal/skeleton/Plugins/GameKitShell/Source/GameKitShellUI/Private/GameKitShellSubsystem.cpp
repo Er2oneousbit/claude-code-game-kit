@@ -10,9 +10,12 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): "display_applied" sets the window through
 //           UGameUserSettings outside the editor and smoke runs (#308); HudTextScale, HudFontSize, OnHudScaleChanged
 //           (#309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): GameUserSettings.ini is written only once no display
+//           confirm is open ("display_kept" writes it), so Unreal never starts in a mode the player did not keep
 // ---------------------------------------------------------------------------
 #include "GameKitShellSubsystem.h"
 
+#include "ComponentRecreateRenderStateContext.h"
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "GameFramework/GameUserSettings.h"
@@ -88,7 +91,7 @@ void UGameKitShellSubsystem::MakeModel()
 	Model->OnEvent = [this](const FString& What)
 	{
 		OnShellEvent.Broadcast(What);
-		if (What == TEXT("display_applied"))
+		if (What == TEXT("display_applied") || What == TEXT("display_kept"))
 		{
 			ApplyWindow();
 		}
@@ -206,7 +209,18 @@ void UGameKitShellSubsystem::ApplyWindow()
 	User->SetScreenResolution(GameKit::SettingResolution(*Model->Settings));
 	User->SetVSyncEnabled(Model->Flag(TEXT("display"), TEXT("vsync")));
 	User->SetFrameRateLimit(static_cast<float>(Model->Num(TEXT("display"), TEXT("frame_cap"))));   // 0 = no limit
-	User->ApplySettings(/*bCheckForCommandLineOverrides*/ false);
+	// UGameUserSettings::ApplySettings, less its SaveSettings: GameUserSettings.ini, which Unreal reads at start, waits
+	// while the keep-or-revert confirm is open (Keep sends "display_kept", a revert "display_applied") (verify)
+	{
+		FGlobalComponentRecreateRenderStateContext Context;   // one render-state recreate, as ApplySettings does
+		User->ApplyResolutionSettings(/*bCheckForCommandLineOverrides*/ false);
+		User->ApplyNonResolutionSettings();
+	}
+	User->RequestUIUpdate();
+	if (!Model->DisplayConfirming())
+	{
+		User->SaveSettings();
+	}
 	UE_LOG(LogGameKitShell, Log, TEXT("window: %s %dx%d"), *Mode, User->GetScreenResolution().X, User->GetScreenResolution().Y);
 }
 

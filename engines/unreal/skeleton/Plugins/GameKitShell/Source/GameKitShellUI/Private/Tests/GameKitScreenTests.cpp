@@ -26,6 +26,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, its confirm (Keep,
 //           Revert, cancel; model time does not count it down), Back warns once (#308); the HUD text factor and
 //           hud_scale_changed (#309); disabled rows need not be reachable
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an Apply that waits for Keep is not saved, Keep saves it; Back's
+//           warning outlasts a settings message
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -410,6 +412,9 @@ bool FGameKitScreensDisplayConfirmTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("size applied"), GameKit::SettingResolution(*M->Settings), FIntPoint(1600, 900));
 	TestEqual(TEXT("focus on Keep"), M->FocusId(), FString(TEXT("confirm.keep")));
 	TestEqual(TEXT("15 s to answer"), M->DisplayStaging().Seconds().Get(-1), 15);
+	// not saved while it waits for Keep (a missing file reads as the defaults: windowed, 1920x1080)
+	TestEqual(TEXT("an Apply that waits for Keep is not saved"),
+	          GameKit::SettingResolution(*GameKit::SettingsLoadFile(M->SettingsPath()).Settings), FIntPoint(1920, 1080));
 	Frames(*M, 1200);                                // 20 s of model time, a few milliseconds of real time
 	TestTrue(TEXT("the countdown is real time, not Update's Dt"), M->DisplayConfirming());
 	M->Dispatch(TEXT("ui_right"));                   // the confirm takes every press: no row changes
@@ -428,6 +433,7 @@ bool FGameKitScreensDisplayConfirmTest::RunTest(const FString& Parameters)
 	M->Dispatch(TEXT("ui_accept"));                  // Keep
 	TestFalse(TEXT("Keep closes the confirm"), M->DisplayConfirming());
 	TestEqual(TEXT("the new size stays"), GameKit::SettingResolution(*M->Settings), FIntPoint(2560, 1440));
+	TestEqual(TEXT("Keep saves it"), GameKit::SettingResolution(*GameKit::SettingsLoadFile(M->SettingsPath()).Settings), FIntPoint(2560, 1440));
 	// Back during the confirm reverts and stays on settings
 	FocusRow(*M, TEXT("display.resolution"));
 	M->Dispatch(TEXT("ui_right"));
@@ -459,6 +465,8 @@ bool FGameKitScreensDisplayDiscardTest::RunTest(const FString& Parameters)
 	M->Dispatch(TEXT("ui_accept"));
 	TestEqual(TEXT("Back from another tab warns too"), M->Message, M->T(TEXT("settings.unapplied")));
 	TestEqual(TEXT("and stays"), M->TopName(), FString(TEXT("settings")));
+	Frames(*M, 300);                                 // 5 s: longer than a settings message lasts
+	TestEqual(TEXT("the warning stays up while the next Back discards"), M->Message, M->T(TEXT("settings.unapplied")));
 	M->Dispatch(TEXT("ui_cancel"));
 	TestEqual(TEXT("a second Back leaves"), M->TopName(), FString(TEXT("main_menu")));
 	TestEqual(TEXT("the staged ui_scale is discarded"), M->Num(TEXT("display"), TEXT("ui_scale")), 1.0, 1e-9);

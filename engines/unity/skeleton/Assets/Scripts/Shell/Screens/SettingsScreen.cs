@@ -5,7 +5,8 @@
 //           shown as swaps, the one-handed layouts (#166) and Reset to defaults. Back (or cancel) saves settings.json.
 //           The Display tab waits for Apply (#308): its rows stage through Core's DisplayStaging, Apply (next to Back,
 //           enabled while a change waits) sets the changed fields and saves, and a new window mode or size asks
-//           "Keep these display settings? Reverting in N s" (Keep focused, 15 real seconds, then it reverts).
+//           "Keep these display settings? Reverting in N s" (Keep focused, 15 real seconds, then it reverts); the
+//           file is written when that confirm closes.
 // Usage   : front.OpenSettings()   (from the main menu or the pause menu)
 // Notes   : Changes apply at once (Shell.SetValue), Display's on Apply; Back writes the file, and with Display
 //           changes waiting it warns once (settings.unapplied), the second Back discards them. The confirm counts on
@@ -20,12 +21,15 @@
 //   build: heading, tab buttons (one grid row), a scroll area holding the current tab's rows, Back, a status line
 //   tab rows: per schema field a label + control (switch / slider + value / choice); Controls adds one row per
 //     action: name, keyboard slot, pad slot; then Reset and the one-handed presets on one row
-//   display rows: show and stage DisplayStaging values; Apply -> SetValue per call (mode first) -> save -> confirm?
-//   confirm: Tick(real dt) counts down; Keep closes; Revert, cancel or running out -> SetValue the old values, save
+//   display rows: show and stage DisplayStaging values; Apply -> SetValue per call (mode first) -> confirm? else save
+//   confirm: Tick(real dt) counts down; Keep saves, closes; Revert, cancel or running out -> SetValue the old values,
+//     save
 //   Back: confirm open -> revert; Display changes waiting -> warn once; else save and leave
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply, its hint line and the
 //           keep-or-revert confirm on a real-time clock; Back warns once about unapplied Display changes (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the confirm is open, Keep saves (a mode
+//           the screen cannot show never reaches settings.json)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -312,7 +316,8 @@ namespace {{GAME_SLUG}}.Shell.Screens
         }
 
         /// <summary>Sets each (field, value) through Shell.SetValue in the order given (mode before resolution), then
-        /// saves settings.json.</summary>
+        /// saves settings.json, unless the confirm is open: a mode the screen cannot show is never saved (Keep saves
+        /// it), so a game killed during the confirm starts with the old values.</summary>
         private void SetDisplay(List<(string Field, object Value)> calls)
         {
             if (calls.Count == 0)
@@ -323,12 +328,16 @@ namespace {{GAME_SLUG}}.Shell.Screens
             {
                 S.SetValue("display", field, value);
             }
-            S.SaveSettings();
+            if (!_staging.Confirming)
+            {
+                S.SaveSettings();
+            }
         }
 
         private void KeepDisplay()
         {
             _staging.Keep();
+            S.SaveSettings();                            // the values the confirm held back from settings.json
             CloseConfirm();
         }
 
