@@ -78,8 +78,8 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
   machine refused it (and once hung on it), so the fallback is what was seen. A first run has no settings.json, so the
   window opens at 1280x720 while the Display tab says 1920x1080, and a revert sets 1920x1080, not the window seen before
   (the runs above had settings.json holding 1600x900, the window's size). Game HUD text follows text_scale and ui_scale
-  through `app:hud_font(base)` (or `app:hud_font_size(base)`), set again from `app:on_look_changed(fn)` (#309; the
-  starter's pause hint in `src/shell/screens/play.lua` uses it). Controls lists the game actions with their prompt
+  through `app:hud_font(base)` (or `app:hud_font_size(base)`), set again from `app:on_look_changed(fn)`, which returns the function that stops it
+  (call it when the screen leaves) (#309; the starter's pause hint in `src/shell/screens/play.lua` uses it). Controls lists the game actions with their prompt
   glyph (`assets/ui/glyphs/<glyph_name>.png` at 1x, else a text key-cap), rebinds with "press a key" (a binding
   taken from another action swaps onto it), marks clashes, resets to defaults; `glyph_set` follows the last device.
   Applied: text_scale and ui_scale (font size), subtitles (on, size, background, speaker names, barks),
