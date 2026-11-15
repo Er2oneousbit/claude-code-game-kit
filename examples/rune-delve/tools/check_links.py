@@ -31,6 +31,8 @@
 #           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --baseline FILE and --write-baseline (#299): a
 #           sorted list of the known hits ("file: kind: target"), so a new break stands out from the ones a
 #           template tree reports on purpose
+#           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --baseline counts each line: a second copy of a known
+#           hit in one file was hidden by the set compare, and the summary miscounted it as known
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -41,6 +43,7 @@
 #   print broken references grouped by file, return exit code
 #   --baseline: compare the hits with the file's lines; print only the new ones as failures, the fixed ones as info
 import argparse
+import collections
 import fnmatch
 import os
 import re
@@ -253,9 +256,10 @@ def hit_lines(broken):
 
 
 def read_baseline(path):
-    """The baseline file's hit lines (blank lines and # comments skipped). Raises OSError when it cannot be read."""
-    with open(path, encoding="utf-8") as fh:
-        return {line.rstrip("\r\n") for line in fh if line.strip() and not line.startswith("#")}
+    """The baseline file's hit lines with their counts (a file holding the same broken link twice is listed twice;
+    blank lines and # comments skipped; a byte order mark is ignored). Raises OSError when it cannot be read."""
+    with open(path, encoding="utf-8-sig") as fh:
+        return collections.Counter(line.rstrip("\r\n") for line in fh if line.strip() and not line.startswith("#"))
 
 
 def write_baseline(path, lines):
@@ -270,9 +274,11 @@ def write_baseline(path, lines):
 
 
 def compare_baseline(lines, known):
-    """(new, fixed): hits the baseline lacks, and baseline lines that are no longer hits. Both sorted."""
-    current = set(lines)
-    return sorted(current - known), sorted(known - current)
+    """(new, fixed): hits the baseline lacks, and baseline lines that are no longer hits, both sorted. Counted, not
+    set-wise: a second copy of a known hit in the same file (the same target linked again) is a new break."""
+    current = collections.Counter(lines)
+    known = collections.Counter(known)
+    return sorted((current - known).elements()), sorted((known - current).elements())
 
 
 def main():

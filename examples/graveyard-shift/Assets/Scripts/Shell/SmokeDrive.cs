@@ -27,6 +27,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display (stage, warn, apply, the confirm reverts on the
 //           wall clock, discard; DRIVE_DISPLAY lines), show:apply and show:confirm, the pseudo drive checks the
 //           Display tab with a change waiting and the confirm (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old
+//           size while the confirm waits
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -269,7 +271,7 @@ namespace graveyard_shift.Shell
             return ((Dictionary<string, object>)GameSettings.LoadFile(file).Settings["display"])["resolution"];
         }
 
-        /// <summary>display: stage a window size, Back warns, Apply sets and saves it and opens the confirm, nobody
+        /// <summary>display: stage a window size, Back warns, Apply sets it (not saved yet) and opens the confirm, nobody
         /// answers and it reverts on the wall clock (proof that it counts real time), then two Backs discard a staged
         /// change. DRIVE_DISPLAY lines say what happened; settings.json is checked each time.</summary>
         private IEnumerator Display()
@@ -301,11 +303,13 @@ namespace graveyard_shift.Shell
             if (Failed) yield break;
             yield return Press("ui_accept");
             int? secs = Settings()?.Staging.Seconds();
-            if (secs == null || DisplayStaging.Same(LiveResolution(), before) || !DisplayStaging.Same(SavedResolution(), LiveResolution())
+            // set and confirmed, and not saved: settings.json keeps the old size (or is not there yet) until Keep
+            object file = SavedResolution();
+            if (secs == null || DisplayStaging.Same(LiveResolution(), before) || (file != null && !DisplayStaging.Same(file, before))
                 || _front.Top()?.Focused?.Name != "Keep")
             {
-                Fail($"Apply did not set, save and confirm the window size (settings {Json.Stringify(LiveResolution())}, "
-                     + $"file {Json.Stringify(SavedResolution())}, focus {_front.Top()?.Focused?.Name})");
+                Fail($"Apply did not confirm the window size, or saved it before Keep (settings {Json.Stringify(LiveResolution())}, "
+                     + $"file {Json.Stringify(file)}, focus {_front.Top()?.Focused?.Name})");
                 yield break;
             }
             float appliedAt = Time.realtimeSinceStartup;

@@ -3,7 +3,7 @@
 # Purpose : The Dotwork importer (scripts/core/dotwork_manifest.gd, dotwork_assets.gd) against the spec's golden
 #           fixture: loads data/golden/dotwork/assets/dotwork/golden.assets.json and compares what it built with
 #           data/golden/dotwork/expected.json (the reference loader's result) to 1e-6, every asset of every kind,
-#           the three maps' terrain, placed cells and centres included. Where Godot holds the number (a frame's
+#           the maps' terrain, placed cells and centres included. Where Godot holds the number (a frame's
 #           seconds in the SpriteFrames, a prop's collision box, a TileSet's tile counts, TileMapLayer.map_to_local
 #           and the tiles it holds, texture_origin), the number is read back from the Godot object. Plus what
 #           expected.json cannot show: the spec's hash and roll vectors, the corners4 rule, the variant pick,
@@ -15,6 +15,7 @@
 #           (DotworkAssets.texture), as in a game whose PNGs Godot has not imported yet.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created with the Godot importer (#307)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the imported-font scaling case
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -497,12 +498,53 @@ func test_tile_flags_to_alternatives() -> void:
 			| TileSetAtlasSource.TRANSFORM_FLIP_V | TileSetAtlasSource.TRANSFORM_TRANSPOSE)
 
 
+# The golden maps have no flagged cell: a map of all eight flag values must hold each cell with its transform and
+# find its tile data (a window run on 4.7.2, 2026-11-14, drew all eight as the spec's transpose-then-flip, pixel
+# for pixel; headless GUT cannot draw, so this checks what the drawing reads).
+func test_flagged_cells_hold_their_tile() -> void:
+	var doc: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
+	var t: Dictionary = _model["tileset"]["ground_yard"]["tile_list"][0]
+	var cells: Array = []
+	for f: int in 8:
+		cells.append([f, 0, t["atlas"], t["col"], t["row"], f])
+	doc["assets"].append({"kind": "map", "name": "flags", "tileset": "ground_yard", "size": [8, 1],
+			"tile_size": _model["tileset"]["ground_yard"]["tile_size"],
+			"layers": [{"name": "Flags", "kind": "tiles", "cells": cells}]})
+	var m: Dictionary = DotworkManifest.parse(doc, MANIFEST)
+	assert_eq((m["problems"] as Array).size(), 0, "\n".join(m["problems"]))
+	var root: Node2D = DotworkAssets.map_node(m["map"]["flags"])
+	var layer: TileMapLayer = root.get_node("Flags")
+	for f: int in 8:
+		var at: Vector2i = Vector2i(f, 0)
+		assert_eq(layer.get_cell_alternative_tile(at), DotworkAssets.flags_to_alternative(f), "flags %d" % f)
+		assert_not_null(layer.get_cell_tile_data(at), "flags %d finds its tile" % f)
+	root.free()
+
+
 # ---- Fonts, UI, the extra kinds as Godot objects ---------------------------------------------
 func test_font_loads_as_a_fontfile() -> void:
 	var f: FontFile = DotworkAssets.font(_model["font"]["tiny"])
 	assert_not_null(f, "the .fnt loads (FontFile.load_bitmap_font)")
 	if f != null:
 		assert_eq(int(f.get_height()), int(_model["font"]["tiny"]["line_height"]), "line height")
+
+
+# The golden folder has a .gdignore, so the imported-FontFile branch never runs on it. Godot's BMFont importer gives
+# the font scaling_mode Enabled (probed on 4.7.2: the 5 px golden font came back 22.4 px tall at the default size 16
+# instead of its 7 px line height); the importer's copy must draw 1:1 like the load_bitmap_font branch.
+func test_imported_font_draws_one_to_one() -> void:
+	var f: FontFile = FontFile.new()
+	assert_eq(f.load_bitmap_font(_model["font"]["tiny"]["file"]), OK)
+	f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_ENABLED # what the import gives
+	var line: int = int(_model["font"]["tiny"]["line_height"])
+	assert_ne(int(f.get_height()), line, "an Enabled bitmap font scales to size 16 (the bug)")
+	var fixed: FontFile = DotworkAssets.one_to_one(f)
+	assert_eq(int(fixed.get_height()), line, "drawn 1:1 at the default size")
+	assert_eq(int(fixed.get_height(32)), line, "and at any other size")
+	assert_true(fixed.has_char(65), "the copy keeps its glyphs")
+	var a: Dictionary = _model["font"]["tiny"]["chars"][65]
+	assert_eq(fixed.get_char_size(65, 16), Vector2(a["xadvance"], line), "A at its own advance and line height")
+	assert_eq(f.fixed_size_scale_mode, TextServer.FIXED_SIZE_SCALE_ENABLED, "the shared resource is not changed")
 
 
 func test_ui_and_extra_kinds_build() -> void:
@@ -566,6 +608,17 @@ func test_broken_references_are_problems() -> void:
 		"objects": [{"asset": "ghost", "x": 0, "y": 0}]}]}), "res://assets/dotwork/t.assets.json")
 	assert_eq((m["problems"] as Array).size(), 2, "\n".join(m["problems"]))
 	assert_eq(DotworkAssets.verify(m).size(), 2, "verify() names them")
+
+
+# The schema makes a normal map's size optional (image, target, convention are required): a manifest without it is
+# valid, so it must load (it was a fatal "field 'size' is missing" for the whole manifest).
+func test_normal_map_without_a_size_loads() -> void:
+	var m: Dictionary = DotworkManifest.parse(_doc({"assets": [{"kind": "normal_map", "name": "n",
+			"image": "art/n.png", "target": "art/t.png", "convention": "opengl"}]}), "res://assets/dotwork/t.assets.json")
+	assert_false(m.has("error"), str(m.get("error", "")))
+	if not m.has("error"):
+		assert_eq(m["normal_map"]["n"]["size"], null)
+		assert_eq(m["normal_map"]["n"]["image"], "res://assets/art/n.png")
 
 
 func test_paths_never_leave_the_game_folder() -> void:

@@ -8,10 +8,13 @@
 #           Also: mirrored character views are not light-checked, a 2 px outline, a missing outline, a character at
 #           twice the height, a prop that melts into the ground, the CLI exit codes, the lineup, and lit TileSet
 #           normal maps (tile_px a [w, h] list) that must not vote on the tile size, and store / brand art (scaled
-#           up on purpose) that no style check applies to.
+#           up on purpose) that no style check applies to; a tools edit row without "source" in a game whose source
+#           folder is not assets_src is still colour-checked against its source sprite (#282).
 # Usage   : python -I -B tools/art/dotwork/tests/test_qapack.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a tools row without a source, in a game whose
+#           src_dir is not assets_src (#282)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -256,6 +259,32 @@ class QaPackExam(unittest.TestCase):
         self.assertIn("#c81ec8", f[0]["detail"])
         self.assertGreater(f[0]["value"], 0)
         self.assertEqual([x for x in ctx.findings if x["file"] != rel], [])   # nothing else is blamed
+
+    def test_tools_row_without_a_source_reads_the_configured_source_folder(self):
+        """#282: a tools-lane row from before the lane wrote "source" falls back to the lane's own copy of the source
+        sprite. That fallback said assets_src/art/tools/<name>/source.png whatever src_dir was, so in a game with
+        another source folder the colour check found no file and skipped the edit without a word."""
+        g = clean_game(self.tmp)
+        src = os.path.join(self.tmp, "art_source")
+        sprite = shaded(20, 28, RAMPS["blue"])
+        os.makedirs(os.path.join(src, "art", "tools", "guard_edit"))
+        Image.fromarray(sprite).save(os.path.join(src, "art", "tools", "guard_edit", "source.png"))
+        edit = sprite.copy()
+        op = np.argwhere(edit[..., 3] == 255)
+        for y, x in op[:40]:
+            edit[y, x, :3] = (200, 30, 200)   # a scarf in a magenta neither the source nor the palette has
+        rel = g.put("assets/art/tools/guard_edit/spr_guard_edit_edit_00.png", edit, "edit",
+                    workflow="SpriteKiln wf04 (klein reference edit)")   # no "source": an old row
+        g.save()
+        os.makedirs(os.path.join(src, "dotwork"))
+        shutil.move(os.path.join(self.tmp, "assets_src", "dotwork", "manifest_test.json"),
+                    os.path.join(src, "dotwork", "manifest_test.json"))
+        ctx = qa_pack.analyse(self.tmp, src, g.pal, g.env)
+        self.assertIn(rel, ctx.measured, "the edit was colour-checked against its source")
+        f = self.by(ctx, "palette", rel)
+        self.assertEqual(len(f), 1, ctx.findings)
+        self.assertIn("#c81ec8", f[0]["detail"])
+        self.assertIn("source sprite", f[0]["detail"])
 
     def test_planted_prop_lit_from_the_wrong_side(self):
         g = clean_game(self.tmp)

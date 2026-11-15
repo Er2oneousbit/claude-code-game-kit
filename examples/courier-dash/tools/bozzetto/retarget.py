@@ -19,11 +19,16 @@
 #           from (the pack's row id when the pack's path has one). Run it before `rig chain`: a chain's sway is keyed
 #           into the clips the file has when the chain is made.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the backup is written again after a `rig make` re-run
+#           (rig.json's hash differs from the one retarget.json kept): it kept the old rig's skeleton; a pack clip
+#           name or path holding '|' or ';' no longer breaks the model's asset log row; the row holds one retarget
+#           note, the rig's clips from packs now (every --replace re-run appended another)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   options (clip list) -> <name>_rigged.glb exists -> the pack exists -> Blender found
-#   first run: copy the rig to before_retarget.glb -> rig_retarget.py pack --onto rig -> retargeted.glb + report
+#   first run, or `rig make` wrote a new rig since (rig.json's hash): copy the rig to before_retarget.glb
+#   -> rig_retarget.py pack --onto rig -> retargeted.glb + report
 #   failed: say why, replace nothing -> ok: replace the rig (unless --no-replace), record retarget.json (a history
 #   of runs), note the clips in the model's ASSET_LOG row, warn when the pack has no row of its own
 import json
@@ -69,6 +74,24 @@ def resolve(args):
     return root, dst, pack.resolve(), root / bz.SRC_ROOT / args.name / "rig" / "retarget"
 
 
+def rig_made_sha(work):
+    """The SHA-256 of <name>_rigged.glb as `rig make` last wrote it (rig.json beside the retarget folder), or None."""
+    try:
+        sha = json.loads((work.parent / "rig.json").read_text(encoding="utf-8"))["output"]["sha256"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    return sha if isinstance(sha, str) else None
+
+
+def refresh_backup(backup, record, made):
+    """True when the backup must be (re)written from the rig: there is none yet, or `rig make` wrote a new rig since
+    the backup was taken (`made`, its rig.json hash, differs from the one the record kept). Only a re-rig counts:
+    `rig chain` also rewrites the rig, and a retarget after it must keep the rig from before the first retarget."""
+    if not backup.is_file():
+        return True
+    return made is not None and record.get("rig_sha256") not in (None, made)
+
+
 def log_rows(text):
     """[(id, path cell)] of the ASSET_LOG rows."""
     out = []
@@ -79,8 +102,37 @@ def log_rows(text):
     return out
 
 
-def note_in_log(root, log_path, dst, pack_ref, clips, record_rel):
-    """Add (or extend) 'retarget: ...' in the Notes cell of the model's ASSET_LOG row; no row, no change."""
+def cell_text(text):
+    """A note safe for one ASSET_LOG Notes cell: '|' would start a new table cell, ';' a new note."""
+    return text.replace("|", "/").replace(";", ",")
+
+
+def clips_now(root, dst, runs, made):
+    """{new clip name: (source clip, pack ref)} the rig holds from packs now: the runs that wrote the rig, on this
+    rig (`made`, rig.json's hash; a re-rig drops the older ones), oldest first, so a re-run of a clip replaces it."""
+    out = {}
+    for r in runs:
+        if not isinstance(r, dict) or r.get("output") != bz.rel(root, dst) or r.get("rig_sha256") != made:
+            continue
+        ref = r.get("pack_asset") or f"`{r.get('pack')}`"
+        for name, c in ((r.get("report") or {}).get("clips") or {}).items():
+            out[name] = (c.get("from", name) if isinstance(c, dict) else name, ref)
+    return out
+
+
+def note_text(clips, record_rel):
+    """One 'retarget: ...' note: the clips grouped by pack, in the order they came."""
+    groups = {}
+    for name, (src, ref) in clips.items():
+        groups.setdefault(ref, []).append(f"{src} as {name}")
+    what = " + ".join(f"{', '.join(c)} from {ref}" for ref, c in groups.items())
+    # no '|' (a table cell) or ';' (the notes split on it): the pack's clip names and path come from outside
+    return cell_text(f"{NOTE_PREFIX}{what}, record `{record_rel}`")
+
+
+def note_in_log(root, log_path, dst, note):
+    """Put `note` ('retarget: ...') in the Notes cell of the model's ASSET_LOG row, replacing an older retarget note
+    (one per row, the rig's clips now, as `rig chain` does with its own); no row, no change."""
     text = log_path.read_text(encoding="utf-8")
     main_rel = bz.rel(root, dst)
     lines = text.splitlines(keepends=True)
@@ -88,9 +140,8 @@ def note_in_log(root, log_path, dst, pack_ref, clips, record_rel):
         cells = line.rstrip("\r\n").split("|")
         if not line.startswith("| A-") or len(cells) < 4 or f"`{main_rel}`" not in cells[3]:
             continue
-        notes = [n.strip() for n in cells[-2].split(";") if n.strip()]
-        what = ", ".join(f"{c['from']} as {name}" for name, c in clips.items())
-        notes.append(f"{NOTE_PREFIX}{what} from {pack_ref}, record `{record_rel}`")   # no ';': notes split on it
+        notes = [n.strip() for n in cells[-2].split(";") if n.strip() and not n.strip().startswith(NOTE_PREFIX)]
+        notes.append(note)
         cells[-2] = " " + "; ".join(notes) + " "
         lines[i] = "|".join(cells) + line[len(line.rstrip("\r\n")):]
         log_path.write_bytes("".join(lines).encode("utf-8"))
@@ -127,8 +178,11 @@ def cmd_rig_retarget(args):
         old = json.loads(rec_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         old = {}
-    if not (work / BACKUP).is_file():
+    made = rig_made_sha(work)
+    if refresh_backup(work / BACKUP, old, made):
         shutil.copyfile(dst, work / BACKUP)
+    if made:
+        old["rig_sha256"] = made                     # the rig the backup was taken from (an older record: adopted)
     out, report, sheet = work / "retargeted.glb", work / "retarget_report.json", work / "clips.png"
     for stale in (out, report, sheet):
         if stale.exists():
@@ -150,7 +204,7 @@ def cmd_rig_retarget(args):
     pack_id = next((aid for aid, cell in log_rows(text) if f"`{pack_rel}`" in cell), None)
     run = {"tool": f"tools/{bz.TOOL.lower()}/{bz.TOOL.lower()}.py rig retarget {bz.VERSION}",
            "date": time.strftime("%Y-%m-%d"), "pack": pack_rel, "pack_sha256": bz.sha256_bytes(pack.read_bytes()),
-           "pack_asset": pack_id, "clips": args.clips, "map": rep.get("map"), "report": rep}
+           "pack_asset": pack_id, "clips": args.clips, "map": rep.get("map"), "report": rep, "rig_sha256": made}
     history = old.get("runs", [])
     if rc != 0 or not out.is_file():
         rec_path.write_text(json.dumps(dict(old, runs=history, last_attempt=run), indent=2) + "\n", encoding="utf-8")
@@ -166,9 +220,11 @@ def cmd_rig_retarget(args):
         run["output"] = bz.rel(root, dst)
         print(f"[ OK ] {bz.rel(root, dst)} (the rig before its first retarget: {bz.rel(root, work / BACKUP)})")
     run["output_sha256"] = bz.sha256_bytes(Path(root / run["output"]).read_bytes())
-    rec_path.write_text(json.dumps({"runs": history + [run]}, indent=2) + "\n", encoding="utf-8")
+    rec_path.write_text(json.dumps(dict({k: v for k, v in old.items() if k == "rig_sha256"}, runs=history + [run]),
+                                   indent=2) + "\n", encoding="utf-8")
     if not args.no_replace and not args.no_log:
-        note_in_log(root, log_path, dst, pack_id or f"`{pack_rel}`", rep.get("clips", {}), bz.rel(root, rec_path))
+        note = note_text(clips_now(root, dst, history + [run], made), bz.rel(root, rec_path))
+        note_in_log(root, log_path, dst, note)
     if not pack_id and not args.no_log:
         print(f"[WARN] {pack_rel} has no row of its own in {bz.fetch_asset.ASSET_LOG.as_posix()}: log the pack and "
               "its licence (/asset-intake; Quaternius packs are CC0) before the game ships")

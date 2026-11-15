@@ -7,6 +7,9 @@
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --baseline write, compare, new, fixed, missing (#299)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --baseline counts repeated hits; a BOM is ignored
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the crafted-file case checks how the scan time grows
+#           (n against 4n), not a 5 s wall clock that coverage and load tipped over (#282)
 # ---------------------------------------------------------------------------
 import sys
 import tempfile
@@ -131,13 +134,31 @@ class CheckLinksSecondModelFixes(CheckLinksExam):
     passed on Windows and failed on Linux and GitHub."""
 
     def test_a_crafted_file_is_scanned_in_bounded_time(self):
+        # Unclosed "[a](" with no ")" or space: the destination class ate the rest of the file and backtracked once
+        # per link (a minute at 80 KB, hours at 1 MB); the same for a "[" label that ran across lines. What matters is
+        # how the time grows, not a wall-clock number: the bounded regexes take about 2.7 s for 20000 "[a](" on one
+        # machine and 5.1 s under coverage, linear either way. So each text is scanned at n and at 4n, the two runs
+        # taken in turn three times (a busy moment slows both sizes, not one) and the best of each kept, and the
+        # ratio must stay under GROWTH_LIMIT: linear measured 3.7 to 4.6 at these sizes, quadratic is about 16; 10
+        # leaves room on both sides. Sizes keep the small run at 25 ms or more, where timer noise is small.
         import time
-        # 20000 unclosed "[a](" with no ")" or space: the destination class ate the rest of the file and backtracked
-        # once per link (a minute at 80 KB, hours at 1 MB); the same for a "[" label that ran across lines
-        for text in ("[a](" * 20000, "[x\n" * 60000):
+        GROWTH_LIMIT = 10.0
+
+        def scan(text):
             started = time.perf_counter()
             list(check_links.references(text))
-            self.assertLess(time.perf_counter() - started, 5.0, "the regexes are quadratic again")
+            return time.perf_counter() - started
+
+        for unit, n in (("[a](", 2500), ("[x\n", 120000)):
+            small_text, big_text = unit * n, unit * (4 * n)
+            small, big = [], []
+            for _ in range(3):
+                small.append(scan(small_text))
+                big.append(scan(big_text))
+            ratio = min(big) / max(min(small), 1e-4)
+            self.assertLess(ratio, GROWTH_LIMIT,
+                            "the regexes are quadratic again: %r x%d took %.3f s, x%d %.3f s (x%.1f)"
+                            % (unit, n, min(small), 4 * n, min(big), ratio))
 
     def test_a_link_text_wrapped_over_two_lines_is_still_checked(self):
         self.assertIn("link: docs/NOPE.md", self.scan_text("see [the design\ndocument](docs/NOPE.md) first")["README.md"])
@@ -198,6 +219,29 @@ class CheckLinksBaseline(unittest.TestCase):
         rc, out = self.run_main()
         self.assertEqual(rc, 0, out)
         self.assertIn("[info] fixed since the baseline: README.md: path: docs/GONE.md", out)
+
+    def test_a_second_copy_of_a_known_hit_is_new(self):
+        """The same broken target twice in one file is two lines: a set compare hid the second copy (a new break in
+        a file that already had one) and counted a hit as known that the baseline never listed."""
+        self.baseline.write_text("# header only\n", encoding="utf-8")
+        (self.root / "README.md").write_text("[a](docs/X.md) and [b](docs/X.md)\n", encoding="utf-8")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1, out)
+        self.assertIn("2 broken reference(s), 0 known in known.txt, 2 new", out)
+        self.run_main("--write-baseline")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        (self.root / "README.md").write_text("[a](docs/X.md) [b](docs/X.md) [c](docs/X.md)\n", encoding="utf-8")
+        rc, out = self.run_main()
+        self.assertEqual(rc, 1, out)                       # a third link to the same missing file is a new break
+        self.assertIn("3 broken reference(s), 2 known in known.txt, 1 new", out)
+
+    def test_a_baseline_saved_with_a_byte_order_mark_reads_the_same(self):
+        self.run_main("--write-baseline")
+        self.baseline.write_bytes(b"\xef\xbb\xbf" +self.baseline.read_bytes())   # Notepad's "UTF-8 with BOM"
+        rc, out = self.run_main()
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn("fixed since the baseline", out)
 
     def test_a_missing_baseline_is_a_usage_problem(self):
         rc, out = self.run_main()

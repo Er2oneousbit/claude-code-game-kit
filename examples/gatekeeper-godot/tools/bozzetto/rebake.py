@@ -30,6 +30,7 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the policy text for --rebake auto (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --png and each map's format in the record and the evidence line (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --png help names the data-map JPEG gate (#313)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -348,7 +349,8 @@ def add_parser(sub, common):
                    help="ship a model that fails the UV coverage floor alone; the waiver goes on its asset log row")
     p.add_argument("--png", action="store_true",
                    help="every baked map as PNG (default: a colour map whose source was JPEG, as Tripo's are, stays "
-                        "JPEG; normal and data maps are always PNG)")
+                        "JPEG; a JPEG source's metallic-roughness map is JPEG only when measured under the limits, "
+                        "#313; normal maps are always PNG)")
     p.add_argument("--out", help="models folder (default: the engine's, as for make)")
     p.add_argument("--project", default=".", help="the game's root folder (default: the current folder)")
     p.add_argument("--no-replace", action="store_true",

@@ -24,6 +24,8 @@
 #           tools/art/dotwork/assetspec.py (the reference) line for line.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created, the Godot importer (#307)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map's size is optional, as in the schema
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -31,7 +33,7 @@
 #     for each kind in dependency order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map,
 #     then the extra kinds): convert every asset (required fields checked, unknown fields warned, paths resolved)
 #   tileset: terrain tiles filed by terrain and key (mask, or the sum of the corner bits holding the tile's own
-#     terrain) as [weight, tile] candidates in atlas order (atlases by id, tiles in list order)
+#     terrain) as [weight, tile] candidates in atlas order (atlases as listed, tiles in list order)
 #   map terrain layer: painted = its cells; key = cell_mask(painted, x, y, mode); tile = pick(candidates of key,
 #     cell_roll(x, y, layer_index))
 #   map stamps layer: each [x, y, stamp] -> the stamp's tiles, tile j at (x + j % w, y + j / w)
@@ -666,24 +668,21 @@ func _convert_tileset(a: Dictionary, where: String) -> Dictionary:
 						atlas["rows"]])
 			s["tiles"][tile_key(atlas["id"], col, row)] = tile
 			s["tile_list"].append(tile)
-	# terrain tiles filed by "set/terrain" and key as [weight, tile] candidates in atlas order: atlases by id,
-	# tiles in list order (the spec's pick walks them in exactly this order)
-	var ids: Array = (s["atlas_by_id"] as Dictionary).keys()
-	ids.sort()
-	for id: int in ids:
-		for tile: Dictionary in s["tile_list"]:
-			if tile["atlas"] != id or tile["terrain"] == null:
-				continue
-			var tset: Dictionary = s["terrain_sets"].get(tile["terrain_set"], {})
-			var key: int = terrain_key(tile, tset.get("mode", "blob47"), s["shape"])
-			if key < 0:
-				continue
-			var tk: String = "%d/%d" % [tile["terrain_set"], tile["terrain"]]
-			if not (s["by_key"] as Dictionary).has(tk):
-				s["by_key"][tk] = {}
-			if not (s["by_key"][tk] as Dictionary).has(key):
-				s["by_key"][tk][key] = []
-			s["by_key"][tk][key].append([tile["probability"], tile])
+	# terrain tiles filed by "set/terrain" and key as [weight, tile] candidates in atlas order: atlases as listed
+	# (never sorted by id: the spec's pick walks the list), tiles in list order. tile_list is in exactly that order.
+	for tile: Dictionary in s["tile_list"]:
+		if tile["terrain"] == null:
+			continue
+		var tset: Dictionary = s["terrain_sets"].get(tile["terrain_set"], {})
+		var key: int = terrain_key(tile, tset.get("mode", "blob47"), s["shape"])
+		if key < 0:
+			continue
+		var tk: String = "%d/%d" % [tile["terrain_set"], tile["terrain"]]
+		if not (s["by_key"] as Dictionary).has(tk):
+			s["by_key"][tk] = {}
+		if not (s["by_key"][tk] as Dictionary).has(key):
+			s["by_key"][tk][key] = []
+		s["by_key"][tk][key].append([tile["probability"], tile])
 	var si: int = 0
 	for st: Variant in (a["stamps"] if typeof(a.get("stamps")) == TYPE_ARRAY else []):
 		var sw: String = "%s stamp %s" % [where, (st as Dictionary).get("name", si)]
@@ -891,8 +890,9 @@ func _convert_transition(a: Dictionary, where: String) -> Dictionary:
 
 
 ## normal_map: the map and the image it lights (both ship); green up (opengl, what Godot expects) unless said.
+## size is optional here (the schema requires image, target and convention only).
 func _convert_normal_map(a: Dictionary, where: String) -> Dictionary:
-	var size: Array = _pair(_need(a, "size", "pair", where))
+	var size: Variant = _pair(_need(a, "size", "pair", where)) if a.get("size") != null else null
 	var s: Dictionary = {"kind": "normal_map", "name": a["name"], "size": size,
 			"convention": a["convention"] if a.get("convention") != null else "opengl"}
 	s["image"] = _file(_need(a, "image", "string", where), where, size)

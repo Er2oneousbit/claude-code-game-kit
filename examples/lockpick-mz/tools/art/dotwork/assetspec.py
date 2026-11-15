@@ -31,6 +31,8 @@
 #           placement, the variant pick, stamps layers, placed cells in the loaded result
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): resolve_terrain's note: Godot's map scenes take this
 #           pick too (mapbuild.terrain_picks, #307); no change to the rules
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a map object must be a sprite (what every importer
+#           places); the variant pick walks atlases as listed, whatever their ids
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -507,8 +509,8 @@ def _check_map(a, w, tilesets, names, errs):
                     errs.append(f"{lw}: no tile for {len(bad)} cell(s) ({', '.join(bad[:6])}): a corners4 terrain "
                                 f"needs shapes at least 2 cells thick, a blob needs all 47 masks")
     for o in a.get("objects") or []:
-        if not any(n == o["asset"] for (_, n) in names):
-            errs.append(f"{w}: object {o['asset']!r} is not an asset in this manifest")
+        if ("sprite", o["asset"]) not in names:   # every importer places objects as sprites (props)
+            errs.append(f"{w}: object {o['asset']!r} is not a sprite in this manifest")
 
 
 # ---- the reference loader --------------------------------------------------------------------

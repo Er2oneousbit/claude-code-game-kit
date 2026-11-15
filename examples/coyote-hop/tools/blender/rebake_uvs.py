@@ -28,14 +28,21 @@
 #           Resampling blurs a little (the vendor's texels are not the new ones), so expect a few levels, never zero.
 #           Formats (#303): a colour map (sRGB, no alpha) whose source image was JPEG is written as JPEG at
 #           prep_export.JPEG_QUALITY (a Tripo character's three 2048 maps had come back as 9.7 MB of PNG, the main
-#           file 5.0 MB to 11.5 MB); normal, metallic-roughness(-occlusion) and other data maps stay PNG, since JPEG's
-#           blocks show as dents in a normal map and as noise in roughness; a map with alpha stays PNG (JPEG has none).
-#           --png writes every map as PNG. Each map's "format" and "quality" go into the report.
+#           file 5.0 MB to 11.5 MB); normal maps stay PNG, since JPEG's blocks show as dents in the shading; a map
+#           with alpha stays PNG (JPEG has none). A metallic-roughness(-occlusion) or other data map whose source was
+#           JPEG goes through a measured gate (#313, gate_data_maps): its unused texels are filled with the mean of
+#           the used ones, then each of DATA_JPEG_QUALITIES is compared with the baked PNG (mean and 99.9th
+#           percentile error per channel the material reads, over the texels the mesh covers, and the lit check
+#           renders with each map); the first quality under DATA_MEAN_LIMIT, DATA_P999_LIMIT and DATA_LIT_LIMIT, and
+#           smaller than the PNG, is written, else PNG. --png writes every map as PNG. Each map's "format" and
+#           "quality" go into the report, and a gated map's "gate" holds what was measured.
 #           What is not carried: a second UV map, images read through a Vector input of their own (they keep that
 #           input and are left alone, with a warning). Vertex colours stay as they are (nothing to bake).
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the island gap is size/1024 px (1 at 1024, #203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG source's colour map stays JPEG, --png (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a JPEG source's data map through a measured JPEG
+#           gate (#313)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -48,7 +55,9 @@
 #   per material, per image node: transfer rounds (EMIT of the node's Color [and Alpha] into a new image of the
 #     texture size, same colour space), normal round (bake NORMAL, tangent space, into a new image) -> swap the
 #     node's image for the new one (a JPEG copy for a colour map whose source was JPEG, unless --png), pack it
-#   remove the UV Map nodes and the vendor layer -> check render "after" -> mean and max difference -> report
+#   remove the UV Map nodes -> data maps from JPEG sources: used-texel mask bake, fill the unused texels, PNG vs
+#     JPEG at each quality (texel errors + lit renders) -> first under the limits and smaller wins, else PNG
+#   remove the vendor layer -> check render "after" -> mean and max difference -> report
 #   standalone: export .glb with the kit's preset, JSON report
 import argparse
 import json
@@ -78,6 +87,23 @@ LIT_SAMPLES = 4
 LIT_SUN = 3.0              # W/m2
 GRID = 128                 # UV raster for coverage (validate_asset's default)
 WELD_DISTANCE = 0.0001     # standalone: vertices closer than this fraction of the bounds diagonal become one
+# A data map (metallic-roughness) whose source was JPEG may go back as JPEG, but only through a measured gate (#313):
+# the baked PNG and each JPEG candidate are compared texel by texel over the texels the mesh uses (8-bit levels, per
+# channel the material reads) and as lit renders (the check views, PNG map against JPEG map). The lowest quality of
+# DATA_JPEG_QUALITIES under every limit wins, and only when its bytes are fewer than the PNG's; else PNG.
+# Measured on a 51k-triangle Tripo character at 2048 px (K01): the rebake's own resampling moves the lit renders 1.08
+# levels; a JPEG copy of its rebaked metallic-roughness map adds 0.06 to 0.10 at quality 80 to 95, with mean texel
+# errors of 1.1 to 0.7 (roughness) and 1.8 to 1.2 (metallic). Tripo's own map is a quality-95 JPEG with 4:2:0 chroma.
+DATA_JPEG_QUALITIES = (80, 85, 90, 95)   # tried in order; under 80 the metallic mean passed 2 levels (2.1 at 70)
+DATA_MEAN_LIMIT = 2.0      # mean absolute error per channel, levels: under 1% of the range (a roughness of 0.5 read
+                           # as 0.508), far under what the resampling itself moves; Tripo's own map round-tripped
+                           # at quality 90 is already 1.0 (roughness) and 1.5 (metallic)
+DATA_P999_LIMIT = 24.0     # the 99.9th percentile per channel, levels: at most 1 texel in 1000 off by more than
+                           # about 0.1 (an edge between metal and cloth smeared by a texel). Not the maximum: 4:2:0
+                           # chroma smears a metal edge by 150+ levels on a few texels at every quality up to 98
+                           # (measured), so a max limit would mean "never JPEG"; the max is recorded all the same
+DATA_LIT_LIMIT = 0.5       # mean lit-render difference, PNG map against JPEG map, levels: under half of what the
+                           # resampling already moves (1.08), and under one 8-bit step on average
 VENDOR_UV = "UVMap_vendor"
 NEW_UV = "UVMap"
 
@@ -122,7 +148,8 @@ def parse_args(argv):
     ap.add_argument("--no-check", action="store_true", help="skip the before/after check renders")
     ap.add_argument("--png", action="store_true",
                     help="write every baked map as PNG (default: a colour map whose source was JPEG stays JPEG, at "
-                         "prep_export.JPEG_QUALITY; normal and data maps are always PNG)")
+                         "prep_export.JPEG_QUALITY; a data map whose source was JPEG is JPEG only when measured "
+                         "under the DATA_* limits; normal maps are always PNG)")
     ap.add_argument("--json", dest="json_out", help="write the report (coverage, maps, settings, the check) here")
     ap.add_argument("--overwrite", action="store_true", help="replace --out if it exists")
     ap.add_argument("--debug", action="store_true", help="verbose output and full tracebacks")
@@ -330,17 +357,81 @@ def merge_alpha(colour, alpha_img):
 
 def map_format(entry, png):
     """JPEG for a colour map (sRGB transfer, no alpha) whose source image was JPEG, else PNG (#303): JPEG's
-    8x8 blocks dent a normal map and add noise to roughness and metallic, and JPEG has no alpha."""
+    8x8 blocks dent a normal map, and JPEG has no alpha. A data map from a JPEG source starts as PNG here and may
+    become JPEG through the measured gate (data_jpeg_candidate, gate_data_maps, #313)."""
     if png or not entry["source_jpeg"] or entry["kind"] != "transfer" or entry["alpha"]:
         return "PNG"
     return "JPEG" if entry["colorspace"] == "sRGB" else "PNG"
 
 
+def data_jpeg_candidate(entry, png):
+    """A data map (metallic-roughness(-occlusion): a transfer, not sRGB, no alpha) whose source was JPEG: it goes
+    through gate_data_maps (#313). Normal maps never do (they are baked, not transferred, and their blocks dent the
+    shading); --png turns the gate off."""
+    return (not png and entry["source_jpeg"] and entry["kind"] == "transfer" and not entry["alpha"]
+            and entry["colorspace"] != "sRGB")
+
+
+def channels_read(node):
+    """{channel index: what reads it} for an Image Texture's Color output: through a Separate Color node, each
+    linked output names the socket it feeds (glTF's importer: Green -> Roughness, Blue -> Metallic, Red -> the
+    glTF settings group's Occlusion); a Color output linked anywhere else reads all three channels."""
+    out = {}
+    for link in node.outputs["Color"].links:
+        sep = link.to_node
+        if sep.type in ("SEPARATE_COLOR", "SEPRGB"):
+            for i, sock in enumerate(list(sep.outputs)[:3]):
+                for l2 in sock.links:
+                    out.setdefault(i, l2.to_socket.name.lower())
+        else:
+            for i, name in enumerate(("red", "green", "blue")):
+                out.setdefault(i, name)
+    return out
+
+
+def dilate(mask, steps):
+    """A boolean texel mask grown by `steps` texels (4-neighbour), numpy only."""
+    grown = mask.copy()
+    for _ in range(steps):
+        g = grown.copy()
+        g[1:] |= grown[:-1]
+        g[:-1] |= grown[1:]
+        g[:, 1:] |= grown[:, :-1]
+        g[:, :-1] |= grown[:, 1:]
+        grown = g
+    return grown
+
+
+def texel_errors(base, other, mask, channels):
+    """{channel name: {mean, p999, max}} in 8-bit levels over the masked texels (numpy arrays h x w x 4)."""
+    import numpy as np
+    out = {}
+    for i, name in sorted(channels.items()):
+        d = np.abs(other[..., i][mask] - base[..., i][mask]) * 255.0
+        out[name] = {"mean": round(float(d.mean()), 3) if d.size else 0.0,
+                     "p999": round(float(np.percentile(d, 99.9)), 1) if d.size else 0.0,
+                     "max": round(float(d.max()), 1) if d.size else 0.0}
+    return out
+
+
+def over_limits(errors, lit):
+    """The limits a candidate breaks (DATA_MEAN_LIMIT, DATA_P999_LIMIT per channel, DATA_LIT_LIMIT), as text."""
+    bad = [f"{name} mean {e['mean']:.2f} > {DATA_MEAN_LIMIT:g}" for name, e in errors.items()
+           if e["mean"] > DATA_MEAN_LIMIT]
+    bad += [f"{name} p99.9 {e['p999']:.1f} > {DATA_P999_LIMIT:g}" for name, e in errors.items()
+            if e["p999"] > DATA_P999_LIMIT]
+    if lit is not None and lit.get("mean_levels") is not None and lit["mean_levels"] > DATA_LIT_LIMIT:
+        bad.append(f"lit mean {lit['mean_levels']:.2f} > {DATA_LIT_LIMIT:g}")
+    return bad
+
+
 def transfer_maps(bpy, obj, mats, size, report, png=False):
     """Bake every image the materials read onto the new layout, swapping each node's image. Fills report['maps'].
-    png: every map as PNG (else a JPEG source's colour map stays JPEG, map_format)."""
+    png: every map as PNG (else a JPEG source's colour map stays JPEG, map_format). Returns the data maps for
+    gate_data_maps: [(map entry, its Image Texture node)]."""
     import prep_export as pe   # noqa: E402  (is_jpeg, jpeg_copy, JPEG_QUALITY: the LOD textures share them)
     px = BAKE_MARGIN_PX
+    candidates = []
     plan = {m.name: [n for n in image_nodes(m) if free_vector(n)] for m in mats}
     transfers = {m.name: [n for n in plan[m.name] if not feeds_normal_map(n)] for m in mats}
     normals = {m.name: [n for n in plan[m.name] if feeds_normal_map(n)] for m in mats}
@@ -435,12 +526,20 @@ def transfer_maps(bpy, obj, mats, size, report, png=False):
         if d["format"] == "PNG":
             pack_image(bpy, d["image"])
         d["image"] = name
+        if data_jpeg_candidate(d, png):
+            candidates.append((d, d["node"]))   # gate_data_maps measures it once the materials read the new layout
         del d["node"]
     report["maps"] = done
     report["bake"] = {"samples": SAMPLES, "margin_px": px, "margin_type": "EXTEND", "normal_space": "TANGENT",
                       "island_gap_px": padding_px(size), "uv_angle_deg": UV_ANGLE,
                       "packer": "smart_project + pack_islands(rotate, CONCAVE)",
-                      "formats": "png" if png else "jpeg colour maps from jpeg sources", "jpeg_quality": pe.JPEG_QUALITY}
+                      "formats": "png" if png else "jpeg colour maps from jpeg sources; jpeg data maps from jpeg "
+                                                   "sources when measured under the limits",
+                      "jpeg_quality": pe.JPEG_QUALITY,
+                      "data_jpeg": None if png else {"qualities": list(DATA_JPEG_QUALITIES),
+                                                     "mean_limit": DATA_MEAN_LIMIT, "p999_limit": DATA_P999_LIMIT,
+                                                     "lit_limit": DATA_LIT_LIMIT}}
+    return candidates
 
 
 # ---------------------------------------------------------------- the check renders
@@ -535,6 +634,117 @@ def compare_renders(bpy, before, after):
             "max_levels": round(worst * 255, 1)}
 
 
+# ---------------------------------------------------------------- the data-map JPEG gate (#313)
+def image_pixels(img):
+    """An image's pixels as a float32 numpy array, height x width x 4."""
+    import numpy as np
+    w, h = img.size
+    buf = np.empty(w * h * 4, dtype=np.float32)
+    img.pixels.foreach_get(buf)
+    return buf.reshape(h, w, 4)
+
+
+def used_texels(bpy, obj, mats, size):
+    """{material name: boolean mask of the texels its faces cover on the new layout}: a constant white emission baked
+    with no margin (the bake clears the rest to black). One bake for every material at once."""
+    restores, masks = [], {}
+    for mat in mats:
+        tree = mat.node_tree
+        restores.append(emit(tree, None, (1.0, 1.0, 1.0, 1.0)))
+        img = new_image(bpy, "rebake_mask_" + mat.name, size, True, False)
+        masks[mat.name] = img
+        tgt = tree.nodes.new("ShaderNodeTexImage")
+        tgt.image = img
+        tree.nodes.active = tgt
+        restores.append(lambda tree=tree, tgt=tgt: tree.nodes.remove(tgt))
+    try:
+        bake(bpy, obj, "EMIT", 0)
+    finally:
+        for restore in restores:
+            restore()
+    out = {}
+    for name, img in masks.items():
+        out[name] = image_pixels(img)[..., 0] > 0.5
+        bpy.data.images.remove(img)
+    return out
+
+
+def gate_data_maps(bpy, obj, mats, candidates):
+    """Each data map whose source was JPEG (data_jpeg_candidate) is tried as JPEG at DATA_JPEG_QUALITIES in turn,
+    against its baked PNG: texel errors on the channels the material reads (texel_errors, over the texels the mesh
+    uses) and the lit check renders with the PNG map against the JPEG map. The first quality under every limit
+    (over_limits) and smaller than the PNG replaces the PNG; else the map stays PNG. Each map entry gets "format",
+    "quality" and a "gate" record (the PNG's bytes, every quality tried with its errors, and why one was refused).
+    The materials must read the new layout (after read_through's undo)."""
+    if not candidates:
+        return
+    import prep_export as pe   # noqa: E402
+    scene = bpy.context.scene
+    setup_render(bpy, scene)
+    size = candidates[0][1].image.size[0]
+    masks = used_texels(bpy, obj, mats, size)
+    folder = Path(tempfile.mkdtemp(prefix="rebake_gate_"))
+    try:
+        for entry, node in candidates:
+            img = node.image
+            base = image_pixels(img)
+            mask = masks[entry["material"]]
+            if mask.shape != base.shape[:2] or not mask.any():
+                entry["gate"] = {"why": "no texels to compare"}
+                continue
+            # texels past the bake margin are never sampled: the mean of the used ones there, so the 8x8 blocks that
+            # cross the gaps between islands hold no hard edge (black gaps cost the map 3.5x its bytes at quality 90,
+            # and raised its errors, K01); the PNG gets the same pixels
+            base[~dilate(mask, BAKE_MARGIN_PX), :3] = base[mask, :3].mean(axis=0)
+            img.pixels.foreach_set(base.ravel())
+            img.update()
+            pack_image(bpy, img)
+            png_bytes = img.packed_file.size if img.packed_file else None
+            channels = channels_read(node)
+            ref = render_views(bpy, scene, obj, mats, folder, "gate_png", lit=True)
+            tried, chosen = [], None
+            for q in DATA_JPEG_QUALITIES:
+                jpg = pe.jpeg_copy(bpy, img, f"{img.name}_q{q}", quality=q)
+                errors = texel_errors(base, image_pixels(jpg), mask, channels)
+                node.image = jpg
+                views = render_views(bpy, scene, obj, mats, folder, f"gate_q{q}", lit=True)
+                node.image = img
+                lit = compare_renders(bpy, ref, views)
+                for p in views:
+                    p.unlink()
+                jpg_bytes = jpg.packed_file.size
+                over = over_limits(errors, lit)
+                small = png_bytes is None or jpg_bytes < png_bytes
+                if not small:
+                    over.append(f"{jpg_bytes} bytes, not under the PNG's {png_bytes}")
+                tried.append({"quality": q, "bytes": jpg_bytes, "errors": errors, "lit": lit, "over": over})
+                if not over:
+                    chosen = (q, jpg)
+                    break
+                bpy.data.images.remove(jpg)
+                if not small:
+                    break   # a higher quality only grows
+            entry["gate"] = {"png_bytes": png_bytes, "channels": {str(i): n for i, n in sorted(channels.items())},
+                             "tried": tried}
+            what = f"{entry['source']} (data map from a JPEG source)"
+            if chosen is None:
+                print(f"[info] {what} stays PNG: {'; '.join(tried[-1]['over']) if tried else 'nothing tried'}")
+                continue
+            q, jpg = chosen
+            name = img.name
+            img.user_remap(jpg)          # every node that read the PNG reads the JPEG
+            bpy.data.images.remove(img)
+            jpg.name = name
+            entry["format"], entry["quality"] = "JPEG", q
+            means = ", ".join("%s mean %.2f" % (n, v["mean"]) for n, v in tried[-1]["errors"].items())
+            print(f"[ OK ] {what}: JPEG {q} ({means}, lit {tried[-1]['lit']['mean_levels']} levels; "
+                  f"{tried[-1]['bytes']} bytes against PNG {png_bytes})")
+    finally:
+        for p in folder.glob("*"):
+            p.unlink()
+        folder.rmdir()
+
+
 # ---------------------------------------------------------------- the step
 def rebake(bpy, va, obj, texture_px, report, check=True, png=False):
     """Re-unwrap obj and bake its textures onto the new layout. Fills report (a dict); returns True when the
@@ -564,8 +774,9 @@ def rebake(bpy, va, obj, texture_px, report, check=True, png=False):
     if sources:
         undo, skipped = read_through(mats, VENDOR_UV)
         setup_render(bpy, scene)   # the bake runs in Cycles too
-        transfer_maps(bpy, obj, mats, size, report, png=png)
+        candidates = transfer_maps(bpy, obj, mats, size, report, png=png)
         undo()
+        gate_data_maps(bpy, obj, mats, candidates)   # #313: a JPEG data map only under the measured limits
         for name in skipped:
             print(f"[WARN] {name} is read through its own Vector input and was left on the old layout")
     else:

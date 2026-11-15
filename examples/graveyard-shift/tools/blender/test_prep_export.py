@@ -15,6 +15,7 @@
 #           module (#292: its own exit crashed after the fixtures' glTF export); the 30 fps clip case
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the LOD texture sizes (#196)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG texture's LODs stay JPEG (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an image name at Blender's limit stays in the LOD
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -363,6 +364,25 @@ def main():
     pngs = [m for ims in ([glb_images(tmp / f"painted_out{s}.glb") for s in ("", "_LOD1", "_LOD2")]
                           if (tmp / "painted_out_LOD2.glb").is_file() else [[]]) for _, _, _, m in ims]
     case("a PNG texture stays PNG in the main file and every LOD", pngs == ["image/png"] * 3, pngs)
+    # an image name at Blender's limit (63 bytes on 4.2, 255 on 5.x): the full image was renamed name + "_full",
+    # cut to the limit, so it kept the name and the LOD's image became a renamed copy (254 characters on bpy 5.3)
+    import prep_export as pe
+    bpy.ops.wm.read_factory_settings(use_empty=True)
+    bpy.ops.mesh.primitive_plane_add()
+    img = bpy.data.images.new("long", 1024, 1024)
+    img.name = "n" * 300                   # Blender keeps as much as it allows
+    full = img.name
+    mat = bpy.data.materials.new("long_mat")
+    mat.use_nodes = True
+    node = mat.node_tree.nodes.new("ShaderNodeTexImage")
+    node.image = img
+    bpy.context.active_object.data.materials.append(mat)
+    swaps = pe.shrink_textures(bpy, pe.texture_nodes(bpy.context.scene), 0.5)
+    lod_name, lod_px = node.image.name, max(node.image.size)
+    pe.undo_shrink(bpy, swaps)
+    case(f"an LOD image keeps a {len(full)}-character name (Blender's limit)",
+         lod_name == full and lod_px == 512 and node.image.name == full and len(bpy.data.images) == 1,
+         (len(full), len(lod_name), lod_px, [len(i.name) for i in bpy.data.images]))
 
     passed = sum(results)
     print(f"{passed}/{len(results)} cases passed")

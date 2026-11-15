@@ -23,6 +23,7 @@
 #           assets/dotwork/* in the preset's include_filter (the kit's presets have it).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created, the Godot importer (#307)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an imported .fnt draws 1:1 like a loaded one (one_to_one)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -383,15 +384,28 @@ static func map_node(map: Dictionary, tiles: TileSet = null) -> Node2D:
 
 
 # ---- Fonts and UI --------------------------------------------------------------------
-## The BMFont: Godot's imported FontFile when the .fnt was imported, else loaded from the file now. null on failure.
+## The BMFont, drawn 1:1 at any font size: Godot's imported FontFile when the .fnt was imported, else loaded from the
+## file now. null on failure. Godot's BMFont importer scales a bitmap font to the requested size by default
+## (scaling_mode Enabled: a 5 px font is 3.2x at the default size 16, blurred), while load_bitmap_font does not
+## scale; the spec says draw 1:1, so the imported font is a copy with scaling off, the same in both branches.
 static func font(asset: Dictionary) -> FontFile:
 	var path: String = asset["file"]
 	if ResourceLoader.exists(path, "FontFile"):
-		return load(path) as FontFile
+		var imported: FontFile = load(path) as FontFile
+		return one_to_one(imported) if imported != null else null
 	var f: FontFile = FontFile.new()
 	if f.load_bitmap_font(path) != OK:
 		return null
 	return f
+
+
+## A copy of a bitmap FontFile that never scales to the requested size (the shared imported resource stays as it is).
+static func one_to_one(f: FontFile) -> FontFile:
+	if f.fixed_size_scale_mode == TextServer.FIXED_SIZE_SCALE_DISABLE:
+		return f
+	var out: FontFile = f.duplicate() as FontFile
+	out.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_DISABLE
+	return out
 
 
 ## A NinePatchRect of a UI kit part with its margins (left, top, right, bottom), drawn 1:1.

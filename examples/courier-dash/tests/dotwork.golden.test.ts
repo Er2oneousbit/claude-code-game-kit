@@ -12,6 +12,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' placed cells and
 //           centres, the corners4 and roll vectors, stamps, the extra kinds loaded
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map without a size loads
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -187,6 +188,15 @@ describe("Dotwork manifest rules", () => {
     const d = { ...doc(), version: "2.0.0" };
     expect(() => importManifest(d, "x/dotwork/a.assets.json")).toThrow(/2\.0\.0.*1\.x/);
     expect(() => importManifest({ ...doc(), format: "other" }, "x.json")).toThrow(DotworkError);
+  });
+
+  // the schema makes a normal map's size optional (image, target and convention are required): a manifest without
+  // it is valid, so it must load (pair() threw on the missing size)
+  it("loads a normal map without a size", () => {
+    const d = doc();
+    delete d.assets.find((a: { kind: string }) => a.kind === "normal_map").size;
+    const p = importManifest(d, posix(MANIFEST));
+    expect(p.normalMaps.get("spr_crate_n")!.size).toBeNull();
   });
 
   it("reads a newer minor: unknown fields ignored, unknown kinds skipped with a warning", () => {

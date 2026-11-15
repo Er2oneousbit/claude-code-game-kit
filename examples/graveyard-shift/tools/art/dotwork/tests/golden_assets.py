@@ -22,6 +22,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): path variants, a stamps layer,
 #           the corners4 and isometric maps
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the atlas_order tileset and map: atlases listed out of
+#           id order, so a port that sorts them by id picks other variants
 # ---------------------------------------------------------------------------
 import argparse
 import hashlib
@@ -460,6 +462,36 @@ def _extras(g):
     g.png("assets/art/brand/golden/logo_golden.png", Canvas(12, 4, (240, 200, 60, 255)), "logo", scale=4)
 
 
+ORDER_CELLS = [[0, 0], [2, 0], [4, 0], [0, 2], [2, 2], [4, 2]]   # lone cells: every one has the key 0
+
+
+def _unsorted_atlases(root, doc):
+    """atlas_order: a hand-written tileset (no Dotwork writer lists atlases out of id order, another generator may)
+    whose atlases are listed id 1 first, then id 0, each with one sides4 tile of key 0 at the same weight, and the map
+    atlas_order_check that paints six lone cells of that terrain. The variant pick walks the atlases as listed (the
+    spec, assetspec.resolve_terrain): a port that sorts them by id picks the other tile on every cell whose roll is
+    under one half. Added to the doc after assetmap.build, in the spec's asset order; its PNGs carry no provenance
+    row (a row would become an `image` asset)."""
+    out = "art/tiles/order"
+    for name, col in (("order_a", (60, 160, 90, 255)), ("order_b", (200, 60, 60, 255))):
+        p = os.path.join(root, ASSETS, *out.split("/"), f"{name}.png")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "wb") as f:
+            f.write(Canvas(T, T, INK).rect(1, 1, T - 2, T - 2, col).png())
+    tile = {"col": 0, "row": 0, "terrain_set": 0, "terrain": 0, "mask": 0}
+    doc["assets"] += [
+        {"kind": "tileset", "name": "atlas_order", "tile_size": [T, T], "shape": "square",
+         "terrain_sets": [{"id": 0, "mode": "sides4", "terrains": [{"id": 0, "name": "marker", "color": "#3ca05a"}]}],
+         "atlases": [{"id": 1, "name": "order_b", "role": "base", "image": f"{out}/order_b.png", "tile_size": [T, T],
+                      "columns": 1, "rows": 1, "tiles": [dict(tile)]},
+                     {"id": 0, "name": "order_a", "role": "base", "image": f"{out}/order_a.png", "tile_size": [T, T],
+                      "columns": 1, "rows": 1, "tiles": [dict(tile)]}]},
+        {"kind": "map", "name": "atlas_order_check", "tileset": "atlas_order", "size": [5, 3], "tile_size": [T, T],
+         "layers": [{"name": "Marker", "kind": "terrain", "terrain_set": 0, "terrain": 0,
+                     "cells": [list(c) for c in ORDER_CELLS]}]}]
+    doc["assets"].sort(key=lambda a: (assetmap.KIND_ORDER[a["kind"]], a["name"]))
+
+
 # ---- write / check -------------------------------------------------------------------------------------
 def make(out, with_godot=False):
     """The fixture into out (assets/ with the manifest and every file it names, expected.json). Returns the doc."""
@@ -468,6 +500,7 @@ def make(out, with_godot=False):
         doc, warns = assetmap.build(tmp, ASSETS, {"assets": g.rows, "entities": g.ents}, PACK)
         if warns:
             raise RuntimeError("golden pack: " + "; ".join(warns))
+        _unsorted_atlases(tmp, doc)
         errs = assetspec.check(doc, os.path.join(tmp, ASSETS))
         if errs:
             raise RuntimeError("golden pack does not pass the spec:\n  " + "\n  ".join(errs[:20]))

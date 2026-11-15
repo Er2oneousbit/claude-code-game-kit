@@ -35,6 +35,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the exit goes through bpy_common.end_process
 #           (exit_with): the bpy 4.2 module crashed with 0xC0000005 while the process ended after a glTF import, so
 #           every verdict on 4.2 read as exit 3221225477 (#312)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): under_text cuts its decimal instead of rounding it
+#           (54.97% of a 55% floor read "55.0% is under 55%")
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -307,9 +309,13 @@ class UnionFind:
 
 def under_text(value, floor):
     """A share under a floor as a percentage: whole percent, or one decimal when the whole percent would read as the
-    floor itself (54.6% of a 55% floor printed "55% is under 55%", #203)."""
+    floor itself (54.6% of a 55% floor printed "55% is under 55%", #203). The decimal is cut, not rounded: 54.97%
+    rounded read "55.0% is under 55%"."""
     text = f"{value:.0%}"
-    return f"{value:.1%}" if text == f"{floor:.0%}" else text
+    if text != f"{floor:.0%}":
+        return text
+    tenths = int(round(value * 1000, 6))       # 0.5497 -> 549 (the round: 0.549 * 1000 can be 548.999...)
+    return f"{tenths // 10}.{tenths % 10}%"
 
 
 def uv_islands(mesh, uv_layer):

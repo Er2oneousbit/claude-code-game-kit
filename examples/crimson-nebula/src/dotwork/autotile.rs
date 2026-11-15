@@ -169,7 +169,8 @@ pub fn cell_roll(x: i64, y: i64, layer: usize) -> f64 {
 }
 
 /// The candidate whose weight span holds `roll` times the total: `candidates` are (probability, value) in atlas
-/// order (atlases by id, tiles in list order). The first when every weight is 0; None for no candidates.
+/// order (atlases as listed, never sorted by id; tiles in list order). The first when every weight is 0; None for
+/// no candidates.
 pub fn pick<T>(candidates: &[(f64, T)], roll: f64) -> Option<&T> {
     let total: f64 = candidates.iter().map(|(w, _)| w).sum();
     if total <= 0.0 {

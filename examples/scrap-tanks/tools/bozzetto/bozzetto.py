@@ -46,6 +46,10 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png; a JPEG colour map stays JPEG (#303)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): `make --rebake <name>` works again (rebake_switch:
+#           the optional mode took the name for itself, "invalid choice"); --rebake-png with nothing to rebake is
+#           refused (it was ignored)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png help names the data-map JPEG gate (#313)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -439,6 +443,9 @@ class Plan:
         if rebake in ("on", "auto") and args.material != "texture":   # asked for on purpose (Tripo refuses vertex)
             raise ToolError("--rebake bakes textures: nothing to bake with --material vertex")
         self.rebake = rebake or ("on" if self.route == "tripo" else "auto" if args.material == "texture" else "off")
+        if getattr(args, "rebake_png", False) and self.rebake == "off":   # it was ignored without a word
+            raise ToolError("--rebake-png sets the rebake's map format: nothing is rebaked with "
+                            + ("--material vertex" if args.material != "texture" else "--no-rebake"))
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
         self.src = self.root / SRC_ROOT / self.name
@@ -1087,7 +1094,8 @@ def build_parser():
     p.add_argument("--no-rebake", dest="rebake", action="store_const", const="off", help="keep the model's own atlas")
     p.add_argument("--rebake-png", action="store_true",
                    help="the rebake writes every map as PNG (default: a colour map whose source was JPEG, as "
-                        "Tripo's are, stays JPEG; normal and data maps are always PNG): README 'UV coverage'")
+                        "Tripo's are, stays JPEG, a JPEG metallic-roughness map is JPEG when measured under the limits; "
+                        "normal maps are always PNG): README 'UV coverage'")
     p.add_argument("--accept-uv", action="store_true",
                    help="ship a model that fails the UV coverage floor alone (sprite sources, a rebake that lands "
                         "under the floor); the waiver goes on its asset log row")
@@ -1120,6 +1128,14 @@ def build_parser():
     return ap
 
 
+def rebake_switch(argv):
+    """`--rebake` followed by something that is no mode (the model's name, another option) as `--rebake=on`: it was
+    a switch until 0.15.1, and with its optional mode argparse took `make --rebake npc_guard`'s name for the mode."""
+    argv = list(argv)
+    return [("--rebake=on" if a == "--rebake" and (i + 1 == len(argv) or argv[i + 1] not in REBAKE_MODES[:2]) else a)
+            for i, a in enumerate(argv)]
+
+
 def main(argv=None):
     global DEBUG
     for stream in (sys.stdout, sys.stderr):
@@ -1128,7 +1144,7 @@ def main(argv=None):
         except (AttributeError, ValueError):
             pass
     try:
-        args = build_parser().parse_args(argv)
+        args = build_parser().parse_args(rebake_switch(sys.argv[1:] if argv is None else argv))
     except SystemExit as exc:
         return int(exc.code or 0)
     DEBUG = args.debug

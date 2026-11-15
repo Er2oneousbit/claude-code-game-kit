@@ -13,6 +13,8 @@
 //           HUD text factor and its watch (#309)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a tall CREDITS.md under reduce motion starts at the
 //           top and moves a row per press (#302)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open,
+//           Keep saves
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -290,16 +292,33 @@ TEST_CASE("a new window size asks to keep it, and the real-time countdown puts b
     CHECK(h.settings["display"]["resolution"] == json::array({1600, 900}));
     CHECK(menu.focus_id() == "confirm.keep");              // focus on Keep
     CHECK(menu.staging().seconds() == 15);
+    CHECK(h.saves == 0);                                   // not saved while it waits for Keep
     menu.action("ui_right");                               // the confirm takes every press: no row changes
     CHECK(menu.staging().pending().empty());
     menu.tick(14.5);
     CHECK(menu.confirming());
     CHECK(menu.staging().seconds() == 1);
-    menu.tick(0.5);                                        // ran out: reverted and saved again
+    menu.tick(0.5);                                        // ran out: reverted, and the old values saved
     CHECK_FALSE(menu.confirming());
     CHECK(h.settings["display"]["mode"] == "windowed");
     CHECK(h.settings["display"]["resolution"] == json::array({1920, 1080}));
-    CHECK(h.saves == 2);
+    CHECK(h.saves == 1);
+}
+
+TEST_CASE("an Apply that waits for Keep is never saved, Keep saves it") {
+    // a mode the screen cannot show must not reach settings.json: a game killed during the confirm starts as before
+    Harness h;
+    core::SettingsMenu menu(h.settings, h.hooks);
+    menu.open_tab("display", "mode");
+    menu.action("ui_right");                               // fullscreen
+    REQUIRE(menu.apply_display());
+    CHECK(h.saves == 0);
+    menu.tick(5);
+    CHECK(h.saves == 0);
+    menu.action("ui_accept");                              // Keep
+    CHECK_FALSE(menu.confirming());
+    CHECK(h.saves == 1);
+    CHECK(h.settings["display"]["mode"] == "fullscreen");
 }
 
 TEST_CASE("Keep confirms, Revert and cancel put the old values back") {

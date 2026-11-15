@@ -109,7 +109,9 @@ Turn it on:
 2. In your module's `Build.cs`, add `"GameKitShell"` (and `"Json"` if your code touches `FJsonObject`) to
    `PublicDependencyModuleNames`, then `#include "GameKitShake.h"` and so on.
 3. `python tools/dev.py check`, then `python tools/dev.py test`: it runs your `<Game>` tests and the plugin's `GameKit.*`
-   tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's.
+   tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's. After that, `test` and
+   `smoke` build first by themselves when a C++ source is newer than the module built from it (they ran the old
+   binaries before, so a test edited since the last `check` passed without running).
 
 A Blueprint-only project (no `Source/`) has no `Build.cs`, so skip step 2. `check` then compiles the plugin once through
 the engine's own `UnrealEditor` target (the C++ toolchain from docs/ENGINE.md is needed for that), and `test` runs its
@@ -177,11 +179,24 @@ focused)**. Wire the game to it:
   "settings_changed" (read the settings again: `GetModel()->Settings`, Sound Classes for the volumes,
   `access.timing_scale` into your buffers), "consent", "display_applied" (the Display tab's Apply or its revert: the
   subsystem sets the window through `UGameUserSettings` itself, outside the editor and smoke runs **(verify in a
-  packaged game)**), "hud_scale_changed".
+  packaged game)**), "display_kept" (Keep on the confirm: the subsystem writes GameUserSettings.ini now),
+  "hud_scale_changed".
 - The Display tab waits for Apply (`FGameKitDisplayStaging`, `GameKitDisplayStaging.h` in the runtime module, held to
   `data/golden/shell.json`): Apply sends only the changed fields, mode before resolution, and saves; a new window mode
   or size asks "Keep these display settings?" and puts the old ones back after 15 real seconds (`FPlatformTime`, not
-  game time; it runs while the game is paused), on Revert, or on Back. Back with a change not applied warns once.
+  game time; it runs while the game is paused), on Revert, or on Back, and is saved (settings.json, and
+  GameUserSettings.ini, which Unreal reads at start **(verify in a packaged game)**) only once kept. Back with a change
+  not applied warns once, and the warning stays up until a change, Apply or the second Back.
+  Seen on a real window (2026-11-14, UE 5.8, a standalone `-game` run of a Blueprint-only project, not the editor and
+  not packaged; a 1920x1200 screen at 125 % display scaling; the drive's steps pressed on the live model, the window
+  read back from the OS): Apply of 1600x900 resized the window and Apply of fullscreen took it out of its title bar,
+  and 15.1 s later the countdown put a titled window back. With the engine's default
+  `bAllowHighDPIInGameMode=False` Windows scales the game window, so a windowed size is divided by that scale before
+  it reaches `UGameUserSettings` (`UGameKitShellSubsystem::WindowSizeForScale`, the screen's real pixels over the
+  pixels the game sees): without it 1600x900 became a 1920x1125 window and the revert to 1920x1080 a 1920x1200 one
+  with its title bar above the screen; with it, on the same default setting, the window was exactly 1600x900 on
+  Apply and 1920x1080 after the countdown. Exclusive fullscreen is **(verify)**: that machine refused display mode changes, so
+  fullscreen at 1600x900 gave a 1600x900 window without a title bar in the screen's corner.
 - A game HUD's text: `HudFontSize(Base)` on the subsystem (`HudTextScale()` is `display.ui_scale` times
   `access.text_scale`; both `BlueprintPure`) and `OnHudScaleChanged` when it changes (#309). The shell's own play
   prompt and every menu font go through the model's `HudFontSize`.

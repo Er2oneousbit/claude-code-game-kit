@@ -23,6 +23,9 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, with a hint line
 //           and a keep-or-revert confirm counted in real time (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning goes with the next Display change
+//           (it stayed up after the player stepped back to the applied value, with nothing left to apply); the
+//           confirm closing cancels a rebind still waiting for its key
 // ---------------------------------------------------------------------------
 import presetData from "../../data/input/presets.json";
 import { DEFAULT_BINDINGS, GLYPH_SETS, findConflicts, glyphName, glyphSet, rebind } from "../core/bindings";
@@ -234,6 +237,8 @@ export function settingsScreen(shell: Shell): Screen {
     if (focus && !s.menu?.focusId(focus)) s.menu?.focusId("settings.back");
   };
   const closed = (calls: [string, unknown][]) => {
+    // the redraw below drops a rebind prompt: a capture still waiting would bind the next key the player presses
+    if (shell.input.capturing) shell.input.cancelCapture();
     if (calls.length) shell.setDisplay(calls, "REVERTED");
     shell.saveSettings();
     message = "";
@@ -315,7 +320,11 @@ export function settingsScreen(shell: Shell): Screen {
 
     const list = el("div", "list");
     const status = el("div", "status");
-    const c: Ctx = { shell, menu, list, status, staging, refresh: () => refresh() };
+    // a Display row changed: a new stage clears staging.warned, and the warning line goes with it
+    const c: Ctx = { shell, menu, list, status, staging, refresh: () => {
+      if (!staging.warned) message = "";
+      refresh();
+    } };
     p.append(menu.add(tabItem).el, list);
     section(c, TABS[shell.settingsTab]);
     // the status row (rebinding messages, the unapplied warning, the countdown) sits above the buttons

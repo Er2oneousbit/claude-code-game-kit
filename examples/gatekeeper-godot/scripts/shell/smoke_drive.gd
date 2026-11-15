@@ -30,6 +30,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 #           and the pseudo drive checks the Display tab's warning and confirm (#308)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning stays up on another tab, and
+#           settings.json keeps the old mode while the confirm waits; a rebind waiting at the revert is cancelled
 # ---------------------------------------------------------------------------
 class_name SmokeDrive
 extends Node
@@ -88,6 +90,7 @@ const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle
 		"confirm"]
 const CONFIRM_WAIT_MS: int = 25000 # real time the display drive gives the confirm to revert on its own
 const CONFIRM_MIN_MS: int = 14000 # sooner than this, the countdown did not run on real time
+const CAPTURE_AT_S: int = 3 # the display drive starts a rebind this close to the revert (a rebind gives up after 6 s)
 # the access sweep: the actions the shell's navigation needs on both devices, and the demo's control hints
 const ACCESS_ACTIONS: PackedStringArray = ["ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel",
 		"pause"]
@@ -205,6 +208,15 @@ func _display() -> void:
 		_fail("Back with an unapplied Display change did not warn (screen %s)" % front.current_name())
 		return
 	Log.raw("DRIVE_DISPLAY warned")
+	# the warning stays up on another tab: the next Back there discards, so the player must still see it
+	var status: Label = screen.find_child("Status", true, false)
+	(screen.find_child("Tab_audio", true, false) as Control).grab_focus()
+	await _frames(2)
+	if screen.current_tab() != "audio" or status.text != Shell.t("settings.unapplied"):
+		_fail("the unapplied warning went with the tab (tab %s, status \"%s\")" % [screen.current_tab(), status.text])
+		return
+	(screen.find_child("Tab_display", true, false) as Control).grab_focus()
+	await _frames(2)
 	if not await _nav_to("Back", "ui_down") or not await _nav_to("Apply", "ui_right"):
 		return
 	var start: int = Time.get_ticks_msec()
@@ -213,9 +225,41 @@ func _display() -> void:
 	if not staging.confirming() or focus == null or focus.name != "Keep":
 		_fail("Apply did not open the confirm with focus on Keep (focus %s)" % (focus.name if focus else "none"))
 		return
+	var held: Dictionary = GameSettings.load_text(AtomicFile.read_text(file))["settings"]
+	if str(held["display"]["mode"]) != before: # an Apply that waits for Keep is never saved
+		_fail("settings.json holds the mode %s before Keep" % held["display"]["mode"])
+		return
 	Log.raw("DRIVE_DISPLAY applied")
-	while staging.confirming() and Time.get_ticks_msec() - start < CONFIRM_WAIT_MS:
+	# a rebind still waiting for its key when the countdown runs out: the revert rebuilds the rows, and a capture
+	# left armed would bind the next key the player presses (the "press a key" prompt is gone by then)
+	while staging.confirming() and staging.seconds() > CAPTURE_AT_S and Time.get_ticks_msec() - start < CONFIRM_WAIT_MS:
 		await _frames(1)
+	(screen.find_child("Tab_controls", true, false) as Control).grab_focus()
+	await _frames(2)
+	var bind: Button = null
+	for b: Node in screen.find_children("Bind_*_0", "Button", true, false):
+		bind = b
+		break
+	if bind == null:
+		_fail("the Controls tab has no binding to rebind")
+		return
+	bind.grab_focus()
+	await _press("ui_accept")
+	if not screen.capturing() or not staging.confirming():
+		_fail("the rebind did not start before the revert")
+		return
+	# wait out the countdown in real time without running frames: headless frames run far faster than real time,
+	# so the rebind's own game-time timeout (REBIND_TIMEOUT_S) would end it first and prove nothing
+	OS.delay_msec(int(ceilf(staging.left * 1000.0)) + 100)
+	await _frames(2)
+	if staging.confirming():
+		_fail("the confirm did not revert on the real-time clock")
+		return
+	if screen.capturing():
+		_fail("the revert left a rebind waiting for a key its prompt no longer shows")
+		return
+	(screen.find_child("Tab_display", true, false) as Control).grab_focus()
+	await _frames(2)
 	var took: int = Time.get_ticks_msec() - start
 	if staging.confirming():
 		_fail("the confirm did not revert within %d ms" % CONFIRM_WAIT_MS)

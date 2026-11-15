@@ -156,7 +156,7 @@ prints) and `blink`.
 | `shape` | `square` or `isometric` (2:1 diamond, diamond-down layout) |
 | `terrain_sets` | `[{id, mode, terrains: [{id, name, color}]}]`; `mode` is `blob47`, `corners4` or `sides4` |
 | `atlases` | `[{id, name, role, image, tile_size, columns, rows, tiles}]`: one atlas image each. `role` names its use (`base`, `overlay`, `decals`, `fixtures`, `pair`, `platform`, `floors`, `blocks`, `transitions`). An atlas's `tile_size` can be taller than the cell (iso blocks) |
-| `atlases[].tiles[]` | `col`, `row` (atlas cell), optional `terrain_set` + `terrain` + `mask` (blob47, sides4) or `corners` (corners4: terrain id per corner, `-1` for none), `probability` (relative pick weight among tiles with the same terrain and key; absent = 1; 0 is never picked; [the pick](#variants-the-probability-pick)), `surface` (custom data: `stone`, `water`), `collision` (rects in tile pixels), `anim` (`{frames, fps}`: the frames sit in the next cells to the right), `origin` (the point of the image drawn on the cell's centre; absent: the atlas tile's own centre, [placement](#placing-tiles)) |
+| `atlases[].tiles[]` | `col`, `row` (atlas cell), optional `terrain_set` + `terrain` + `mask` (blob47, sides4) or `corners` (corners4: terrain id per corner, `-1` for none), `probability` (relative pick weight among tiles with the same terrain and key; absent = 1; 0 is never picked; [the pick](#variants-the-probability-pick)), `surface` (custom data: `stone`, `water`), `collision` (rects in tile pixels: the pixels of a cell-sized box centred on the map cell's centre, so on a tile taller than the cell, such as an iso block, they are measured from the cell's centre, not the atlas tile's; writer and importers agree), `anim` (`{frames, fps}`: the frames sit in the next cells to the right), `origin` (the point of the image drawn on the cell's centre; absent: the atlas tile's own centre, [placement](#placing-tiles)) |
 | `stamps` | multi-cell pieces (a 1x2 door): `{name, size: [w, h], solid, tiles: [[atlas, col, row], ...]}` in reading order (tile `j` sits at `(x + j % w, y + j // w)` from the stamp's top-left cell); a map places one through a `stamps` layer |
 | `custom_data` | the name of the custom value tiles carry (`surface`) |
 
@@ -176,7 +176,7 @@ Every layer's cells are drawn at the positions under [Placing tiles](#placing-ti
 `tiles` and `stamps` layers and by `y` then `x` for a terrain layer, so on a diamond grid a taller tile overdraws the
 one above it.
 
-`objects`: `[{asset, x, y}]`, an asset of this manifest (a prop `sprite`) placed with its pivot at pixel `(x, y)`
+`objects`: `[{asset, x, y}]`, a `sprite` of this manifest (a prop; the validator refuses any other kind) placed with its pivot at pixel `(x, y)`
 (a cell's bottom centre, for props mapbuild places). Draw objects sorted by `y` with the characters (y-sorting by feet).
 
 ### font
@@ -259,8 +259,8 @@ cell of every map against it in Godot (`blob_bad`), and the live exam below did 
 ### Variants: the probability pick
 Several tiles can share a key (texture variants). Every engine picks the same one: the cell's **roll** is a number in
 [0, 1) hashed from the cell and its layer, and the pick walks the candidates in atlas order (atlases in the order of
-the `atlases` list, which Dotwork writes by `id`, tiles in list order; `assetspec.resolve_terrain` iterates the lists
-as they are) subtracting weights. A weight of 0 is never picked, except that when every candidate weighs 0 the first
+the `atlases` list, never sorted by `id`: Dotwork writes them by `id`, another generator may not; tiles in list
+order; `assetspec.resolve_terrain` iterates the lists as they are) subtracting weights. A weight of 0 is never picked, except that when every candidate weighs 0 the first
 one is taken (so a tileset of zero-probability variants still draws):
 ```python
 M = 0xFFFFFFFF
@@ -356,10 +356,12 @@ starters drew it walking.
 `data/golden/dotwork/` holds one small pack with every kind: `assets/` is an assets folder (its manifest is
 `data/golden/dotwork/assets/dotwork/golden.assets.json`) and `expected.json` is what `assetspec.expected()` makes of it: the **loaded
 result**. It is built without a GPU by `tests/golden_assets.py` through Dotwork's own writers and lane functions, and
-the exam checks it is current. Its three maps cover every rule: `yard` (blob47 path and water over a base, two full
+the exam checks it is current. Its four maps cover every rule: `yard` (blob47 path and water over a base, two full
 path cells of which one rolls the variant tile, a door placed through a `stamps` layer, a prop object),
 `meadow_patch` (a corners4 patch on the square pair set) and `isle` (an isometric map: placed floors, a corners4 pond
-on the transitions, a raised block with its own origin).
+on the transitions, a raised block with its own origin), plus `atlas_order_check` on the hand-written tileset
+`atlas_order`, whose atlases are listed id 1 first: a port that sorts atlases by `id` picks the other variant on four
+of its six cells.
 
 | In `expected.json` | What an importer compares |
 |---|---|
@@ -412,7 +414,7 @@ engine's issue is "wire the importer into the starter scene".
    `cell_mask` for all three modes, the key match and the probability pick with `cell_roll`), or with the engine's
    own rule tiles when they give the same cells; a `tiles` layer is placed as is; a `stamps` layer places every tile
    of each stamp. Cells land as [Placing tiles](#placing-tiles) says, on both shapes.
-7. **Test** with the golden fixture: the same numbers as `expected.json` (clips, sprites, the three maps' `terrain`,
+7. **Test** with the golden fixture: the same numbers as `expected.json` (clips, sprites, the maps' `terrain`,
    `placed` and `centres`), then load every real manifest of the game and fail on a missing file or a broken asset
    (the engine's stand-in for Dotwork's Godot `verify`).
 8. **Wire it**: the starter scene shows one character walking, a prop, a tile map and a label in the font when the
@@ -453,7 +455,8 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   solver; flags as the `TRANSFORM_FLIP_H` / `FLIP_V` / `TRANSPOSE` alternative bits; an isometric layer is
   `y_sort_enabled`). The TileSet has no terrain sets (cells come resolved). Textures: Godot's imported resource when
   there is one, else the PNG decoded at run time (the golden folder has a `.gdignore`). Fonts: `FontFile` from the
-  imported `.fnt`, else `load_bitmap_font`. The extra kinds: the table above. Tests: GUT (`dev.py test`) on the golden
+  imported `.fnt` (a copy with `fixed_size_scale_mode` off: Godot's BMFont import scales a bitmap font to the
+  requested size), else `load_bitmap_font`; both draw 1:1. The extra kinds: the table above. Tests: GUT (`dev.py test`) on the golden
   pack, every number read back from the Godot object where Godot holds it (frame seconds, collision boxes, tile counts,
   `map_to_local`, the tile each `TileMapLayer` cell holds), the rendered character, and every game manifest.
 - **web, Phaser 4.2.1 (#55, src/game/dotworkPlan.ts + src/game/dotwork.ts).** The manifests and PNGs load

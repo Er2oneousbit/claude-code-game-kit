@@ -26,6 +26,8 @@
 //   Tick  : left -= dt; left <= 0 -> Revert()
 //   Back  : confirm open -> ("revert", Revert()) ; pending and not warned -> warned, ("warn") ; else discard, ("leave")
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): Warned(), so the shell can show Back's warning
+//           while it holds
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -161,6 +163,7 @@ public:
 	}
 
 	bool Confirming() const { return Left.IsSet(); }
+	bool Warned() const { return bWarned; }   // Back warned: the next Back discards
 	bool HasPending() const { return Pending->Values.Num() > 0; }
 	const TSharedRef<FJsonObject>& PendingValues() const { return Pending; }
 	const TSharedRef<FJsonObject>& AppliedValues() const { return Applied; }

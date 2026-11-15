@@ -32,6 +32,9 @@
 //           "Keep these display settings?" confirm (#308); text sizes through HudScale (#309)
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): Fira Mono in full instead of Bevy's ASCII subset,
 //           a font stack behind the readable font, missing glyphs fail the pseudo check
+//           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a rebuild despawns only the top-level roots; the
+//           confirm's overlay is a UiRoot inside the root, so it was despawned twice and Bevy warned once a second
+//           (#308, seen on a real window)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 
@@ -109,6 +112,17 @@ impl Fonts {
 /// The root of the shell's UI tree; despawned and rebuilt when the shell changes.
 #[derive(Component)]
 pub struct UiRoot;
+
+/// The UiRoots that have no parent. An overlay (the display confirm, a key capture) is a UiRoot inside the root:
+/// despawning the root takes it along, so despawning it too failed ("Entity despawned", a warning a second).
+pub type TopUiRoots<'w, 's> = Query<'w, 's, Entity, (With<UiRoot>, Without<ChildOf>)>;
+
+/// Despawns the shell's UI tree: each top-level root with everything under it.
+pub fn despawn_ui(commands: &mut Commands, roots: &TopUiRoots) {
+    for root in roots {
+        commands.entity(root).despawn();
+    }
+}
 
 /// A scrolling list: labels outside it are hidden, so the sweep skips them.
 #[derive(Component)]
@@ -1112,7 +1126,7 @@ pub fn rebuild_ui(
     shell: Res<Shell>,
     fonts: Res<Fonts>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    roots: Query<Entity, With<UiRoot>>,
+    roots: TopUiRoots,
 ) {
     let win = windows
         .single()
@@ -1123,9 +1137,7 @@ pub fn rebuild_ui(
         return;
     }
     *last = Some(key);
-    for root in &roots {
-        commands.entity(root).despawn();
-    }
+    despawn_ui(&mut commands, &roots);
     let style = Style::from(&shell, &fonts);
     let Some(top) = shell.top() else {
         return;
@@ -1379,7 +1391,30 @@ fn report_access(
 
 #[cfg(test)]
 mod tests {
-    use super::undecorated;
+    use super::{TopUiRoots, UiRoot, despawn_ui, undecorated};
+    use bevy::ecs::system::RunSystemOnce;
+    use bevy::prelude::*;
+
+    #[test]
+    fn a_rebuild_despawns_a_nested_overlay_once() {
+        // the display confirm's overlay is a UiRoot inside the root (#308): a rebuild that despawned every UiRoot
+        // despawned the overlay twice (with the root, then itself), and Bevy warned about it once a second
+        let mut world = World::new();
+        let root = world.spawn(UiRoot).id();
+        let overlay = world.spawn((UiRoot, ChildOf(root))).id();
+        let row = world.spawn(ChildOf(overlay)).id();
+        let targets = world
+            .run_system_once(|roots: TopUiRoots| roots.iter().collect::<Vec<Entity>>())
+            .unwrap();
+        assert_eq!(targets, vec![root], "only the top-level root is despawned");
+        world
+            .run_system_once(|mut commands: Commands, roots: TopUiRoots| despawn_ui(&mut commands, &roots))
+            .unwrap();
+        world.flush();
+        for e in [root, overlay, row] {
+            assert!(world.get_entity(e).is_err(), "the whole tree is gone");
+        }
+    }
 
     #[test]
     fn the_pseudo_check_sees_through_the_shells_decorations() {

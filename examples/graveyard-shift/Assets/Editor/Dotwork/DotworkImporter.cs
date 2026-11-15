@@ -46,6 +46,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285): corners4 terrain,
 //           the variant pick, isometric placement on Unity's Isometric Grid, stamps layers, the extra kinds loaded
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -1051,10 +1052,11 @@ namespace graveyard_shift.Dotwork
                 {
                     int tid = M.Int(tr, "id");
                     var terrain = new DotworkTerrain { set = sid, id = tid, name = M.Str(tr, "name", ""), color = M.Str(tr, "color", ""), mode = mode };
-                    // Every keyed tile of the terrain in atlas order (atlases by id, tiles in list order): the
-                    // candidates the variant pick walks, several per key when the set has variants
+                    // Every keyed tile of the terrain in atlas order (atlases as listed, never sorted by id; tiles
+                    // in list order: entry.tiles is in exactly that order): the candidates the variant pick walks,
+                    // several per key when the set has variants
                     List<DotworkTile> keyed = entry.tiles.Where(t => t.terrainSet == sid && t.terrain == tid && t.key >= 0)
-                                                         .OrderBy(t => t.atlas).ToList();
+                                                         .ToList();
                     if (keyed.Count > 0)
                     {
                         var tt = ScriptableObject.CreateInstance<DotworkTerrainTile>();

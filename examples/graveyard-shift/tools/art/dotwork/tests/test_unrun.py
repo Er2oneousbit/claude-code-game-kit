@@ -3,13 +3,16 @@
 # test_unrun.py
 # Purpose : offline exam for the Dotwork commands and lanes no other exam ran (#14, found with a coverage run of every
 #           exam): `palette extract|extend`, `materials` and `--extend-palette`, `preview title|battle|attack`,
-#           `audition --promote` and its argument checks, and the scenes, img2px and effects lanes, with stand-in
-#           renders in place of ComfyUI (no GPU, no models).
+#           `audition --promote` and its argument checks, an audition render (#282: the Wan clip job stood in for, so
+#           audition.run renders, QA's, scores, ranks, lays out the sheet, copies it to the configured review folder
+#           and resumes), and the scenes, img2px and effects lanes, with stand-in renders in place of ComfyUI (no GPU,
+#           no models).
 # Usage   : python tools/art/dotwork/tests/test_unrun.py   (test_dotwork.py runs it too)
 # Exit    : 0 all pass, 1 a case failed
-# Notes   : Not covered here: an audition render (it needs a stand-in Wan clip job and a character's rotations) and
-#           lane_icons.py, an 8-line alias of lane_props.run_icons, which test_dotwork's small-icons case runs.
+# Notes   : Not covered here: lane_icons.py, an 8-line alias of lane_props.run_icons, which test_dotwork's small-icons
+#           case runs.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the audition render exam (#282)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -343,6 +346,100 @@ class AuditionExam(Dw):
                 self.assertEqual(code, 2, text)
                 self.assertIn(want, text)
                 self.assertNotIn("unexpected failure", text)
+
+
+class AuditionRenderExam(Dw):
+    """#282: an audition render, with the Wan clip job stood in for at engine.run_job: the takes are rendered (one job
+    per seed and wording), QA'd, scored, ranked and laid out on a sheet that is copied to the configured review
+    folder; a second run reuses the takes, a new wording renders again."""
+
+    conf = {"project": {"src_dir": "art_source"}}   # not assets_src: the review copy must follow the config
+    ORANGE = (220, 150, 40)                        # hue about 36 degrees: inside --feature-hue 30-56
+
+    def stand_in_job(self, graph, timeout=1800):
+        """The Wan clip: 4 frames where SK_SavePixelArt's prefix says. Seed 8102 reaches out to the east (the box
+        grows 2 px per frame), seed 8101 stands still."""
+        prefix = next(n["inputs"]["filename_prefix"] for n in graph.values() if n["class_type"] == "SK_SavePixelArt")
+        seed = next(n["inputs"]["noise_seed"] for n in graph.values() if n["class_type"] == "KSamplerAdvanced")
+        self.jobs.append((prefix, seed, graph["5"]["inputs"].get("custom_motion", "")))
+        files = []
+        for k in range(4):
+            grow = 2 * k if seed == 8102 else 0
+            out = os.path.join(fcore.WORK, "comfy_out", *prefix.split("/")) + "_%05d_.png" % k
+            files.append(save(out, figure(40, 32, self.ORANGE, (8, 4, 24 + grow, 32))))
+        return {"files": files, "seconds": 0.1}
+
+    def audition(self, *args):
+        import engine
+        import lane_character
+        graph = {"2": {"class_type": "LoadImage", "inputs": {}}, "5": {"class_type": "SK_AnimPrompt", "inputs": {}},
+                 "18": {"class_type": "CLIPTextEncode", "inputs": {}},
+                 "29": {"class_type": "SK_Stabilize", "inputs": {}},
+                 "30": {"class_type": "KSamplerAdvanced", "inputs": {}},
+                 "9": {"class_type": "SK_SavePixelArt", "inputs": {}}}
+        with StandIn(os.path.join(self.tmp, "renders")), mock.patch.object(engine, "run_job", self.stand_in_job), \
+                mock.patch.object(engine, "free_models", lambda: None), mock.patch.object(fcore, "stop_comfy", lambda: None), \
+                mock.patch.object(lane_character, "COMFY_WORK", os.path.join(fcore.WORK, "comfy_out", "dotwork_work")), \
+                mock.patch.object(lane_character, "_wf", lambda name: json.loads(json.dumps(graph))):
+            return self.dw("audition", "--name", "guard", "--clip", "walk_e", *args)
+
+    def test_render_score_rank_sheet_and_resume(self):
+        self.jobs = []
+        # the character's work folder, from the message of a promote with no takes yet
+        code, text = self.dw("audition", "--name", "guard", "--clip", "walk_e", "--promote", "m0_s1")
+        self.assertEqual(code, 2, text)
+        root = text.split("no take m0_s1 in ", 1)[1].split(" (tags", 1)[0].strip()
+        work = os.path.dirname(os.path.dirname(root))
+        sprite = figure(40, 32, self.ORANGE, (8, 4, 24, 32))
+        save(os.path.join(work, "south.png"), sprite)
+        for d in ("s", "e", "n", "w"):
+            save(os.path.join(work, "rot", d + ".png"), sprite)
+        with open(os.path.join(work, "rot", "orient.json"), "w", encoding="utf-8") as f:
+            json.dump({"auto": [], "unsure": [], "manual": []}, f)   # the facing check already ran
+        ship = os.path.join(work, "clips", "walk_e")                  # a shipped clip: the sheet's baseline row
+        for k in range(4):
+            save(os.path.join(ship, "f_%05d.png" % k), sprite)
+        with open(os.path.join(ship, "meta.json"), "w", encoding="utf-8") as f:
+            json.dump({"seed": 7000}, f)
+
+        code, text = self.audition("--seeds", "8101", "8102", "--feature-hue", "30-56")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(sorted(s for _, s, _ in self.jobs), [8101, 8102], "one clip job per seed")
+        self.assertIn("audition/walk_e/m0_s8101/f", self.jobs[0][0])
+        with open(os.path.join(root, "audition.json"), encoding="utf-8") as f:
+            rep = json.load(f)
+        takes = {t["tag"]: t for t in rep["takes"]}
+        self.assertEqual(set(takes), {"shipped", "m0_s8101", "m0_s8102"})
+        self.assertEqual(takes["shipped"]["seed"], 7000)
+        self.assertGreater(takes["m0_s8102"]["reach_px"], 0, "the take that reaches out")
+        self.assertEqual(takes["m0_s8101"]["reach_px"], 0)
+        self.assertEqual((takes["m0_s8102"]["rank"], takes["m0_s8101"]["rank"]), (1, 2))
+        self.assertGreater(takes["m0_s8102"]["score"], takes["m0_s8101"]["score"])
+        self.assertEqual(takes["m0_s8101"]["feature_retention"], 1.0, "the orange holds in every frame")
+        self.assertIn("#1 m0_s8102", text)
+        self.assertIn("--fix walk_e:seed=8102", text)
+        for t in ("m0_s8101", "m0_s8102"):
+            self.assertEqual(len(glob.glob(os.path.join(root, t, "qa", "q_*.png"))), 4)
+        self.assertTrue(os.path.isfile(os.path.join(root, "shipped_qa", "q_00.png")))
+        with Image.open(os.path.join(root, "audition.png")) as sheet:
+            self.assertGreater(sheet.size[1], 3 * 32, "three rows on the sheet")
+        review = os.path.join(self.game, "art_source", "review")
+        self.assertTrue(os.path.isfile(os.path.join(review, "guard_walk_e_audition.png")))
+        self.assertTrue(os.path.isfile(os.path.join(review, "guard_walk_e_audition.json")))
+        with open(os.path.join(ship, "meta.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["seed"], 7000, "the shipped clip is untouched")
+
+        self.jobs = []                                                   # resume: the same takes, no job
+        code, text = self.audition("--seeds", "8101", "8102")
+        self.assertEqual(code, 0, text)
+        self.assertEqual(self.jobs, [])
+        code, text = self.audition("--seeds", "8101", "--motion", "", "the guard strides forward")
+        self.assertEqual(code, 0, text)
+        self.assertEqual([(s, m) for _, s, m in self.jobs], [(8101, "the guard strides forward")],
+                         "only the new wording renders")
+        self.assertTrue(os.path.isfile(os.path.join(root, "m1_s8101", "f_00000_.png")))
+        with open(os.path.join(root, "m1_s8101", "meta.json"), encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["motion_fix"], "the guard strides forward")
 
 
 # ---- lanes with stand-in renders ------------------------------------------------------------------------------------

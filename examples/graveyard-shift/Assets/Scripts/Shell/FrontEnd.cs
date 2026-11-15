@@ -23,6 +23,8 @@
 //           and navigation events are dropped meanwhile (#276)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the panel clears only its own texture; on the screen it
 //           draws over the camera's picture instead of blacking it out (#277)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a player started with --drive runs the drive and quits
+//           when it ends (PlayerRun.ArmDrive, #308); before, Shell.cs documented it and nothing ran
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -45,7 +47,8 @@ namespace graveyard_shift.Shell
         private static readonly string[] LOOK_KEYS = { "text_scale", "readable_font", "line_spacing", "language" };
 
         public static FrontEnd I { get; private set; }
-        /// <summary>A PlayMode test sets this before loading the scene when it wants Shell.Drive to run.</summary>
+        /// <summary>A PlayMode test sets this before loading the scene when it wants Shell.Drive to run (a player
+        /// started with --drive arms it from its command line).</summary>
         public static bool DriveArmed;
 
         public event Action<string> ScreenShown;
@@ -83,12 +86,26 @@ namespace graveyard_shift.Shell
         {
             Shell.I.ApplyAll();
             ShowTitle();
-            if (DriveArmed && !string.IsNullOrEmpty(Shell.I.Drive))
+            bool player = !Application.isEditor;
+            if (PlayerRun.ArmDrive(DriveArmed, player, Shell.I.DriveOnCommandLine) && !string.IsNullOrEmpty(Shell.I.Drive))
             {
                 Drive = new SmokeDrive(this, Shell.I.Drive);
                 ShellInput.Scripted = true;   // only the drive presses: no real keyboard, mouse or pad (#276)
                 StartCoroutine(Drive.Run());
+                if (player && !DriveArmed)
+                {
+                    StartCoroutine(QuitWhenDriveEnds());   // a player's --drive run ends like a smoke run: 0 or 1
+                }
             }
+        }
+
+        private System.Collections.IEnumerator QuitWhenDriveEnds()
+        {
+            while (!Drive.Finished && !Drive.Failed)
+            {
+                yield return null;
+            }
+            Application.Quit(Drive.Failed ? 1 : 0);
         }
 
         private void OnDestroy()

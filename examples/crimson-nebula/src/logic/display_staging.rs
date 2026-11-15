@@ -26,6 +26,8 @@
 //   tick   : left -= dt; left <= 0 -> revert()
 //   back   : confirm open -> (Revert, revert()); pending and not warned -> warned, (Warn); else discard, (Leave)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): warned(), so the shell can show Back's warning
+//           while it holds
 // ---------------------------------------------------------------------------
 use serde_json::{Map, Value};
 
@@ -175,6 +177,11 @@ impl DisplayStaging {
 
     pub fn confirming(&self) -> bool {
         self.left.is_some()
+    }
+
+    /// Back warned about pending changes: the next Back discards them.
+    pub fn warned(&self) -> bool {
+        self.warned
     }
 
     pub fn has_pending(&self) -> bool {

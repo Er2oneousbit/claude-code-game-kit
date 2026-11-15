@@ -102,7 +102,7 @@
   times `scale` again. The starter play screen shows
   a map, a label in the font, a prop and a character walking when the game has packs (`src/game/DotworkShowcase`,
   PROTOTYPE). `tests/test_dotwork_assets.cpp` holds the loader to `data/golden/dotwork/expected.json` (1e-6: every
-  kind, the three maps' `terrain`, `placed` and `centres` included) and fails
+  kind, the maps' `terrain`, `placed` and `centres` included) and fails
   on any manifest under `assets/dotwork/` that does not load or names a missing, non-PNG or wrongly sized file; a PNG
   SDL cannot decode is an `[ERROR]` line at boot, which fails `smoke`. All types are in `core::dotwork` and
   `gfx::dotwork`, so a game's own `Sprite` or `Map` never clashes with them.

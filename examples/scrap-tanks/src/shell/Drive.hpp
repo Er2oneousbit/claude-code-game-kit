@@ -28,6 +28,7 @@
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): crash, pseudo, pseudo-plant, bug, show:juice (#275)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm (#308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): kWarningHoldFrames (the display drive checks the warning stays)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -59,6 +60,7 @@ public:
     static constexpr double kTargetMaster = 0.5; // menus drives the master volume here
     static constexpr int kMaxSliderSteps = 40;
     static constexpr double kRealSlackS = 2.0;   // display: the confirm reverts within this of its 15 real seconds
+    static constexpr int kWarningHoldFrames = 300;   // display: 5 s of smoke ticks, longer than a settings message
     static constexpr int kRealWaitMs = 10;       // display: sleep per frame while the confirm counts down
 
 private:

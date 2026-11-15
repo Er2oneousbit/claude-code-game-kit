@@ -78,6 +78,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --pro-flash, --style-image, --quote, animate
 #           --last-frame, animate-character --end-frame (#16)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --end-frame without --directions takes south, the
+#           custom modes' default -h names (it was refused)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -902,7 +904,8 @@ def build(kind, args):
             # pixminimax only, one direction only, the same size as that rotation. A 422 would come after sending
             if args.mode not in ("v3", "pixminimax"):
                 raise ToolError("--end-frame works with --mode v3 or pixminimax (PixelLab's rule)")
-            if len(body.get("directions", [])) != 1:
+            body.setdefault("directions", ["south"])   # a custom mode's default (-h), sent so the request says it
+            if len(body["directions"]) != 1:
                 raise ToolError("--end-frame needs exactly one direction, e.g. --directions south")
             # the start pose, when `character` saved it in --from (rotations/<d>.png, or <state>/rotations/<d>.png)
             start = next(iter(sorted(Path(args.source).glob(f"rotations/{body['directions'][0]}.png"))
@@ -1561,8 +1564,9 @@ def build_parser():
     p.add_argument("--frames", type=int, default=8, help="v3: 4 to 16, even; pixminimax: a multiple of 4 up to 40 (default 8)")
     p.add_argument("--directions", default="", help="comma list, e.g. south,east (default: all for template, south for custom)")
     p.add_argument("--name", default="", help="the animation's name in your PixelLab library")
-    p.add_argument("--end-frame", help="v3 or pixminimax, one direction: a PNG pose to end on, the size of that "
-                                       "direction's rotation (that rotation itself pins a loop)")
+    p.add_argument("--end-frame", help="v3 or pixminimax, one direction (south without --directions): a PNG pose "
+                                       "to end on, the size of that direction's rotation (that rotation itself pins a "
+                                       "loop)")
     p.set_defaults(fn=lambda a: cmd_generate(a, "animate-character"))
     p = sub.add_parser("iso-tile", parents=[common, gen, look2], help="one isometric tile or block (about 1)")
     p.add_argument("--text", required=True, help="e.g. 'mossy stone block'")

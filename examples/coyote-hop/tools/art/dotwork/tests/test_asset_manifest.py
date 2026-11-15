@@ -239,7 +239,11 @@ class Validator(unittest.TestCase):
 
         def obj(d):
             asset(d, "map", "yard")["objects"][0]["asset"] = "barrel"
-        self.assertFinds(obj, "not an asset")
+        self.assertFinds(obj, "not a sprite")
+
+        def obj_not_sprite(d):   # every importer places objects as sprites (props): another kind is refused
+            asset(d, "map", "yard")["objects"][0]["asset"] = "hero"
+        self.assertFinds(obj_not_sprite, "not a sprite")
 
         def coll(d):
             ts = asset(d, "tileset", "ground_yard")

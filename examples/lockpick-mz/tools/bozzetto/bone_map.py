@@ -25,6 +25,8 @@
 #           A plan is refused (MapError) when two bones would get one name, a new name is already another bone's,
 #           or a core role (CORE) is missing: a half-mapped skeleton would play half a clip.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): parse_clips refuses '|' and ';' in a new clip name
+#           (it is written into the asset log's Notes cell, where '|' added a table cell)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -52,6 +54,7 @@ CORE = ("Hips", "Spine", "Head", "LeftUpLeg", "RightUpLeg", "LeftLeg", "RightLeg
         "LeftForeArm", "RightForeArm", "LeftHand", "RightHand")
 _ROLE_BY_LOWER = {r.lower(): r for r in ROLES}
 _MIXAMO_SPELLING = re.compile(r"^mixamorig\d*[:_]?(?P<role>.+)$", re.IGNORECASE)
+CLIP_NAME_BREAKS = "|;"   # not in a new clip name: the asset log row is a table, its notes split on ';'
 _LAYER = re.compile(r"^(Layer\d*|BaseLayer|AnimLayer\d*)$", re.IGNORECASE)   # FBX animation layer names
 
 
@@ -162,6 +165,10 @@ def parse_clips(text):
         src, dst = src.strip(), (dst.strip() if sep else src.strip())
         if not src or not dst:
             raise ValueError(f"--clips {part.strip()!r}: write SOURCE=new_name or SOURCE, comma-separated")
+        if any(ch in dst for ch in CLIP_NAME_BREAKS):
+            # the new name goes into the asset log's Notes cell: '|' splits the table row, ';' the notes in it
+            raise ValueError(f"--clips {part.strip()!r}: a clip's new name takes no '|' or ';' (write "
+                             f"SOURCE=new_name, e.g. {src}=walk)")
         if dst in new_names:
             raise ValueError(f"--clips names two clips {dst!r}")
         new_names.add(dst)

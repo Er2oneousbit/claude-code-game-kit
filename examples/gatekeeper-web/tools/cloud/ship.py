@@ -61,6 +61,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --target itch pushes a build with butler (#86):
 #           dry run, version from the engine's version source, login checked by presence only, confirm like --apply
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --target itch hands butler the absolute --site, so
+#           a path relative to another folder pushes the folder that was scanned, not a same-named one in the root
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -572,7 +574,7 @@ def itch_check(a):
     if not a.site:
         raise ToolError("--target itch needs --site <the build folder to push> (dev.py ship adds the engine's web "
                         "build)")
-    folder = Path(a.site)
+    folder = Path(os.path.abspath(a.site))  # butler runs in ROOT: a relative path would name another folder there
     if not folder.is_dir():
         raise ToolError(f"--site {a.site}: no such folder (build the game first)")
     if not any(folder.iterdir()):

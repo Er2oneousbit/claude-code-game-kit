@@ -201,7 +201,7 @@ the GPU starts.
 ## What lands where
 | Path | What |
 |---|---|
-| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). Every LOD is a whole `.glb` that any engine loads on its own, so it carries its own textures, at half the size of the level before (2048, 1024, 512; never under 256 px; #196). A rebaked 2048 px character, 51,244 triangles with three maps: 11.5 MB, LOD1 10.8 MB and LOD2 10.3 MB before (32.7 MB), 11.5, 4.6 and 1.8 MB with all-PNG maps (17.9 MB), and 9.1, 3.6 and 1.4 MB (14.1 MB) with its colour map kept JPEG (#303); Godot 4.7 imported all three with 2048, 1024 and 512 px textures (K01, 2026-11-13). Shared external textures (`.gltf` beside its images) would save the rest but change the file every engine import and the kit's records expect; `tools/blender/prep_export.py --lod-textures keep` writes full-size LOD textures. |
+| `<models>/<name>.glb`, `<name>_LOD1.glb` ... | The model, only when it passed `validate_asset.py --class`; the LODs are made from that validated model and copied with it (they are not validated on their own). Every LOD is a whole `.glb` that any engine loads on its own, so it carries its own textures, at half the size of the level before (2048, 1024, 512; never under 256 px; #196). A rebaked 2048 px character, 51,244 triangles with three maps: 11.5 MB, LOD1 10.8 MB and LOD2 10.3 MB before (32.7 MB), 11.5, 4.6 and 1.8 MB with all-PNG maps (17.9 MB), 9.1, 3.6 and 1.4 MB (14.1 MB) with its colour map kept JPEG (#303), and 6.1, 2.5 and 1.1 MB (9.6 MB) with its metallic-roughness map through the JPEG gate (#313); Godot 4.7 imported all three with 2048, 1024 and 512 px textures (K01, 2026-11-13). Shared external textures (`.gltf` beside its images) would save the rest but change the file every engine import and the kit's records expect; `tools/blender/prep_export.py --lod-textures keep` writes full-size LOD textures. |
 | `assets_src/bozzetto/<name>/reference.png` | The picture the mesh was made from (`.jpg`, `.jpeg` or `.webp` when your `--image` was one). Metadata is removed from the copy and from what ComfyUI gets: EXIF (a photo's GPS position, the camera), XMP, IPTC, text chunks, comments and ComfyUI's embedded prompt; the pixels and the colour profile stay. |
 | `assets_src/bozzetto/<name>/raw.glb` | TRELLIS.2's own output, before cleanup (its embedded ComfyUI prompt removed: it holds local paths), or Tripo's (glTF extras removed). |
 | `.../view_front.png` ..., `.../tripo/tasks.json`, `.../tripo/tripo.glb` | Tripo route: the views as uploaded (metadata removed), the journal of paid tasks (no key in it), Tripo's file as downloaded. |
@@ -270,14 +270,25 @@ cannot fix that without a rebake. The policy, decided from that run (K01, 2026-1
   mesh like that; merging the fragments first (tried, 3,120 islands to 190) packed no better. A hand unwrap does
   (SOP-11).
 - **Texture formats** (#303): a colour map whose source was JPEG (Tripo's are) is baked back as JPEG at quality 90
-  (`JPEG_QUALITY` in `tools/blender/prep_export.py`), and its LOD copies stay JPEG; normal and
-  metallic-roughness(-occlusion) maps are always PNG, since JPEG's 8x8 blocks show as dents in a normal map and as
-  noise in roughness, and a map with alpha stays PNG. Each map's format and quality go into the rebake report, the
-  record and the evidence line ("Color (transfer, JPEG 90)"). `make --rebake-png` or `rebake <name> --png` bakes
-  every map as PNG. On that character (K01, Blender 5.2.3) the main file went from 5.0 MB as delivered to 11.5 MB
-  with all-PNG maps and 9.1 MB now (the colour map 3.5 MB as PNG, 1.1 MB as JPEG; LOD1 4.6 to 3.6 MB, LOD2 1.8 to
-  1.4 MB); the flat check went from 0.26 to 0.76 levels mean, the lit one from 1.15 to 1.33. The rest is the PNG
-  metallic-roughness map (2.9 MB, a 0.8 MB JPEG from Tripo) and the rebaked normal map (3.3 MB).
+  (`JPEG_QUALITY` in `tools/blender/prep_export.py`), and its LOD copies stay JPEG. Normal maps are always PNG,
+  since JPEG's 8x8 blocks show as dents in the shading, and a map with alpha stays PNG. A metallic-roughness(-occlusion)
+  map whose source was JPEG (Tripo's is) is JPEG only through a measured gate (#313, `gate_data_maps` in
+  `tools/blender/rebake_uvs.py`): the texels no island uses are filled with the mean of the used ones, then each
+  quality in `DATA_JPEG_QUALITIES` (80, 85, 90, 95) is compared with the baked PNG, on the channels the material
+  reads (roughness, metallic, occlusion) over the texels the mesh covers, and as the lit check renders with each map.
+  The first quality whose mean error is at most `DATA_MEAN_LIMIT` (2 levels of 255, under 1% of the range), whose
+  99.9th percentile is at most `DATA_P999_LIMIT` (24 levels) and whose lit renders move at most `DATA_LIT_LIMIT` (0.5
+  levels, under half of what the resampling itself moves), and which is smaller than the PNG, is written; else PNG.
+  The maximum is recorded but not limited: 4:2:0 chroma smears a metal edge by 150+ levels on a few texels at every
+  quality up to 98, so a max limit would mean "never JPEG". Each map's format and quality go into the rebake report,
+  the record and the evidence line ("Color (transfer, JPEG 90)"), and a gated map's `gate` entry holds every
+  quality tried with its errors, its lit difference, its bytes and the limit it broke. `make --rebake-png` or
+  `rebake <name> --png` bakes every map as PNG. On that character (K01, Blender 5.2.3) the main file went from
+  5.0 MB as delivered to 11.5 MB with all-PNG maps, 9.1 MB with the colour map kept JPEG (#303) and 6.1 MB with the
+  gate (LOD1 4.6, 3.6, then 2.5 MB; LOD2 1.8, 1.4, then 1.1 MB): the metallic-roughness map went from a 3.3 MB PNG to
+  a 0.29 MB JPEG at quality 80 (Tripo's own is 0.81 MB at quality 95), with mean texel errors of 1.1 levels
+  (roughness) and 1.8 (metallic) and its lit renders 0.08 levels apart. The flat check is 0.76 levels mean, the lit
+  one 1.34 (1.15 with all-PNG maps). The rest is the rebaked normal map (2.9 MB PNG).
 - **`--accept-uv` is the waiver**: a model that fails on UV coverage alone ships, and the waiver is written to the
   record (`validation.waived`), the asset log row ("UV coverage waived: 46% under the hero floor 60% (--accept-uv)")
   and the evidence file. Any other failure still stops it. A sprite source (`--sprites`, render_sprites.py) never
@@ -529,10 +540,11 @@ python tools/bozzetto/bone_map.py pelvis thigh_l upperarm_l ...       # how a pa
 `--clips` names each pack clip and what it is called on your character (`SOURCE=new_name`); a name the character
 already has is refused unless `--replace`. `--map my_map.json` (`{"their_name": "Hips", ...}`) covers a pack the
 built-in maps do not fit; `--no-replace` writes `assets_src/bozzetto/<name>/rig/retarget/retargeted.glb` only, to look
-first. The rig before the first retarget is kept there as `before_retarget.glb`, with the report, a record of every
-run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
-"retarget: ..." note naming the clips and the pack's own row. The pack needs that row of its own, with its licence,
-before the game ships: the command warns when it has none.
+first. The rig before the first retarget is kept there as `before_retarget.glb` (written again after a `rig make`
+re-run, never after a `rig chain`), with the report, a record of every run (retarget.json) and `clips.png` (4 frames
+of each new clip). The character's asset log row gets a "retarget: ..." note naming the clips and the pack's own row
+(one note, the clips the rig has from packs now: a re-run replaces it). The pack needs that row of its own, with its
+licence, before the game ships: the command warns when it has none.
 
 How it works (`rig_retarget.py`, in Blender): the pack's bones are renamed to Mixamo's (`bone_map.py`), then for
 every frame each bone both rigs share is turned so it points where the pack's bone points. It is a retarget, not a

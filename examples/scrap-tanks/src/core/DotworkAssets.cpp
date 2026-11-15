@@ -16,6 +16,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick, stamps layers, cell centres and placement, the extra kinds read and checked
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
 // ---------------------------------------------------------------------------
 #include "core/DotworkAssets.hpp"
 
@@ -910,14 +911,11 @@ std::vector<MapCell> resolve_terrain(const Tileset& tileset, int terrain_set, in
                                      const std::vector<std::pair<int, int>>& cells, int layer_index) {
     const TerrainSet* set = tileset.terrain_set(terrain_set);
     const std::string mode = set ? set->mode : "blob47";
-    // The candidates per key in atlas order: atlases by id, tiles in list order
-    std::vector<const Atlas*> atlases;
-    for (const auto& at : tileset.atlases) {
-        atlases.push_back(&at);
-    }
-    std::stable_sort(atlases.begin(), atlases.end(), [](const Atlas* l, const Atlas* r) { return l->id < r->id; });
+    // The candidates per key in atlas order: atlases as listed (never sorted by id: the spec's pick walks the
+    // list), tiles in list order
     std::map<int, std::vector<std::pair<double, TileRef>>> by_key;
-    for (const Atlas* at : atlases) {
+    for (const Atlas& atlas : tileset.atlases) {
+        const Atlas* at = &atlas;
         for (const auto& t : at->tiles) {
             if (t.terrain != terrain || t.terrain_set != terrain_set) {
                 continue;

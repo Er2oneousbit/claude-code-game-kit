@@ -17,9 +17,10 @@ Then skim `docs/ROADMAP.md` (Now column only). Do not read the rest of `docs/` u
 Never guess build or test commands. Use the project wrapper:
 
 ```
-python tools/dev.py check | test | smoke | build | run | clean | doctor     # -h for help and env vars, --debug for detail
+python tools/dev.py check | test | smoke | build | run | clean | doctor | ship   # -h for help and env vars, --debug for detail
 ```
-`check` is the fast parse/compile pass, `test` runs unit tests, `smoke` boots headless and fails on errors.
+`check` is the fast parse/compile pass, `test` runs unit tests, `smoke` boots headless and fails on errors, `ship`
+puts a build online or on itch.io (`SOP-06`, `SOP-21`).
 A change is not done until `check` and `test` pass,
 and `smoke` passes if you touched startup, scenes/levels, or anything loaded at boot. A project with no tests yet
 gets "nothing ran" from `test`: write the first test, or record the gap in `docs/HANDOFF.md` (`SOP-09`).

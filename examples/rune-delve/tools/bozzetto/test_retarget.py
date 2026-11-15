@@ -25,6 +25,9 @@
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig refreshes the backup, a chain does not;
+#           a new clip name with '|' or ';' is refused, a pack's clip or path with them keeps the log row whole;
+#           one retarget note per row, naming the rig's clips from packs now
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -129,7 +132,11 @@ class MapExam(unittest.TestCase):
         self.assertEqual(bm.parse_clips("Walk_Loop=walk, Idle_Loop=idle,Jump"),
                          [("Walk_Loop", "walk"), ("Idle_Loop", "idle"), ("Jump", "Jump")])
         self.assertEqual(bm.parse_clips("all"), "all")
-        for bad in ("A=b,C=b", "=walk", "A="):
+        # a '|' or ';' in a new name broke the model's asset log row (one cell more) or its notes; a bare FBX
+        # action name (Armature|mixamo.com|Layer0) is still a valid SOURCE, it only needs a new name
+        self.assertEqual(bm.parse_clips("Armature|mixamo.com|Layer0=walk"), [("Armature|mixamo.com|Layer0", "walk")])
+        for bad in ("A=b,C=b", "=walk", "A=", "Walk_Loop=walk|fast", "Walk_Loop=walk;fast",
+                    "Armature|mixamo.com|Layer0"):
             with self.assertRaises(ValueError, msg=bad):
                 bm.parse_clips(bad)
         self.assertEqual(bm.clip_name("Walk_Loop"), "Walk_Loop")
@@ -169,7 +176,8 @@ class CliExam(unittest.TestCase):
         argv = [str(a) for a in argv]
         self.calls.append(argv)
         self.assertEqual(Path(script).name, "rig_retarget.py")
-        rep = {"map": "ual", "clips": {"walk_ual": {"from": "Walk_Loop", "frames": 24}},
+        rep = {"map": "ual", "clips": {getattr(self, "new_clip", "walk_ual"):
+                                       {"from": getattr(self, "src_clip", "Walk_Loop"), "frames": 24}},
                "clips_in_file": ["idle", "walk", "walk_ual"],
                "failures": [] if self.rc == 0 else ["the pack and the target face different ways"]}
         if self.rc == 0:
@@ -224,6 +232,97 @@ class CliExam(unittest.TestCase):
         self.assertEqual([r["pack"] for r in rec["runs"]], ["assets_src/packs/ual.glb", "assets_src/packs/unlogged.glb"])
         self.assertEqual(rec["runs"][0]["pack_asset"], "A-0003")
         self.assertEqual(rec["runs"][-1]["output_sha256"], bz.sha256_bytes(self.dst.read_bytes()))
+
+    def rig_make(self, data):
+        """What `rig make` leaves: the rigged file and rig.json holding its hash."""
+        self.dst.write_bytes(data)
+        rec = self.work.parent / "rig.json"
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text(json.dumps({"output": {"file": "assets/models/hero_rigged.glb",
+                                              "sha256": bz.sha256_bytes(data)}}), encoding="utf-8")
+
+    def test_a_re_rig_since_the_last_retarget_refreshes_the_backup(self):
+        """`rig make` again writes a new rig: the backup must be that rig, not the one from before, or a restore
+        from before_retarget.glb brings back an old skeleton."""
+        self.rig_make(b"glTF-rigged-v1")
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        backup = self.work / rt.BACKUP
+        self.assertEqual(backup.read_bytes(), b"glTF-rigged-v1")
+        self.rig_make(b"glTF-rigged-v2")                    # rig make re-run: a new rig, no clips from a pack yet
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(backup.read_bytes(), b"glTF-rigged-v2", "the backup is still the rig from before the re-rig")
+        code, out = self.retarget()                         # a plain second retarget keeps it
+        self.assertEqual(code, 0, out)
+        self.assertEqual(backup.read_bytes(), b"glTF-rigged-v2")
+        rec = json.loads((self.work / rt.RECORD).read_text(encoding="utf-8"))
+        self.assertEqual(rec["rig_sha256"], bz.sha256_bytes(b"glTF-rigged-v2"))
+        self.assertEqual(len(rec["runs"]), 3)               # the runs on the older rig stay in the history
+
+    def test_a_chain_between_retargets_keeps_the_first_backup(self):
+        """`rig chain` rewrites the rig too, and retarget's own [WARN] sends you to retarget, chain, retarget: the
+        backup must stay the rig from before any retarget, not the chained one."""
+        self.rig_make(b"glTF-rigged-v1")
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.dst.write_bytes(self.dst.read_bytes() + b"+chain")   # rig chain: rig.json unchanged
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.work / rt.BACKUP).read_bytes(), b"glTF-rigged-v1")
+        # with no rig.json at all (a rig from elsewhere) the backup is never replaced
+        (self.work.parent / "rig.json").unlink()
+        self.dst.write_bytes(b"glTF-other")
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.work / rt.BACKUP).read_bytes(), b"glTF-rigged-v1")
+
+    def test_a_pack_clip_or_path_with_table_characters_keeps_the_log_row_whole(self):
+        """The pack's clip name and path come from outside: a '|' in them added a cell to the model's asset log row,
+        a ';' split the retarget note in two (the notes are split on it)."""
+        odd = self.root / "assets_src" / "packs" / "odd;pack.glb"
+        odd.write_bytes(b"glTF-pack-3")
+        self.src_clip = "Walk;Fast|2"
+        code, out = self.retarget(pack="assets_src/packs/odd;pack.glb")
+        self.assertEqual(code, 0, out)
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        row = [l for l in log.splitlines() if l.startswith("| A-0002")][0]
+        self.assertEqual(len(row.split("|")), len(LOG.splitlines()[-1].split("|")), row)
+        notes = [n.strip() for n in row.split("|")[-2].split(";")]
+        self.assertEqual(sum(n.startswith(rt.NOTE_PREFIX) for n in notes), 1, notes)
+        self.assertTrue(notes[-1].startswith(rt.NOTE_PREFIX) and "as walk_ual from" in notes[-1], notes)
+
+    def retarget_notes(self):
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        row = [l for l in log.splitlines() if l.startswith("| A-0002")][0]
+        self.assertEqual(len(row.split("|")), len(LOG.splitlines()[-1].split("|")), row)
+        return [n.strip() for n in row.split("|")[-2].split(";") if n.strip().startswith(rt.NOTE_PREFIX)]
+
+    def test_the_retarget_note_holds_the_rigs_clips_now(self):
+        """Every --replace re-run appended another "retarget: ..." note; the row now holds one, naming the clips the
+        rig has from packs now (a re-run of one clip replaces it, a new clip joins it), as `rig chain` does."""
+        self.rig_make(b"glTF-rigged-v1")
+        for _ in range(3):
+            code, out = self.retarget("--replace")
+            self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("Walk_Loop as walk_ual from A-0003", notes[0])
+        self.new_clip, self.src_clip = "idle_ual", "Idle_Loop"
+        code, out = self.retarget(pack="assets_src/packs/unlogged.glb")
+        self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("Walk_Loop as walk_ual from A-0003", notes[0])
+        self.assertIn("Idle_Loop as idle_ual from `assets_src/packs/unlogged.glb`", notes[0])
+        self.assertIn("rig of A-0001", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
+        self.rig_make(b"glTF-rigged-v2")                    # a re-rig: the old rig's clips are gone with it
+        self.new_clip, self.src_clip = "walk_ual", "Walk_Loop"
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertNotIn("idle_ual", notes[0])
 
     def test_a_refused_transfer_and_no_replace_leave_the_model_alone(self):
         self.rc = 1

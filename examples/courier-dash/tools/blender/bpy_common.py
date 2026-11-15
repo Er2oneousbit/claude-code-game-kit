@@ -36,6 +36,8 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): Notes: bpy 4.2 crashes on exit after a glTF import
 #           too (validate_asset.py now ends through end_process, #312)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): end_process saves a running coverage measurement
+#           before TerminateProcess (run_exams.py --coverage measured no bpy module run, #282)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -46,7 +48,8 @@
 #   conform_clip_fps: gather every key frame of the actions -> clip_fps -> same rate: nothing; a rate: scale every
 #                     key by new / old and snap it to the whole frame (handles shifted along), scale a manual frame
 #                     range, set scene fps, print [info]; none: [WARN]
-#   end_process: Blender executable -> sys.exit(code); the module on Windows -> flush, TerminateProcess(code)
+#   end_process: Blender executable -> sys.exit(code); the module on Windows -> save a running coverage measurement,
+#     flush, TerminateProcess(code)
 import sys
 
 RATES = (12, 15, 20, 24, 25, 30, 48, 50, 60)   # common frame rates, the lowest that fits wins
@@ -136,11 +139,30 @@ def conform_clip_fps(bpy, scene, actions, quiet=False):
     return rate
 
 
+def save_coverage():
+    """Stop and save a running coverage measurement (run_exams.py --coverage, #282): TerminateProcess skips atexit,
+    where coverage writes its data, so without this a bpy module run counted for nothing. True when it saved."""
+    cov = sys.modules.get("coverage")
+    if cov is None:
+        return False
+    try:
+        current = cov.Coverage.current()
+        if current is None:
+            return False
+        current.stop()
+        current.save()
+        return True
+    except Exception:   # noqa: BLE001  (a measurement problem must never change the script's exit code)
+        return False
+
+
 def end_process(bpy, code):
     """The last line of a Blender-side script: exit with `code`. With the bpy module on Windows, end the process
-    without unloading its libraries (see Notes), so the exit code is the script's and not the crash's."""
+    without unloading its libraries (see Notes), so the exit code is the script's and not the crash's; a running
+    coverage measurement is saved first (save_coverage)."""
     code = int(code or 0)
     if not getattr(bpy.app, "binary_path", "") and sys.platform == "win32":
+        save_coverage()
         sys.stdout.flush()
         sys.stderr.flush()
         import ctypes

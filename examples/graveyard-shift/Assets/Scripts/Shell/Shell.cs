@@ -12,7 +12,8 @@
 //           drive once talked to one Shell while the screens listened to another). Run options come from environment variables (dev.py smoke sets them for the PlayMode run) or the
 //           player's command line: GAMEKIT_DATA_DIR / --data-dir <dir> (default Application.persistentDataPath),
 //           GAMEKIT_LOCALE / --locale <code> (this run only; "pseudo" is the test locale), GAMEKIT_DRIVE / --drive
-//           <scenario> (SmokeDrive), GAMEKIT_SMOKE=1 / --smoke. Files in the data folder: settings.json (+ .bak).
+//           <scenario> (SmokeDrive; a player runs it only with --drive on its command line, and quits when it ends:
+//           0 done, 1 failed), GAMEKIT_SMOKE=1 / --smoke. Files in the data folder: settings.json (+ .bak).
 //           Audio: the master slider sets AudioListener.volume; the other sliders are for your AudioMixer (the Core
 //           AudioAccess.UserBusGains gives the gain per bus). Display settings apply only in a player (not in the
 //           editor or batchmode). Crash files (crashes/crash_<time>.txt) and the F8 bug report (bug_<time>/) are
@@ -27,6 +28,8 @@
 //           the stick's deadzone and invert_y for ShellInput's analog values (#274)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): HudScaleChanged and HudFontSize for a game HUD
 //           (HudScale, #309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): DriveOnCommandLine (a player's --drive arms the drive),
+//           and full screen falls back to a maximized window when Unity sees no display modes (PlayerRun, #308)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -58,6 +61,8 @@ namespace graveyard_shift.Shell
         public string LocaleOverride = "";
         public bool Smoke;
         public string Drive = "";
+        /// <summary>True when --drive came on the command line (a player runs the drive only then).</summary>
+        public bool DriveOnCommandLine;
         public string Version = "";
         public string Objective = "";                  // the goal "What now?" shows (#167)
         public string LastNarration = "";              // the line the narrator last worked out (#165), spoken or not
@@ -470,8 +475,16 @@ namespace graveyard_shift.Shell
             }
             QualitySettings.vSyncCount = GameSettings.Bool(Settings, "display", "vsync") ? 1 : 0;
             string mode = GameSettings.Text(Settings, "display", "mode");
-            FullScreenMode fs = mode == "fullscreen" ? FullScreenMode.ExclusiveFullScreen
-                              : mode == "borderless" ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            string kind = PlayerRun.FullScreenKind(mode, Screen.resolutions.Length);
+            if (kind == "maximized")
+            {
+                // Unity lists no display modes (seen in a disconnected remote session): its full-screen kinds then
+                // fall back to a titled window, so fill the screen with a maximized one instead
+                Debug.LogWarning($"[WARN][display] no display modes known: {mode} is a maximized window instead");
+            }
+            FullScreenMode fs = kind == "exclusive" ? FullScreenMode.ExclusiveFullScreen
+                              : kind == "borderless" ? FullScreenMode.FullScreenWindow
+                              : kind == "maximized" ? FullScreenMode.MaximizedWindow : FullScreenMode.Windowed;
             var res = ((Dictionary<string, object>)Settings["display"])["resolution"] as List<object>;
             int w = res != null && res.Count == 2 ? (int)Json.ToNumber(res[0]) : Screen.width;
             int h = res != null && res.Count == 2 ? (int)Json.ToNumber(res[1]) : Screen.height;
@@ -514,7 +527,7 @@ namespace graveyard_shift.Shell
                 {
                     case "--data-dir": DataDir = value; i++; break;
                     case "--locale": LocaleOverride = value; i++; break;
-                    case "--drive": Drive = value; i++; break;
+                    case "--drive": Drive = value; DriveOnCommandLine = true; i++; break;
                     case "--smoke": Smoke = true; break;
                 }
             }

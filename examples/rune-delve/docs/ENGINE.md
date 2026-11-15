@@ -117,7 +117,7 @@ and a clear spec for the Blueprint child.
   saves `/Game/Dotwork/L_DotworkDemo` (the map, its props placed through `map_to_local`, a character walking, a
   label in the font; `DOTWORK_DEMO=0` skips it). Run it again after every Dotwork `pack`: assets update in place.
   `dev.py test` runs the importer's checks (the golden pack against `data/golden/dotwork/expected.json`: clips,
-  sprites, the three maps' terrain, placed cells and centres, then every manifest of the game) through the
+  sprites, the maps' terrain, placed cells and centres, then every manifest of the game) through the
   pythonscript commandlet; enable the PythonAutomationTest plugin as well to have them as
   `Editor.Python.<Game>.kit_dotwork.*` automation tests. Both need `PythonScriptPlugin` (and Paper2D, on by
   default) in the `.uproject`. Paper2D cannot do: animated tiles (first frame shown; the frames are in

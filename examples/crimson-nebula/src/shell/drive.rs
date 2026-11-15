@@ -37,6 +37,8 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): a failed drive's screenshot (#276)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm; the pseudo drive
 //           checks the Display tab with a change waiting and the confirm (#308)
+//           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old size while the
+//           confirm waits
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -831,9 +833,11 @@ fn display(d: &mut Drive) {
         let shell = world.resource::<Shell>();
         let now = shell.settings["display"]["resolution"].clone();
         let secs = shell.staging.seconds();
-        if secs.is_none() || now == d.scratch["before"] || saved != now || shell.focus_id() != "confirm.keep" {
+        // set and confirmed, and not saved: settings.json keeps the old size (or is not there yet) until Keep
+        let file_ok = saved.is_null() || saved == d.scratch["before"];
+        if secs.is_none() || now == d.scratch["before"] || !file_ok || shell.focus_id() != "confirm.keep" {
             return Err(format!(
-                "Apply did not set, save and confirm the window size (settings {now}, file {saved}, focus {})",
+                "Apply did not confirm the size, or saved it before Keep (settings {now}, file {saved}, focus {})",
                 shell.focus_id()
             ));
         }

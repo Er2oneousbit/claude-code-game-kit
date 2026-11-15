@@ -12,6 +12,8 @@
 #           Exit 0 clean, 1 findings, 2 usage. Every threshold is a named constant below, with the measurement that
 #           set it (calibrated on a 1114-PNG rehearsal game, 2026-11-01).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a tools row without a source falls back under the
+#           configured source folder, not assets_src/ (#282)
 # ---------------------------------------------------------------------------
 import glob
 import json
@@ -459,8 +461,11 @@ def palette_rule(ctx, a):
     if a.lane == "hitfx":
         return None, HITFX_MAX, f"a short ramp (about 4 colours) per frame", None
     if a.lane == "tools":
-        src = a.row.get("source") or "/".join(["assets_src", "art", "tools", a.group, "source.png"])
-        im = ctx.image(os.path.join(ctx.project, *src.split("/")))
+        # a row names its source (relative to the game); a row from before the lane wrote one: the lane's own copy
+        # under the game's source folder (ctx.src, from src_dir; it said assets_src/ whatever the config was, #282)
+        src = a.row.get("source")
+        im = ctx.image(os.path.join(ctx.project, *src.split("/")) if src else
+                       os.path.join(ctx.src, "art", "tools", a.group, "source.png"))
         if im is None:
             return None, None, None, None
         sk = keyset(im)

@@ -33,8 +33,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
   reference's `DisplayStaging`, held by the `display_staging` cases): the controls show the staged value, Apply sends
   only the changed fields (mode before resolution), and a change that can black out the screen (mode, resolution)
   asks "Keep these display settings? Reverting in N s" for 15 seconds of real time, never game time, with focus on
-  Keep. Revert, the countdown, Back or cancel put back exactly what that Apply replaced. Back with unapplied Display
-  changes warns once; a second Back discards them. The Display tab says so in a hint line, and the resolution row
+  Keep. Revert, the countdown, Back or cancel put back exactly what that Apply replaced. Such a change is saved only
+  once kept: while the confirm is open settings.json (and an engine's own copy, such as Unreal's GameUserSettings.ini)
+  keeps the old values, so a game killed on a black screen starts as before; Keep saves, a revert saves the old values.
+  Back with unapplied Display changes warns once, and the warning stays up while the next Back would discard them;
+  that second Back discards them. The Display tab says so in a hint line, and the resolution row
   says it sets the window size. `smoke --drive display` runs the whole path headless.
 - Every setting is saved and restored (F37). Machine-specific settings (resolution, vsync) stay out of cloud sync
   (E79).

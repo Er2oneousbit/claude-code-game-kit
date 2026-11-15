@@ -42,6 +42,8 @@
 #           30 fps (#292)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): LOD textures at half the size per level (#196)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG image's LOD copies stay JPEG (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an image name at Blender's limit keeps its name in
+#           the LODs (the full image's "_full" rename was cut back to the name, so the LOD's copy got another)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -313,7 +315,7 @@ def shrink_textures(bpy, found, factor):
         else:
             new.pack()
         name = img.name
-        img.name = f"{name}_full"
+        img.name = f"gamekit_full_{len(swaps)}"   # short: name + "_full" at Blender's name limit was cut back to name
         new.name = name                    # the LOD's image keeps the name the main file's has
         for node in nodes:
             node.image = new

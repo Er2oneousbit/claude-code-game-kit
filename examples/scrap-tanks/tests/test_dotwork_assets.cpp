@@ -22,6 +22,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' full loaded result,
 //           the extra kinds loaded, the hash, roll, corners4, centre and stamps cases
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): four golden maps (atlas_order_check)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -309,7 +310,8 @@ TEST_CASE("dotwork assets: the golden pack loads as expected.json") {
         CHECK_MESSAGE(same(want, got.at(key), key, why), why);
     }
     CHECK_MESSAGE(got.size() == compared, "the importer loaded assets expected.json does not list");
-    CHECK(maps == 3);   // yard (blob47, a stamps layer), meadow_patch (corners4) and isle (isometric corners4)
+    CHECK(maps == 4);   // yard (blob47, a stamps layer), meadow_patch (corners4), isle (isometric corners4) and
+                        // atlas_order_check (atlases listed out of id order)
     // (the message is built even when the check passes under -s, so never front() an empty vector in one)
     CHECK_MESSAGE(pack.warnings.empty(), "the golden pack warned: " << (pack.warnings.empty() ? "" : pack.warnings.front()));
     MESSAGE("compared " << compared << " assets with expected.json");

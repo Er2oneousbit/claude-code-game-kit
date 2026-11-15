@@ -67,6 +67,11 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 
+	/** A windowed display.resolution (real pixels) in the units UGameUserSettings takes: on Windows a game that
+	 *  is not DPI-aware (bAllowHighDPIInGameMode=False, the engine default) gets its window scaled by the system,
+	 *  so the size is divided by DesktopPx / DesktopLogical (1.25 at 125 %); 1 when they agree (#308). */
+	static FIntPoint WindowSizeForScale(FIntPoint Res, FIntPoint DesktopPx, FIntPoint DesktopLogical);
+
 	/** The screens' model (made on the first map load; null before). */
 	TSharedPtr<FGameKitShellModel> GetModel() const { return Model; }
 	TSharedPtr<SGameKitShell> GetWidget() const { return Widget; }

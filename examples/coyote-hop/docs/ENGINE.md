@@ -94,7 +94,7 @@ tools/                   dev.py and helpers
   position), `DotworkAssets.sprite(m["sprite"]["crate"])` (Sprite2D, pivot on the position, a `Shadow` child, a
   `Body` StaticBody2D per collision rect), `add_child(DotworkAssets.map_node(m["map"]["yard"]))` (a Node2D with a
   TileMapLayer per layer and the props under a y-sorted `Props` node), `DotworkAssets.font(...)` (FontFile from the
-  `.fnt`), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
+  `.fnt`, drawn 1:1 at any font size), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
   Textures: Godot's imported PNG when there is one, else the PNG decoded at run time.
   - **Maps.** Cells arrive resolved (`scripts/core/dotwork_manifest.gd`, no nodes): a terrain layer's cells get the
     spec's key (`blob47`, `sides4`, `corners4`) and, among a key's variants, the tile `DotworkManifest.cell_roll(x,
@@ -141,9 +141,13 @@ tools/                   dev.py and helpers
 12. **The windowed shader check can crash under GPU load.** Godot 4.7.2 died twice in five `check` runs (exit
     3221226356, 0xC0000374, heap corruption) during a SubViewport readback while other programs used the GPU; never
     seen with Godot alone. It can also die before the first recipe (0xC0000005 and 0xC0000374, two runs in a row
-    on 2026-11-11 while a Unity editor and other tests ran; the third passed). `dev.py` then says "Godot crashed
-    after N recipe(s)" or "before drawing a recipe": rerun it, or use `check --no-shaders` and let
-    `smoke --shaders` cover them later. "It needs a window" means nothing was drawn and Godot did not crash.
+    on 2026-11-11 while a Unity editor and other tests ran; the third passed), most often on a project's first run.
+    `dev.py` runs a crashed shader run again (up to 3 runs, each one printed; a shader cache Godot cannot read after
+    a crash, its SPIR-V errors, is cleared first) and says "Godot crashed ... 3 times in a row" only when every run
+    crashed: then rerun it, or use `check --no-shaders` and let `smoke --shaders` cover them later. "It needs a
+    window" means nothing was drawn and Godot did not crash. The headless import (`import`, and `check` on a new
+    project) crashes now and then too (0xC0000005 while importing a font, 4 fresh projects in 10 on 2026-11-14);
+    it runs again up to 3 runs, keeping what it imported.
 13. **The editor rewrites `project.godot`.** Whenever it saves the project settings (`ProjectSettings.save()`, the
     first open, any Project Settings change), Godot drops every comment and every key left at its default value, and
     sets `config/features` to the editor's own version (4.6 in the template, the kit's floor, becomes your 4.x: that is

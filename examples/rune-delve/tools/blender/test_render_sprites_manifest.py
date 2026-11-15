@@ -7,11 +7,13 @@
 #           checks, and the committed fixture data/golden/character/sprites/ (rendered from the golden character):
 #           it passes assetspec.py's validator with its files, and its expected.json is assetspec's loaded result.
 #           The renders themselves are checked by test_render_sprites.py (bpy, live). Also bpy_common.py's
-#           plain-Python parts: the clips' frame rate and the Blender 4.2 clip names (#292).
+#           plain-Python parts: the clips' frame rate, the Blender 4.2 clip names (#292), and end_process saving a
+#           running coverage measurement before it ends the process (#282).
 # Usage   : python tools/blender/test_render_sprites_manifest.py [-v]
 # Exit    : 0 all tests pass, 1 a test failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): bpy_common's clip frame rate and clip names (#292)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): end_process saves coverage before TerminateProcess (#282)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -239,6 +241,50 @@ class Common(unittest.TestCase):
         fake = type("B", (), {"data": type("D", (), {"objects": [arm], "actions": Actions([clip, other])})})
         self.assertEqual(bc.adopt_clip_names(fake), [])
         self.assertEqual(clip.name, "walk_Armature")
+
+
+END_CHILD = r'''
+import sys, types
+sys.path.insert(0, sys.argv[1])
+marker = sys.argv[2]
+class Cov:
+    def stop(self):
+        open(marker, "a").write("stop\n")
+    def save(self):
+        open(marker, "a").write("save\n")
+fake = types.ModuleType("coverage")
+fake.Coverage = type("Coverage", (), {"current": staticmethod(lambda: Cov() if sys.argv[3] == "on" else None)})
+sys.modules["coverage"] = fake
+import bpy_common as bc
+bpy = types.SimpleNamespace(app=types.SimpleNamespace(binary_path=""))   # the bpy module: no Blender binary
+print("before", flush=True)
+bc.end_process(bpy, 3)
+'''
+
+
+class EndProcess(unittest.TestCase):
+    """bpy_common.end_process (#312, #282): the bpy module's process ends with TerminateProcess on Windows, which
+    skips atexit, so a coverage run there saved no data and every Blender script read as never executed. With
+    coverage running it is stopped and saved first; the exit code is still the script's."""
+
+    def end(self, mode):
+        with tempfile.TemporaryDirectory() as d:
+            child, marker = Path(d) / "child.py", Path(d) / "marker.txt"
+            child.write_text(END_CHILD, encoding="utf-8")
+            r = __import__("subprocess").run([sys.executable, "-I", str(child), str(HERE), str(marker), mode],
+                                             capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+            return r, (marker.read_text(encoding="utf-8") if marker.exists() else "")
+
+    def test_coverage_is_saved_before_the_process_ends(self):
+        r, marker = self.end("on")
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertIn("before", r.stdout, "the flush before TerminateProcess")
+        self.assertEqual(marker.split(), ["stop", "save"], "coverage stopped, then saved")
+
+    def test_no_coverage_running_ends_as_before(self):
+        r, marker = self.end("off")
+        self.assertEqual(r.returncode, 3, r.stdout + r.stderr)
+        self.assertEqual(marker, "")
 
 
 class CommittedFixture(unittest.TestCase):

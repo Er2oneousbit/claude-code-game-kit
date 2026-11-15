@@ -95,7 +95,7 @@ dist/               production build (git-ignored)
     so a shader reads their bytes as drawn. Drawing a scrolling layer, an emitter or a wipe is the game's job
     (`tools/shaders/` has the dissolve and the transition threshold).
   - `dev.py test` checks the importer against `data/golden/dotwork/expected.json` (tests/dotwork.golden.test.ts: the
-    three maps' terrain, placed cells and centres, the hash vectors) and every manifest's files
+    maps' terrain, placed cells and centres, the hash vectors) and every manifest's files
     (tests/dotwork.manifests.test.ts); `smoke` loads them all in the browser before BOOT_OK. Restart `dev.py run`
     after Dotwork writes a new pack (the list is made at build time).
 

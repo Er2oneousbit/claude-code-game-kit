@@ -29,6 +29,8 @@
 //           screen (debug builds) and the loading screen's next screen (#275)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply (staging, the keep-or-revert
 //           confirm counted on the wall clock, Back that warns once, #308); the HudScale resource for a game HUD (#309)
+//           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves;
+//           Back's unapplied warning stays up while the next Back discards (it timed out after MESSAGE_S)
 // ---------------------------------------------------------------------------
 pub mod bug_report;
 pub mod crash;
@@ -460,7 +462,8 @@ impl Shell {
         }
     }
 
-    /// Writes Apply's (or a revert's) calls into settings.display: the window follows, settings.json is saved.
+    /// Writes Apply's (or a revert's) calls into settings.display: the window follows, settings.json is saved
+    /// unless the confirm is open (a mode the screen cannot show must never be saved: Keep saves it).
     fn set_display(&mut self, calls: Calls) {
         if calls.is_empty() {
             return;
@@ -469,10 +472,13 @@ impl Shell {
             self.settings["display"][field.as_str()] = v;
         }
         self.changed();
-        self.save_settings();
+        if !self.staging.confirming() {
+            self.save_settings();
+        }
     }
 
-    /// Apply: the staged Display changes are set and saved. True when a new mode or size opened the confirm.
+    /// Apply: the staged Display changes are set, and saved unless they wait for Keep. True when a new mode or size
+    /// opened the confirm.
     pub fn apply_display(&mut self) -> bool {
         let calls = self.staging.apply();
         self.set_display(calls);
@@ -483,6 +489,7 @@ impl Shell {
 
     pub fn keep_display(&mut self) {
         self.staging.keep();
+        self.save_settings(); // the values the confirm held back from settings.json
         self.version += 1;
     }
 
@@ -847,7 +854,15 @@ impl Shell {
             self.blink_on = blink;
             bump |= self.top_name() == Some(ScreenName::Title);
         }
-        if let Some((_, left)) = &mut self.message {
+        // Back's unapplied warning shows exactly while the next Back would discard (staging.warned()), not for
+        // MESSAGE_S: timed out, the second Back discarded with nothing on screen
+        let warning = self.t("settings.unapplied");
+        if self.message.as_ref().is_some_and(|(m, _)| *m == warning) {
+            if !self.staging.warned() {
+                self.message = None;
+                bump = true;
+            }
+        } else if let Some((_, left)) = &mut self.message {
             *left -= dt;
             if *left <= 0.0 {
                 self.message = None;
