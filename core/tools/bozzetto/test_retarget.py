@@ -25,7 +25,8 @@
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
-# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig since the last retarget refreshes the backup
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig since the last retarget refreshes the backup;
+#           a new clip name with '|' or ';' is refused
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -130,7 +131,11 @@ class MapExam(unittest.TestCase):
         self.assertEqual(bm.parse_clips("Walk_Loop=walk, Idle_Loop=idle,Jump"),
                          [("Walk_Loop", "walk"), ("Idle_Loop", "idle"), ("Jump", "Jump")])
         self.assertEqual(bm.parse_clips("all"), "all")
-        for bad in ("A=b,C=b", "=walk", "A="):
+        # a '|' or ';' in a new name broke the model's asset log row (one cell more) or its notes; a bare FBX
+        # action name (Armature|mixamo.com|Layer0) is still a valid SOURCE, it only needs a new name
+        self.assertEqual(bm.parse_clips("Armature|mixamo.com|Layer0=walk"), [("Armature|mixamo.com|Layer0", "walk")])
+        for bad in ("A=b,C=b", "=walk", "A=", "Walk_Loop=walk|fast", "Walk_Loop=walk;fast",
+                    "Armature|mixamo.com|Layer0"):
             with self.assertRaises(ValueError, msg=bad):
                 bm.parse_clips(bad)
         self.assertEqual(bm.clip_name("Walk_Loop"), "Walk_Loop")
