@@ -75,6 +75,9 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the shader check and captures run with the Dummy audio
 #           driver (a machine with no sound device failed check with a WASAPI line reported as a shader error)
+#           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a crashed shader run (or one whose shader cache
+#           would not load) and a crashed headless import run again, up to 3 runs: both crash now and then on Godot
+#           4.7.2, most on a project's first run (#264)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -131,6 +134,10 @@ SHADER_DIR = "shaders/kit"               # the kit's shader recipes, generated b
 SHADER_CHECK = "res://tools/shader_check.gd"   # renders each recipe (needs a window: headless Godot has no renderer)
 SHADER_OUT = "build/shader_check"        # where the renders land, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 180
+IMPORT_CRASH_TRIES = 3                        # a crashed headless import runs again, up to this many runs in all
+SHADER_CACHE_DIRS = ("shader_cache", "vulkan")   # user:// caches a crashed shader run may leave half written
+SHADER_CACHE_ERROR = r"SPIR-V|reflect_spirv|shader_data\.is_empty"   # Godot's lines for a shader cache it cannot read
+SHADER_CRASH_TRIES = 3                        # #264: the shader run, crashed (or its cache unreadable), runs again up to 3 runs
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
 DRIVES = ("menus", "crash", "display", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
@@ -444,9 +451,16 @@ def ensure_imported(godot):
 # ---- Commands -----------------------------------------------------------------
 def cmd_import(args, godot):
     names = class_names()
-    rc, out = run([godot, "--headless", "--path", ".", "--import"], timeout=IMPORT_TIMEOUT_S)
-    if rc in NO_EXEC:
-        return 2
+    for attempt in range(1, IMPORT_CRASH_TRIES + 1):
+        rc, out = run([godot, "--headless", "--path", ".", "--import"], timeout=IMPORT_TIMEOUT_S)
+        if rc in NO_EXEC:
+            return 2
+        if not crash_exit(rc) or attempt == IMPORT_CRASH_TRIES:
+            break
+        # Godot 4.7.2's headless import crashes now and then (0xC0000005 while importing a font, 4 fresh projects in
+        # 10 on one machine); what it imported before the crash stays imported, so another run gets further
+        code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)
+        print(f"[info] the import crashed (exit {code}); running it again ({attempt + 1} of {IMPORT_CRASH_TRIES})")
     # Godot exits 0 even when an asset fails to import. Script errors are check's job (and the
     # starter test's "Could not find base class GutTest" is expected until GUT is installed)
     errors = [l for l in scan_errors(out) if "Error importing" in l or "Error loading" in l]
@@ -790,6 +804,55 @@ def crash_exit(rc):
     return rc < 0 or (rc & 0xF0000000) == 0xC0000000
 
 
+def user_data_dir():
+    """The project's user:// folder as Godot 4 places it (application/config/name, or use_custom_user_dir with
+    custom_user_dir_name), or None when project.godot cannot be read."""
+    try:
+        text = (ROOT / "project.godot").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    def setting(key):
+        m = re.search(rf'^{key}="?(.*?)"?\s*$', text, re.M)
+        return m[1] if m else ""
+    system = platform.system()
+    if system == "Windows":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    elif system == "Darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    custom = setting("config/custom_user_dir_name")
+    if setting("config/use_custom_user_dir") == "true" and custom:
+        return base / custom
+    name = setting("config/name")
+    return base / ("Godot" if system in ("Windows", "Darwin") else "godot") / "app_userdata" / name if name else None
+
+
+def clear_shader_caches():
+    """Removes the project's compiled shader and pipeline caches (user://shader_cache, user://vulkan); the names
+    removed. Only caches: Godot rebuilds them on the next run."""
+    user = user_data_dir()
+    cleared = []
+    for name in SHADER_CACHE_DIRS:
+        folder = user / name if user else None
+        if folder and folder.is_dir():
+            shutil.rmtree(folder, ignore_errors=True)
+            cleared.append(name)
+    return cleared
+
+
+def shader_crash(rc, out, errors):
+    """How the shader run crashed ("after N recipe(s) (exit X)"), or "" when it did not. #264: the window opened and
+    drew some recipes, then Godot died (seen as heap corruption under GPU load from other programs): a crash, not a
+    missing display. A Windows exception status or a signal with nothing drawn yet is the same crash, earlier
+    (0xC0000005 and 0xC0000374 seen on 4.7.2)."""
+    drawn = out.count("SHADER_OK ")
+    if errors or rc == 0 or "SHADER_CHECK_DONE" in out or not (drawn or crash_exit(rc)):
+        return ""
+    code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
+    return f"{f'after {drawn} recipe(s)' if drawn else 'before drawing a recipe'} (exit {code})"
+
+
 def shader_pass(godot, compare):
     """The kit's shader recipes: generated files current, every one compiles and renders (a small window), and with
     compare each render matches its golden image (tools/shaders/shader_ref.py). 0 ok, 1 failed, 2 environment."""
@@ -805,28 +868,40 @@ def shader_pass(godot, compare):
         print("[FAIL] the shader files are older than their recipes: python tools/shaders/shader_gen.py")
         return 1
     out_dir = ROOT / SHADER_OUT
-    if out_dir.is_dir():
-        for old in out_dir.glob("*.png"):
-            old.unlink()                        # a render from an earlier run must not pass for this one
     gdignore(out_dir)
-    # Dummy audio: the recipes need no sound, and a machine with no output device prints a WASAPI ERROR line
-    # that the scan below would report as a shader error
-    rc, out = run([godot, "--path", ".", "--audio-driver", "Dummy", "--windowed", "--resolution", "64x64", "--position", "0,0",
-                   "-s", SHADER_CHECK, "--", out_dir.as_posix()], echo="never", timeout=SHADER_TIMEOUT_S)
-    if rc in NO_EXEC:
-        return 2
-    errors = [l for l in out.splitlines() if "SHADER ERROR" in l or any(re.search(p, l) for p in ERROR_PATTERNS)]
+    for attempt in range(1, SHADER_CRASH_TRIES + 1):
+        if out_dir.is_dir():
+            for old in out_dir.glob("*.png"):
+                old.unlink()                    # a render from an earlier run (or try) must not pass for this one
+        # Dummy audio: the recipes need no sound, and a machine with no output device prints a WASAPI ERROR line
+        # that the scan below would report as a shader error
+        rc, out = run([godot, "--path", ".", "--audio-driver", "Dummy", "--windowed", "--resolution", "64x64",
+                       "--position", "0,0", "-s", SHADER_CHECK, "--", out_dir.as_posix()], echo="never",
+                      timeout=SHADER_TIMEOUT_S)
+        if rc in NO_EXEC:
+            return 2
+        errors = [l for l in out.splitlines() if "SHADER ERROR" in l or any(re.search(p, l) for p in ERROR_PATTERNS)]
+        crash = shader_crash(rc, out, errors)
+        # a crash can leave a half-written shader cache that the next run cannot read: Godot's own SPIR-V errors,
+        # no recipe named (seen once, on the run after a crash)
+        bad_cache = bool(errors) and all(re.search(SHADER_CACHE_ERROR, l) for l in errors)
+        if not (crash or bad_cache) or attempt == SHADER_CRASH_TRIES:
+            break
+        # #264: Godot 4.7.2 crashes now and then in the shader run, most often on a project's first run (its
+        # shader cache still empty) and while other programs use the GPU; the same code passes on a run again
+        again = f"({attempt + 1} of {SHADER_CRASH_TRIES})"
+        if bad_cache:
+            cleared = clear_shader_caches()      # only then: a warm cache makes the next run less likely to crash
+            print(f"[info] Godot could not read its shader cache (SPIR-V errors); cleared {', '.join(cleared) or 'nothing'}"
+                  f", running the shader check again {again}")
+        else:
+            print(f"[info] Godot crashed {crash}; running the shader check again {again}")
     if rc != 0 or errors or "SHADER_CHECK_DONE failed=0" not in out:
         drawn = out.count("SHADER_OK ")
         if errors:
             print("[FAIL] shader errors:\n  " + "\n  ".join(errors[:12]))
-        elif (drawn or crash_exit(rc)) and rc != 0 and "SHADER_CHECK_DONE" not in out:
-            # #264: the window opened and drew some recipes, then Godot died (seen as heap corruption under GPU
-            # load from other programs): a crash, not a missing display. A Windows exception status or a signal
-            # with nothing drawn yet is the same crash, earlier (0xC0000005 and 0xC0000374 seen on 4.7.2)
-            code = f"{rc} = 0x{rc:08X}" if rc > 255 else str(rc)      # Windows status codes read better in hex
-            when = f"after {drawn} recipe(s)" if drawn else "before drawing a recipe"
-            print(f"[FAIL] Godot crashed {when} (exit {code}); rerun, or check --no-shaders")
+        elif crash:
+            print(f"[FAIL] Godot crashed {crash}, {SHADER_CRASH_TRIES} times in a row; rerun, or check --no-shaders")
         else:
             print(f"[FAIL] the shader check did not finish (exit {rc}): it needs a window, so run it from a desktop "
                   "session (check --no-shaders skips it)")
