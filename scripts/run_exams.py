@@ -326,13 +326,17 @@ def coverage_version(interpreter=None):
 
 def coverage_rc(folder, kit=None):
     """Write the coverage settings every exam runs with and return the file's path: parallel data files in folder
-    (never the tree), the measured sources, and subprocess measurement (an exam that starts the tool it tests)."""
+    (never the tree), subprocess measurement (an exam that starts the tool it tests), and [paths] that fold a copy
+    of a tool back onto the kit's file: many exams scaffold a project in a temp folder and run its tools/ copy of
+    core/tools (a first run without them listed the SessionStart hook, ship.py and sync_examples.py as never
+    executed). No `source`: it would leave those copies out; the report keeps the kit's files only."""
     kit = kit or KIT
     rc = Path(folder) / "coveragerc"
-    src = ",\n    ".join(str(kit / r) for r in EXAM_ROOTS)
-    rc.write_text("[run]\nparallel = True\ndata_file = %s\nsource =\n    %s\npatch = subprocess\n"
+    rc.write_text("[run]\nparallel = True\ndata_file = %s\npatch = subprocess\n"
                   "disable_warnings = no-data-collected, module-not-measured, couldnt-parse\n"
-                  % (Path(folder) / ".coverage", src), encoding="utf-8")
+                  "[paths]\ncore_tools =\n    %s\n    */tools/\nscripts =\n    %s\n    */scripts/\n"
+                  % (Path(folder) / ".coverage", str(kit / "core" / "tools") + os.sep, str(kit / "scripts") + os.sep),
+                  encoding="utf-8")
     return rc
 
 
