@@ -3,7 +3,7 @@
 Engine-specific workflow for a Godot 4 / GDScript project. Universal process lives in `docs/sop/`.
 
 > **Tested.** Every command ran against Godot 4.7.2 (Windows) with GUT 9.7.1, the test commands including planted failures
-> (`build` exported Windows, Linux and Web; `run` booted the game); the floor, official 4.6-stable with GUT 9.6.1, passed `check`, `test`, `smoke` and the menus and crash drives. Godot below 4.6 is not supported: the shell does not compile there, and `dev.py` refuses it (exit 2; see docs/ENGINE.md). Items marked **(verify)** are untested.
+> (`build` exported Windows, Linux and Web; `run` booted the game); the floor, official 4.6-stable with GUT 9.6.1, passed `check`, `test`, `smoke` and the menus and crash drives, and (2026-11-14) the Dotwork importer: `test` with the golden pack as the game's own art, then a Windows export from `build` that loaded the manifest from its `.pck`. Godot below 4.6 is not supported: the shell does not compile there, and `dev.py` refuses it (exit 2; see docs/ENGINE.md). Items marked **(verify)** are untested.
 
 ## Daily loop
 ```
@@ -41,7 +41,11 @@ keyboard and gamepad reach every control, and the focused one has an outline.
   `data/golden/shell.json`); Apply sends only the changed fields (mode before resolution) through `Shell.set_value`.
   A mode or resolution change asks "Keep these display settings?" for 15 real seconds (focus on Keep); Revert, the
   countdown, Back or cancel put back what that Apply replaced. Back with unapplied changes warns once. Every other tab
-  applies at once.
+  applies at once. Seen on a real window (2026-11-14, Godot 4.7.2, Windows, a 1920x1200 screen, the window's size and
+  style read back from the OS every 100 ms while the display drive ran windowed instead of headless): Apply turned the
+  1920x1080 window into a 1920x1200 fullscreen one without a title bar, and the countdown put the 1920x1080 window back
+  15.2 s later; with the resolution row stepped instead (1920x1080 to 1600x900) the window became 1600x900 on Apply and
+  1920x1080 again after 15.2 s.
 - **Game HUD text** (#309): a HUD under its own CanvasLayer sets `UiTheme.hud_font_size(base)` as each label's font
   size and again on `Shell.look_changed`, so the player's text size and menu size reach it (`scripts/game/play.gd`).
 - **Shell autoload** (`scripts/shell/shell.gd`): settings (`GameSettings`), strings (`Shell.t`), bindings and
