@@ -15,6 +15,7 @@
 #           (DotworkAssets.texture), as in a game whose PNGs Godot has not imported yet.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created with the Godot importer (#307)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the imported-font scaling case
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -503,6 +504,21 @@ func test_font_loads_as_a_fontfile() -> void:
 	assert_not_null(f, "the .fnt loads (FontFile.load_bitmap_font)")
 	if f != null:
 		assert_eq(int(f.get_height()), int(_model["font"]["tiny"]["line_height"]), "line height")
+
+
+# The golden folder has a .gdignore, so the imported-FontFile branch never runs on it. Godot's BMFont importer gives
+# the font scaling_mode Enabled (probed on 4.7.2: the 5 px golden font came back 22.4 px tall at the default size 16
+# instead of its 7 px line height); the importer's copy must draw 1:1 like the load_bitmap_font branch.
+func test_imported_font_draws_one_to_one() -> void:
+	var f: FontFile = FontFile.new()
+	assert_eq(f.load_bitmap_font(_model["font"]["tiny"]["file"]), OK)
+	f.fixed_size_scale_mode = TextServer.FIXED_SIZE_SCALE_ENABLED # what the import gives
+	var line: int = int(_model["font"]["tiny"]["line_height"])
+	assert_ne(int(f.get_height()), line, "an Enabled bitmap font scales to size 16 (the bug)")
+	var fixed: FontFile = DotworkAssets.one_to_one(f)
+	assert_eq(int(fixed.get_height()), line, "drawn 1:1 at the default size")
+	assert_eq(int(fixed.get_height(32)), line, "and at any other size")
+	assert_eq(f.fixed_size_scale_mode, TextServer.FIXED_SIZE_SCALE_ENABLED, "the shared resource is not changed")
 
 
 func test_ui_and_extra_kinds_build() -> void:
