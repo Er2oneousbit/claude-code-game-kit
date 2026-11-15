@@ -15,6 +15,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): layer index, corners4, the
 #           hash and roll vectors, stamps, centres and placed cells against expected.json, particles as an extra kind
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): five golden terrain layers (atlas_order_check)
 # ---------------------------------------------------------------------------
 import importlib.util
 import json
@@ -107,7 +108,7 @@ class TerrainRules(unittest.TestCase):
                     # yard's Path layer holds two full cells: one rolls the 0.6 variant, the other the base tile
                     variants += sum(1 for _, _, k, tile in got if a["name"] == "yard" and k == 255 and tile[1] == 11)
                     n += 1
-        self.assertEqual(n, 4)
+        self.assertEqual(n, 5)   # yard Path and Water, meadow_patch Grass, isle Grass, atlas_order_check Marker
         self.assertEqual(variants, 1)
 
     def test_golden_terrain_matches_expected_json(self):

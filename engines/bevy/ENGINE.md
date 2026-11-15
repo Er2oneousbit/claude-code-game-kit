@@ -66,7 +66,7 @@
   transition recipe), `normal_map` the map and its `target` image (Bevy 0.20's 2D sprites have no normal-map
   lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. `blend: add`
   draws with normal blending (Bevy 0.20 sprites have no additive mode). `tests/dotwork.rs` checks the golden pack in
-  `data/golden/dotwork/` against its `expected.json` (clips, sprites, the three maps' terrain, placed cells and
+  `data/golden/dotwork/` against its `expected.json` (clips, sprites, the maps' terrain, placed cells and
   centres, the backgrounds) and that every manifest the game ships loads; `present.rs` shows a map, a walking
   character, a prop and a label when the game has them.
 - **Verify:** `python tools/dev.py doctor`.

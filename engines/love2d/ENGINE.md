@@ -64,7 +64,7 @@ build/              .love and the fused Windows exe (git-ignored)
   the pivot at x, y), `view:draw_sprite`, `view:map(model.map.yard)` (a SpriteBatch per atlas and layer),
   `view:print(model.font.tiny, text, x, y, 2)` (the .fnt through `love.graphics.newFont`), `view:draw_part`
   (9-slice). Frame timing comes from each frame's `duration`. The starter scene shows the first character, prop,
-  map and font; `test` checks the golden fixture (the three maps' terrain, placed cells and centres to 1e-6) and
+  map and font; `test` checks the golden fixture (the maps' terrain, placed cells and centres to 1e-6) and
   every real manifest.
   - **Maps.** A `terrain` layer is resolved at load (src/core/dotwork_manifest.lua, no window): every painted cell
     gets the key of the spec's `cell_mask` (`blob47`, `sides4`, or `corners4`: the four corner bits, a corner only

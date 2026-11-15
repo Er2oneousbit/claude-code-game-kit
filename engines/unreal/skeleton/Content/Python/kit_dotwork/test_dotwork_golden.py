@@ -2,7 +2,7 @@
 # test_dotwork_golden.py
 # Purpose : Automation test: imports the Dotwork golden pack (data/golden/dotwork/) into the transient package with
 #           the Paper2D importer, reads the assets back and compares them with expected.json (to 1e-6): frame rects,
-#           seconds per frame, pivots, collision boxes, tile collision, the three maps (every terrain cell's key and
+#           seconds per frame, pivots, collision boxes, tile collision, the maps (every terrain cell's key and
 #           picked variant, every drawn tile's image corner, every cell's centre from Paper2D's own
 #           GetTileCenterPosition: the isometric map proves Paper2D's diamond grid is the spec's), font metrics,
 #           9-slice margins. Every imported texture must be nearest-filtered without mips, the particles asset must
