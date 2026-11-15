@@ -23,7 +23,8 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG colour map stays JPEG, --png (#303)
-# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a coverage a hair under the floor never reads as it
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a coverage a hair under the floor never reads as it;
+#           `make --rebake <name>` is the switch again
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -162,6 +163,20 @@ class RouteDefaults(TripoBase):
 
 
 class LocalDefaults(LocalBase):
+    def test_a_bare_rebake_before_the_name_is_still_the_switch(self):
+        """Until 0.15.1 --rebake was a switch, so `make --rebake <name>` worked; with its optional mode argparse took
+        the name for the mode ("invalid choice: 'prop_crate'"). A value that is no mode stays the name."""
+        rc, out = self.run_tool("make", "--rebake", "prop_crate", "--image", "art_src/crate.png", "--seed", "7")
+        self.assertEqual(rc, 0, out)
+        self.assertIn("--rebake", self.cleanup_argv())
+        self.assertEqual(self.record()["rebake_mode"], "on")
+        rc, out = self.run_tool("make", "--rebake", "auto", "prop_crate", "--image", "art_src/crate.png", "--seed",
+                                "7", "--overwrite")
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.record()["rebake_mode"], "auto")
+        self.assertEqual(bz.rebake_switch(["make", "x", "--rebake", "--", "y"]), ["make", "x", "--rebake=on", "--", "y"])
+        self.assertEqual(bz.rebake_switch(["make", "x", "--rebake=auto"]), ["make", "x", "--rebake=auto"])
+
     def test_local_route_rebakes_only_under_the_class_floor(self):
         """#203: the local route's default is --rebake auto: cleanup.py gets the class floor and rebakes only a model
         under it (TRELLIS.2 characters at 51 and 53% of the npc floor's 55%); one over it keeps its own atlas."""
