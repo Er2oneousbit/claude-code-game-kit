@@ -47,7 +47,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png; a JPEG colour map stays JPEG (#303)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): `make --rebake <name>` works again (rebake_switch:
-#           the optional mode took the name for itself, "invalid choice")
+#           the optional mode took the name for itself, "invalid choice"); --rebake-png with nothing to rebake is
+#           refused (it was ignored)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -441,6 +442,9 @@ class Plan:
         if rebake in ("on", "auto") and args.material != "texture":   # asked for on purpose (Tripo refuses vertex)
             raise ToolError("--rebake bakes textures: nothing to bake with --material vertex")
         self.rebake = rebake or ("on" if self.route == "tripo" else "auto" if args.material == "texture" else "off")
+        if getattr(args, "rebake_png", False) and self.rebake == "off":   # it was ignored without a word
+            raise ToolError("--rebake-png sets the rebake's map format: nothing is rebaked with "
+                            + ("--material vertex" if args.material != "texture" else "--no-rebake"))
         self.faces = int(self.budget["max_tris"] * FACE_SHARE)
         self.lods = parse_lods(args.lods, self.cls)
         self.src = self.root / SRC_ROOT / self.name
