@@ -657,6 +657,72 @@
   },
   {
    "kind": "tileset",
+   "name": "atlas_order",
+   "tile_size": [
+    8,
+    8
+   ],
+   "shape": "square",
+   "terrain_sets": [
+    {
+     "id": 0,
+     "mode": "sides4",
+     "terrains": [
+      {
+       "id": 0,
+       "name": "marker",
+       "color": "#3ca05a"
+      }
+     ]
+    }
+   ],
+   "atlases": [
+    {
+     "id": 1,
+     "name": "order_b",
+     "role": "base",
+     "image": "art/tiles/order/order_b.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 1,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 0
+      }
+     ]
+    },
+    {
+     "id": 0,
+     "name": "order_a",
+     "role": "base",
+     "image": "art/tiles/order/order_a.png",
+     "tile_size": [
+      8,
+      8
+     ],
+     "columns": 1,
+     "rows": 1,
+     "tiles": [
+      {
+       "col": 0,
+       "row": 0,
+       "terrain_set": 0,
+       "terrain": 0,
+       "mask": 0
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "tileset",
    "name": "ground_yard",
    "tile_size": [
     8,
@@ -4994,6 +5060,53 @@
         }
        ]
       }
+     ]
+    }
+   ]
+  },
+  {
+   "kind": "map",
+   "name": "atlas_order_check",
+   "tileset": "atlas_order",
+   "size": [
+    5,
+    3
+   ],
+   "tile_size": [
+    8,
+    8
+   ],
+   "layers": [
+    {
+     "name": "Marker",
+     "kind": "terrain",
+     "terrain_set": 0,
+     "terrain": 0,
+     "cells": [
+      [
+       0,
+       0
+      ],
+      [
+       2,
+       0
+      ],
+      [
+       4,
+       0
+      ],
+      [
+       0,
+       2
+      ],
+      [
+       2,
+       2
+      ],
+      [
+       4,
+       2
+      ]
      ]
     }
    ]
