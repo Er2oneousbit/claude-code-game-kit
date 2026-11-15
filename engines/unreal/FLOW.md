@@ -179,8 +179,8 @@ focused)**. Wire the game to it:
   subsystem sets the window through `UGameUserSettings` itself, outside the editor and smoke runs **(verify in a
   packaged game)**), "hud_scale_changed".
 - The Display tab waits for Apply (`FGameKitDisplayStaging`, `GameKitDisplayStaging.h` in the runtime module, held to
-  `data/golden/shell.json`): Apply sends only the changed fields, mode before resolution, and saves; a new window mode
-  or size asks "Keep these display settings?" and puts the old ones back after 15 real seconds (`FPlatformTime`, not
+  `data/golden/shell.json`): Apply sends only the changed fields, mode before resolution, and saves (a new window mode or
+  size, settings.json and GameUserSettings.ini alike, only once kept); a new mode or size asks "Keep these display settings?" and puts the old ones back after 15 real seconds (`FPlatformTime`, not
   game time; it runs while the game is paused), on Revert, or on Back. Back with a change not applied warns once.
 - A game HUD's text: `HudFontSize(Base)` on the subsystem (`HudTextScale()` is `display.ui_scale` times
   `access.text_scale`; both `BlueprintPure`) and `OnHudScaleChanged` when it changes (#309). The shell's own play
