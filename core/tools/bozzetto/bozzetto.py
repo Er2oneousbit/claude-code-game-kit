@@ -46,6 +46,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png; a JPEG colour map stays JPEG (#303)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): `make --rebake <name>` works again (rebake_switch:
+#           the optional mode took the name for itself, "invalid choice")
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -1120,6 +1122,14 @@ def build_parser():
     return ap
 
 
+def rebake_switch(argv):
+    """`--rebake` followed by something that is no mode (the model's name, another option) as `--rebake=on`: it was
+    a switch until 0.15.1, and with its optional mode argparse took `make --rebake npc_guard`'s name for the mode."""
+    argv = list(argv)
+    return [("--rebake=on" if a == "--rebake" and (i + 1 == len(argv) or argv[i + 1] not in REBAKE_MODES[:2]) else a)
+            for i, a in enumerate(argv)]
+
+
 def main(argv=None):
     global DEBUG
     for stream in (sys.stdout, sys.stderr):
@@ -1128,7 +1138,7 @@ def main(argv=None):
         except (AttributeError, ValueError):
             pass
     try:
-        args = build_parser().parse_args(argv)
+        args = build_parser().parse_args(rebake_switch(sys.argv[1:] if argv is None else argv))
     except SystemExit as exc:
         return int(exc.code or 0)
     DEBUG = args.debug

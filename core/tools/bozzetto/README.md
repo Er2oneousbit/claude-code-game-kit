@@ -529,8 +529,8 @@ python tools/bozzetto/bone_map.py pelvis thigh_l upperarm_l ...       # how a pa
 `--clips` names each pack clip and what it is called on your character (`SOURCE=new_name`); a name the character
 already has is refused unless `--replace`. `--map my_map.json` (`{"their_name": "Hips", ...}`) covers a pack the
 built-in maps do not fit; `--no-replace` writes `assets_src/bozzetto/<name>/rig/retarget/retargeted.glb` only, to look
-first. The rig before the first retarget is kept there as `before_retarget.glb`, with the report, a record of every
-run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
+first. The rig before the first retarget is kept there as `before_retarget.glb` (written again after a `rig make`
+re-run, never after a `rig chain`), with the report, a record of every run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
 "retarget: ..." note naming the clips and the pack's own row. The pack needs that row of its own, with its licence,
 before the game ships: the command warns when it has none.
 
