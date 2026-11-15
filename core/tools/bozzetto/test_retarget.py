@@ -25,7 +25,7 @@
 #           BOZZETTO_TEST_BLENDER=skip|bpy|<path to blender>  picks part 2's Blender (skip: part 1 only)
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
-# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig since the last retarget refreshes the backup;
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig refreshes the backup, a chain does not;
 #           a new clip name with '|' or ';' is refused
 # ---------------------------------------------------------------------------
 import contextlib
@@ -231,21 +231,49 @@ class CliExam(unittest.TestCase):
         self.assertEqual(rec["runs"][0]["pack_asset"], "A-0003")
         self.assertEqual(rec["runs"][-1]["output_sha256"], bz.sha256_bytes(self.dst.read_bytes()))
 
+    def rig_make(self, data):
+        """What `rig make` leaves: the rigged file and rig.json holding its hash."""
+        self.dst.write_bytes(data)
+        rec = self.work.parent / "rig.json"
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text(json.dumps({"output": {"file": "assets/models/hero_rigged.glb",
+                                              "sha256": bz.sha256_bytes(data)}}), encoding="utf-8")
+
     def test_a_re_rig_since_the_last_retarget_refreshes_the_backup(self):
-        """`rig make` again writes a new rig: the backup must be that rig, not the one from before (chain.py's
-        pick_base does the same), or a restore from before_retarget.glb brings back an old skeleton."""
+        """`rig make` again writes a new rig: the backup must be that rig, not the one from before, or a restore
+        from before_retarget.glb brings back an old skeleton."""
+        self.rig_make(b"glTF-rigged-v1")
         code, out = self.retarget()
         self.assertEqual(code, 0, out)
         backup = self.work / rt.BACKUP
         self.assertEqual(backup.read_bytes(), b"glTF-rigged-v1")
-        self.dst.write_bytes(b"glTF-rigged-v2")             # rig make re-run: a new rig, no clips from a pack yet
+        self.rig_make(b"glTF-rigged-v2")                    # rig make re-run: a new rig, no clips from a pack yet
         code, out = self.retarget()
         self.assertEqual(code, 0, out)
         self.assertEqual(backup.read_bytes(), b"glTF-rigged-v2", "the backup is still the rig from before the re-rig")
-        self.assertEqual(Path(self.calls[-1][self.calls[-1].index("--onto") + 1]), self.dst.resolve())
         code, out = self.retarget()                         # a plain second retarget keeps it
         self.assertEqual(code, 0, out)
         self.assertEqual(backup.read_bytes(), b"glTF-rigged-v2")
+        rec = json.loads((self.work / rt.RECORD).read_text(encoding="utf-8"))
+        self.assertEqual(rec["rig_sha256"], bz.sha256_bytes(b"glTF-rigged-v2"))
+        self.assertEqual(len(rec["runs"]), 3)               # the runs on the older rig stay in the history
+
+    def test_a_chain_between_retargets_keeps_the_first_backup(self):
+        """`rig chain` rewrites the rig too, and retarget's own [WARN] sends you to retarget, chain, retarget: the
+        backup must stay the rig from before any retarget, not the chained one."""
+        self.rig_make(b"glTF-rigged-v1")
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.dst.write_bytes(self.dst.read_bytes() + b"+chain")   # rig chain: rig.json unchanged
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.work / rt.BACKUP).read_bytes(), b"glTF-rigged-v1")
+        # with no rig.json at all (a rig from elsewhere) the backup is never replaced
+        (self.work.parent / "rig.json").unlink()
+        self.dst.write_bytes(b"glTF-other")
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.work / rt.BACKUP).read_bytes(), b"glTF-rigged-v1")
 
     def test_a_refused_transfer_and_no_replace_leave_the_model_alone(self):
         self.rc = 1
