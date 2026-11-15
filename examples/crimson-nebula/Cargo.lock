@@ -4534,8 +4534,10 @@ name = "project_crimson_nebula"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "raw-window-handle",
  "serde",
  "serde_json",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
