@@ -183,7 +183,7 @@ sentence. Point to `CHOOSING_AN_ENGINE.md` only if they want to compare.
 | Wants to write Rust, or code-only with no editor | `bevy` | Needs Rust (rustup) and, on Windows, Visual Studio Build Tools; the first build takes 5 to 15 minutes, later ones seconds |
 | A small 2D game as plain code, lightest install, or they like Lua | `love2d` | One small download (LÖVE, a zip on Windows) and an environment variable; no editor, so menus and levels are built in code or with Tiled or LDtk |
 | Wants to learn C++ | `cpp-sdl2` | Needs Visual Studio Build Tools or a compiler, CMake and vcpkg; the slowest start |
-| Art source is Dotwork, and no engine named | `godot` | Dotwork writes Godot-ready art (animations, tile sets, scenes); other engines get only image files to wire in by hand |
+| Art source is Dotwork, and no engine named | `godot` | Dotwork writes Godot-ready art (animations, tile sets, map and prop scenes); every other engine loads the same art through its own Dotwork importer, with no ready-made scenes (RPG Maker MZ: no terrain or maps yet) |
 | A classic RPG and they own RPG Maker MZ | `rpgmaker-mz` | They build maps and events in the editor; you write and test the plugins. Tell them this overlay is an untested proof of concept: never run against MZ itself |
 
 ## 5. Check the installs (you run the checks)
