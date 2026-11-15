@@ -67,7 +67,15 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
 - **Settings** (tabs Display, Audio, Controls, Accessibility, Language): every field of the schema in
   `src/core/settings.lua`, applied as it changes, saved on Back; the Display tab waits for Apply (#308:
   `src/core/display_staging.lua`, held to `data/golden/shell.json`; a mode or resolution change asks "Keep these
-  display settings?" for 15 real seconds and reverts on its own). Game HUD text follows text_scale and ui_scale
+  display settings?" for 15 real seconds and reverts on its own). Seen on a real window (2026-11-14, LÖVE 11.5,
+  Windows at 125 % display scaling, a 1920x1200 screen; the display drive run in a normal window with the automated-run
+  guard lifted, the window's size read back from the OS every 100 ms): Apply of fullscreen turned the 1600x900 window
+  into a 1920x1200 one without a title bar, and the countdown put the 1600x900 window back 15.0 s later; a size change
+  (1600x900 to 1280x720) resized the window on Apply and put it back after 15.2 s. That run found two bugs, now fixed:
+  the windowed size ignored display scaling (a 1920x1080 setting made a 2400x1350 window, larger than the screen;
+  `App.window_size` divides by the scale), and a refused exclusive fullscreen left the window as it was under the
+  confirm (it now falls back to borderless, with a warning). Exclusive fullscreen itself is **(verify)**: that test
+  machine refused it (and once hung on it), so the fallback is what was seen. Game HUD text follows text_scale and ui_scale
   through `app:hud_font(base)` (or `app:hud_font_size(base)`), set again from `app:on_look_changed(fn)` (#309; the
   starter's pause hint in `src/shell/screens/play.lua` uses it). Controls lists the game actions with their prompt
   glyph (`assets/ui/glyphs/<glyph_name>.png` at 1x, else a text key-cap), rebinds with "press a key" (a binding

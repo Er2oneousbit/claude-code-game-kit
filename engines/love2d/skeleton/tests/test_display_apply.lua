@@ -7,6 +7,7 @@
 -- Notes   : The settings screen runs on a stand-in app (no window): rows, actions and update() need no graphics.
 --           The golden steps of src/core/display_staging.lua are in test_shell_golden.lua.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): App.window_size under Windows display scaling (#308)
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Settings = require("src.core.settings")
@@ -156,6 +157,22 @@ function T.test_app_hud_size_and_look_listeners()
   app.settings.audio.master = 0.3
   app:apply_settings()
   A.eq(heard, 1, "a volume change is not a look change")
+end
+
+-- the windowed size in window units (#308, seen on a real window): Windows at 125 % scales a LÖVE window, so a
+-- 1920x1080 setting once became a 2400x1350 window on a 1920x1200 screen
+function T.test_window_size_follows_display_scaling()
+  local w, h = App.window_size({ 1920, 1080 }, { 1920, 1200 }, { 1536, 960 })
+  A.eq(w, 1536, "125 %: 1920 real pixels are 1536 window units")
+  A.eq(h, 864)
+  w, h = App.window_size({ 1920, 1080 }, { 1920, 1200 }, nil)
+  A.eq(w, 1920, "no scaling known: the setting as it is")
+  A.eq(h, 1080)
+  A.eq(App.window_size({ 2560, 1440 }, { 1920, 1200 }, { 1536, 960 }), nil, "larger than the screen: left alone")
+  A.eq(App.window_size({ 2560, 1440 }, { 1920, 1200 }, nil), nil)
+  w, h = App.window_size({ 1920, 1200 }, { 1920, 1200 }, { 1280, 800 })
+  A.eq(w, 1280, "150 %: the whole screen still fits")
+  A.eq(h, 800)
 end
 
 return T
