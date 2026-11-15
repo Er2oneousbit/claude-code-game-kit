@@ -9,8 +9,12 @@ Engine-specific workflow for a custom C++ engine on SDL3. Universal process live
 > Crash files, F8, the pseudo locale and the juice demo (2026-11-10): `smoke --drive crash|bug|pseudo|pseudo-plant`,
 > `show:juice`, `test` (70 cases); a real gamepad's analog stick and triggers are untested (the maths is unit tested).
 > The Display tab's Apply (2026-11-13, #308): `smoke --drive display` (the confirm reverted after 15.0 s of real time,
-> 626 frames), `show:apply`, `show:confirm`, `pseudo`, `test` (98 cases); a real window changing mode or size on Apply
-> is untested in smoke (automated runs never touch the window) **(verify)**.
+> 626 frames), `show:apply`, `show:confirm`, `pseudo`, `test` (98 cases). On a real window (2026-11-14, a 1920x1200
+> screen at 125 %; the display drive run in a normal window with the automated-run guard lifted, the window's size and
+> style read back from the OS every 100 ms): a size change (1920x1080 to 1600x900) resized the window on Apply and the
+> countdown put 1920x1080 back after 15.0 s; fullscreen made a 1920x1200 window without a title bar (SDL3's desktop
+> fullscreen) and the countdown put the titled 1920x1080 window back. A first run has no settings.json, so the window
+> opens at 1280x720 while the Display tab says 1920x1080; a revert then sets 1920x1080, not the window seen before.
 > Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted compile error, failing test and boot-time `LOG_ERROR` each failed
 > the right command. `run` (opens a window), a real gamepad, the spoken narration, Metal (MSL) and Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
