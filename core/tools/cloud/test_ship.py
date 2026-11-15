@@ -13,6 +13,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --target itch (#86) against a stand-in butler: the
 #           push command, channel, version source, dry run, login by presence, and that the key never shows
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a relative --site reaches butler as the scanned folder
 # ---------------------------------------------------------------------------
 import contextlib
 import importlib.util
@@ -475,6 +476,23 @@ class ItchPush(unittest.TestCase):
                 self.assertEqual(code, 2, out)
                 self.assertIn(needle, out)
         self.assertEqual(self.fake.calls, [])
+
+    def test_a_relative_site_pushes_the_folder_that_was_scanned(self):
+        """butler runs in the game's root, so a --site relative to another folder must reach it as the folder the
+        checks scanned, not a same-named one under the root (that one was never scanned for secrets)."""
+        work = self.g.root / "elsewhere"
+        (work / "site").mkdir(parents=True)
+        (work / "site" / "index.html").write_text("<html>scanned</html>\n", encoding="utf-8")
+        old = os.getcwd()
+        os.chdir(work)
+        try:
+            code, out = self.itch("--project", "someone/ship-test", "--site", "site", "--yes")
+        finally:
+            os.chdir(old)
+        self.assertEqual(code, 0, out)
+        pushed = Path(self.fake.calls[0][1])
+        self.assertTrue(pushed.is_absolute(), pushed)
+        self.assertEqual(pushed, work / "site")
 
     def test_a_build_holding_secrets_is_refused(self):
         (self.g.site / ".env").write_text("X=1\n", encoding="utf-8")
