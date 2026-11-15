@@ -3,7 +3,7 @@
 # Purpose : The Dotwork importer (scripts/core/dotwork_manifest.gd, dotwork_assets.gd) against the spec's golden
 #           fixture: loads data/golden/dotwork/assets/dotwork/golden.assets.json and compares what it built with
 #           data/golden/dotwork/expected.json (the reference loader's result) to 1e-6, every asset of every kind,
-#           the three maps' terrain, placed cells and centres included. Where Godot holds the number (a frame's
+#           the maps' terrain, placed cells and centres included. Where Godot holds the number (a frame's
 #           seconds in the SpriteFrames, a prop's collision box, a TileSet's tile counts, TileMapLayer.map_to_local
 #           and the tiles it holds, texture_origin), the number is read back from the Godot object. Plus what
 #           expected.json cannot show: the spec's hash and roll vectors, the corners4 rule, the variant pick,

@@ -156,7 +156,7 @@ gives it relative to the assets folder ("art/ui/fonts/font_dialogue.fnt"), so th
   `image` are textures (`plan.transitions.get(name).texture`, `addImage`). Glyphs on a font's second page are left
   out (Phaser draws a bitmap font from one texture).
 - **Checks:** `tests/dotwork.golden.test.ts` compares the importer with `data/golden/dotwork/expected.json` (the
-  reference every engine matches: clips, sprites, the three maps' `terrain`, `placed` and `centres`) and holds the
+  reference every engine matches: clips, sprites, the maps' `terrain`, `placed` and `centres`) and holds the
   spec's hash and roll vectors; `tests/dotwork.assets.test.ts` checks every manifest of the game on disk (missing
   files, rects outside their PNGs, terrain cells with no tile, a normal map not its target's size); in a dev server
   and in `smoke`, every manifest is loaded in Phaser before the title screen (`src/game/dotworkVerify.ts`): a broken

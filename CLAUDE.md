@@ -56,6 +56,8 @@ python scripts/run_exams.py --changed main           # just the exams covering f
 python scripts/run_exams.py --live                   # also the live exams (a real ComfyUI/TRELLIS, a Cycles render) and the
                                                      # live parts (REAPER_BIN, ASEPRITE_BIN, PIXELORAMA_BIN: hidden without --live)
 python scripts/run_exams.py --jobs 4                 # exams at once; exit 0 all passed, 1 an exam failed, 2 setup problem
+uv run --with coverage python scripts/run_exams.py --coverage   # every exam under coverage: per-file lines under
+                                                     # core/tools and scripts, then the files no exam executes
 python core/tools/audio/wavesmith/wavesmith.py test  # the Wavesmith rows on their own (about 3 minutes)
 python core/tools/check_links.py --root . --also core --also core/docs --skip-dir examples --skip-dir .claude/worktrees --baseline scripts/check_links_baseline.txt
                                                      # kit root: exit 1 only on a hit the baseline lacks (250 known on 2026-11-14);

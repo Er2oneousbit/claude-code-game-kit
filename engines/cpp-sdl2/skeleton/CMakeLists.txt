@@ -21,7 +21,7 @@
 #           with shadercross, src/gfx (KitShaders), the kit_shader_check tool
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the game_data target (data/ next to the exe)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork importer (#60); assets/ ships too
-# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): tests/test_capture_format.cpp (#314)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): tests/test_capture_format.cpp (#314); tests/test_window_fit.cpp (#308)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project({{GAME_SLUG}} VERSION 0.1.0 LANGUAGES CXX)
@@ -153,6 +153,7 @@ if(BUILD_TESTS)
     tests/test_main.cpp
     tests/test_analog.cpp
     tests/test_capture_format.cpp
+    tests/test_window_fit.cpp
     tests/test_dotwork_assets.cpp
     tests/test_fixed_timestep.cpp
     tests/test_frame_times.cpp

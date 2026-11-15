@@ -6,6 +6,8 @@
 // Notes   : The settings screen itself is driven by `dev.py smoke --drive display` (SmokeDrive.Display): Back's
 //           warning, the confirm overlay and the real-time countdown on a running front end.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): PlayerRun (a player's --drive, the full-screen
+//           fallback without display modes)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -112,6 +114,27 @@ namespace {{GAME_SLUG}}.Tests
             Assert.IsFalse(watch.Update(s));
             Assert.AreEqual(1.0, HudScale.Factor(new Dictionary<string, object>()), 1e-9);   // missing: 1.0 each
             Assert.AreEqual(HudScale.MIN_PX, HudScale.FontSize(2, s));
+        }
+
+        [Test]
+        public void PlayerRun_DriveRunsInAPlayerOnlyWithDriveOnTheCommandLine()
+        {
+            // #308: Shell.cs documented `--drive` for players, but only a PlayMode test could arm it
+            Assert.IsTrue(PlayerRun.ArmDrive(false, true, true), "a player started with --drive");
+            Assert.IsFalse(PlayerRun.ArmDrive(false, true, false), "a player with GAMEKIT_DRIVE alone");
+            Assert.IsFalse(PlayerRun.ArmDrive(false, false, true), "the editor's play mode without a test");
+            Assert.IsTrue(PlayerRun.ArmDrive(true, false, false), "a PlayMode test");
+        }
+
+        [Test]
+        public void PlayerRun_FullScreenFallsBackToAMaximizedWindowWithoutDisplayModes()
+        {
+            // #308: with no display modes listed Unity turned both full-screen kinds into a titled window
+            Assert.AreEqual("exclusive", PlayerRun.FullScreenKind("fullscreen", 12));
+            Assert.AreEqual("borderless", PlayerRun.FullScreenKind("borderless", 12));
+            Assert.AreEqual("windowed", PlayerRun.FullScreenKind("windowed", 0));
+            Assert.AreEqual("maximized", PlayerRun.FullScreenKind("fullscreen", 0));
+            Assert.AreEqual("maximized", PlayerRun.FullScreenKind("borderless", 0));
         }
     }
 }

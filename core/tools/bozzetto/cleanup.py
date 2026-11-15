@@ -28,7 +28,8 @@
 #           baked onto it at --texture pixels, after decimation (the bake wants the final mesh). A vendor atlas
 #           (Tripo: 6,805 islands covering 29% of the texture) cannot be fixed any other way. The report's
 #           "rebake" entry has coverage before and after, the maps, the bake settings and the before/after check.
-#           A colour map whose source was JPEG stays JPEG (#303; rebake_uvs.py "Formats"); --rebake-png writes PNG.
+#           A colour map whose source was JPEG stays JPEG (#303), a JPEG source's metallic-roughness map is JPEG
+#           when measured under the limits (#313; rebake_uvs.py "Formats"); --rebake-png writes PNG.
 #           --rebake-under FLOOR (bozzetto.py's --rebake auto, the local route's default, #203): measure the model's
 #           own UV coverage as the validator will, rebake only under FLOOR, and drop a rebake that lands no higher or
 #           fails its check (the cleanup runs again with the model's own atlas). The report's "rebake_auto" entry has
@@ -40,6 +41,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png (#303)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto's under-the-floor line uses
 #           validate_asset's under_text (it printed "55.0% is under the floor 55%" at 54.97%)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --png help names the data-map JPEG gate (#313)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -109,7 +111,8 @@ def parse_args(argv):
     ap.add_argument("--texture", type=int, default=0,
                     help="--rebake: texture size in pixels (default 0: the largest image the model reads)")
     ap.add_argument("--rebake-png", action="store_true",
-                    help="--rebake: every baked map as PNG (default: a colour map whose source was JPEG stays JPEG)")
+                    help="--rebake: every baked map as PNG (default: a colour map whose source was JPEG stays JPEG, and "
+                         "a JPEG source's metallic-roughness map is JPEG when measured under the limits, #313)")
     ap.add_argument("--json", dest="json_out", help="write the report (counts before and after) as JSON here")
     ap.add_argument("--overwrite", action="store_true", help="replace --out if it exists")
     ap.add_argument("--debug", action="store_true", help="verbose output and full tracebacks")

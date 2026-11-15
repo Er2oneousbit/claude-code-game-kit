@@ -9,6 +9,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the jpeg feature for generated characters' textures
 #           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the shader check example gets the game's own name (#294)
+#           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): raw-window-handle and windows-sys on Windows (#308)
 # ---------------------------------------------------------------------------
 [package]
 name = "{{GAME_SLUG}}"
@@ -25,6 +26,12 @@ bevy = { version = "0.20", features = ["jpeg"] }
 serde_json = "1"
 # Typed reading of the Dotwork asset manifests (src/dotwork/); Bevy already builds serde with derive
 serde = { version = "1", features = ["derive"] }
+
+# Windows only: the monitor's work area and the window's frame, so a windowed size fits the screen
+# (src/shell/display.rs); the versions Bevy's winit already builds, so nothing new is compiled
+[target.'cfg(windows)'.dependencies]
+raw-window-handle = "0.6"
+windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_UI_WindowsAndMessaging"] }
 
 [features]
 # Faster rebuilds while developing: cargo run --features dev. Never ship it (docs/ENGINE.md gotcha 6).
