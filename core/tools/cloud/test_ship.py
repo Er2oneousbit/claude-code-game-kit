@@ -492,7 +492,7 @@ class ItchPush(unittest.TestCase):
         self.assertEqual(code, 0, out)
         pushed = Path(self.fake.calls[0][1])
         self.assertTrue(pushed.is_absolute(), pushed)
-        self.assertEqual(pushed, work / "site")
+        self.assertEqual(pushed.resolve(), (work / "site").resolve())   # resolve: a temp dir behind a link (macOS)
 
     def test_a_build_holding_secrets_is_refused(self):
         (self.g.site / ".env").write_text("X=1\n", encoding="utf-8")
