@@ -75,9 +75,10 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
   the windowed size ignored display scaling (a 1920x1080 setting made a 2400x1350 window, larger than the screen;
   `App.window_size` divides by the scale), and a refused exclusive fullscreen left the window as it was under the
   confirm (it now falls back to borderless, with a warning). Exclusive fullscreen itself is **(verify)**: that test
-  machine refused it (and once hung on it), so the fallback is what was seen. A first run has no settings.json, so the
-  window opens at 1280x720 while the Display tab says 1920x1080, and a revert sets 1920x1080, not the window seen before
-  (the runs above had settings.json holding 1600x900, the window's size). Game HUD text follows text_scale and ui_scale
+  machine refused it (and once hung on it), so the fallback is what was seen. A first run (no settings.json) used to
+  open a 1280x720 window while the setting said 1920x1080, so a revert grew the window; the setting now takes the
+  window's size in real pixels (`App:adopt_window_size`), and a first-run revert went back to the 1600x900 window seen
+  before. Game HUD text follows text_scale and ui_scale
   through `app:hud_font(base)` (or `app:hud_font_size(base)`), set again from `app:on_look_changed(fn)` (#309; the
   starter's pause hint in `src/shell/screens/play.lua` uses it). Controls lists the game actions with their prompt
   glyph (`assets/ui/glyphs/<glyph_name>.png` at 1x, else a text key-cap), rebinds with "press a key" (a binding

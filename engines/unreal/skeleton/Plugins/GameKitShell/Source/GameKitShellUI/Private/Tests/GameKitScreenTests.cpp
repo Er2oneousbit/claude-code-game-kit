@@ -26,6 +26,7 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, its confirm (Keep,
 //           Revert, cancel; model time does not count it down), Back warns once (#308); the HUD text factor and
 //           hud_scale_changed (#309); disabled rows need not be reachable
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the windowed size under Windows display scaling (#308)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -37,6 +38,7 @@
 #include "GameKitSettings.h"
 #include "GameKitShellCapture.h"
 #include "GameKitShellDrive.h"
+#include "GameKitShellSubsystem.h"
 #include "GameKitAtomicFile.h"
 #include "GameKitI18n.h"
 #include "GameKitJson.h"
@@ -148,6 +150,22 @@ namespace GameKitScreenTests
 			M.Update(1.0 / 60.0);
 		}
 	}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensWindowScaleTest, "GameKit.Screens.WindowSizeFollowsDisplayScaling", ScreenTestFlags)
+bool FGameKitScreensWindowScaleTest::RunTest(const FString& Parameters)
+{
+	// #308, seen on a real window at 125 %: a 1600x900 setting made a 1920x1125 window (the game is not DPI-aware
+	// by default, so Windows scales it); the size handed to UGameUserSettings is divided by that scale
+	TestEqual(TEXT("125 %"), UGameKitShellSubsystem::WindowSizeForScale(FIntPoint(1600, 900), FIntPoint(1920, 1200), FIntPoint(1536, 960)),
+	          FIntPoint(1280, 720));
+	TestEqual(TEXT("1920x1080 at 125 %"), UGameKitShellSubsystem::WindowSizeForScale(FIntPoint(1920, 1080), FIntPoint(1920, 1200), FIntPoint(1536, 960)),
+	          FIntPoint(1536, 864));
+	TestEqual(TEXT("DPI-aware: as it is"), UGameKitShellSubsystem::WindowSizeForScale(FIntPoint(1600, 900), FIntPoint(1920, 1200), FIntPoint(1920, 1200)),
+	          FIntPoint(1600, 900));
+	TestEqual(TEXT("no desktop known"), UGameKitShellSubsystem::WindowSizeForScale(FIntPoint(1600, 900), FIntPoint::ZeroValue, FIntPoint::ZeroValue),
+	          FIntPoint(1600, 900));
+	return true;
+}
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitScreensSettingsRowsTest, "GameKit.Screens.SettingsRowsCoverTheSchema", ScreenTestFlags)
 bool FGameKitScreensSettingsRowsTest::RunTest(const FString& Parameters)

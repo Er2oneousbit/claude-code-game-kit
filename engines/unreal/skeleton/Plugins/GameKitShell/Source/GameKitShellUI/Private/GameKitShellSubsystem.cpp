@@ -10,6 +10,9 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): "display_applied" sets the window through
 //           UGameUserSettings outside the editor and smoke runs (#308); HudTextScale, HudFontSize, OnHudScaleChanged
 //           (#309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a windowed size follows Windows display scaling when
+//           the game is not DPI-aware (WindowSizeForScale; seen on a real window: 1600x900 made a 1920x1125 window
+//           at 125 %, #308)
 // ---------------------------------------------------------------------------
 #include "GameKitShellSubsystem.h"
 
@@ -22,6 +25,11 @@
 #include "Framework/Application/SlateApplication.h"
 #include "GameFramework/PlayerController.h"
 #include "GameKitShellLog.h"
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#include <windows.h>
+#include "Windows/HideWindowsPlatformTypes.h"
+#endif
 #include "Kismet/KismetSystemLibrary.h"
 #include "Misc/App.h"
 #include "Misc/CommandLine.h"
@@ -187,6 +195,34 @@ float UGameKitShellSubsystem::HudFontSize(float BaseSize) const
 	return FGameKitShellModel::HudFontSize(BaseSize, HudTextScale());
 }
 
+FIntPoint UGameKitShellSubsystem::WindowSizeForScale(FIntPoint Res, FIntPoint DesktopPx, FIntPoint DesktopLogical)
+{
+	if (DesktopPx.X <= 0 || DesktopLogical.X <= 0 || DesktopPx.X == DesktopLogical.X)
+	{
+		return Res;
+	}
+	const double Scale = static_cast<double>(DesktopPx.X) / DesktopLogical.X;
+	return FIntPoint(FMath::RoundToInt(Res.X / Scale), FMath::RoundToInt(Res.Y / Scale));
+}
+
+namespace
+{
+	/** The primary screen in real pixels and as this process sees it (scaled when it is not DPI-aware). */
+	void DesktopSizes(FIntPoint& Px, FIntPoint& Logical)
+	{
+		Px = Logical = FIntPoint::ZeroValue;
+#if PLATFORM_WINDOWS
+		DEVMODEW Mode = {};
+		Mode.dmSize = sizeof(Mode);
+		if (::EnumDisplaySettingsW(nullptr, ENUM_CURRENT_SETTINGS, &Mode))
+		{
+			Px = FIntPoint(static_cast<int32>(Mode.dmPelsWidth), static_cast<int32>(Mode.dmPelsHeight));
+		}
+		Logical = FIntPoint(::GetSystemMetrics(SM_CXSCREEN), ::GetSystemMetrics(SM_CYSCREEN));
+#endif
+	}
+}
+
 void UGameKitShellSubsystem::ApplyWindow()
 {
 	// A smoke run or an editor session keeps its window as it is; a game (standalone or packaged) gets the player's
@@ -203,7 +239,14 @@ void UGameKitShellSubsystem::ApplyWindow()
 	User->SetFullscreenMode(Mode == TEXT("fullscreen") ? EWindowMode::Fullscreen
 	                        : Mode == TEXT("borderless") ? EWindowMode::WindowedFullscreen
 	                                                     : EWindowMode::Windowed);
-	User->SetScreenResolution(GameKit::SettingResolution(*Model->Settings));
+	FIntPoint Res = GameKit::SettingResolution(*Model->Settings);
+	if (Mode == TEXT("windowed"))
+	{
+		FIntPoint Px, Logical;
+		DesktopSizes(Px, Logical);
+		Res = WindowSizeForScale(Res, Px, Logical);   // the setting is real pixels, as in the other engines
+	}
+	User->SetScreenResolution(Res);
 	User->SetVSyncEnabled(Model->Flag(TEXT("display"), TEXT("vsync")));
 	User->SetFrameRateLimit(static_cast<float>(Model->Num(TEXT("display"), TEXT("frame_cap"))));   // 0 = no limit
 	User->ApplySettings(/*bCheckForCommandLineOverrides*/ false);
