@@ -10,7 +10,8 @@
 --           screens: app:push("settings"), app:pop(), app:replace("play"), app:reset("title")
 --           text: app:t("menu.play"), app:tp("apples", 3)   say a line: app:say("guide.welcome")
 --           a game HUD: app:hud_font(12) (12 px at scale 1, following text size and UI scale), app:hud_font_size(12),
---           app:on_look_changed(function() ... end) to rebuild cached text when those settings change (#309)
+--           local stop = app:on_look_changed(function() ... end) to rebuild cached text when those settings
+--           change (#309); stop() when the screen leaves
 --           sound: app:play_sound("hit", "sfx"), app:bus_volume("ambience")   music: app:play_music("combat")
 -- Notes   : Only the top screen updates and gets input; screens marked transparent (pause) draw over the one
 --           below. Actions go to the top screen in sorted order until one is used, so Esc (ui_cancel and pause)
@@ -30,6 +31,7 @@
 -- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the windowed size follows Windows display scaling
 --           (App.window_size), and a refused exclusive fullscreen falls back to borderless (#308, seen on a real window);
 --           a first run takes the window's own size as display.resolution (adopt_window_size), so a revert restores it
+--           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): on_look_changed returns the function that stops it
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -214,7 +216,8 @@ function App:apply_settings()
   local look = table.concat({ tostring(s.access.text_scale), tostring(s.display.ui_scale),
                               tostring(s.access.readable_font), tostring(s.access.line_spacing) }, "|")
   if self.look ~= nil and look ~= self.look then
-    for _, fn in ipairs(self.look_listeners) do fn() end
+    local listeners = { unpack(self.look_listeners) }   -- a copy: a listener may stop listening while it runs
+    for _, fn in ipairs(listeners) do fn() end
   end
   self.look = look
   self.i18n:set_locale(self.kit.locale or s.language)
@@ -326,8 +329,16 @@ end
 -- A font at that size (the readable font and line spacing when the player chose them). Draw-time only.
 function App:hud_font(base) return self.ui:font(self:hud_font_size(base), true) end
 
--- fn() runs after text size, UI scale, readable font or line spacing changed (rebuild cached text or layout)
-function App:on_look_changed(fn) self.look_listeners[#self.look_listeners + 1] = fn end
+-- fn() runs after text size, UI scale, readable font or line spacing changed (rebuild cached text or layout).
+-- Returns the function that stops it: call that when the screen that listened leaves (exit), or every visit adds one.
+function App:on_look_changed(fn)
+  self.look_listeners[#self.look_listeners + 1] = fn
+  return function()
+    for i = #self.look_listeners, 1, -1 do
+      if self.look_listeners[i] == fn then table.remove(self.look_listeners, i) end
+    end
+  end
+end
 
 -- ---- Text ------------------------------------------------------------------------------------------------------
 function App:t(key, args) return self.i18n:t(key, args) end

@@ -9,7 +9,8 @@
 #                      kit's shader recipes as materials (the full editor off-screen; --no-shaders skips)
 #             build    same as check (kept for command-contract parity)
 #             test     run automation tests headless (--filter, default "<Game>", plus "GameKit." when the
-#                      kit's GameKitShell plugin is enabled); without --filter also the Dotwork importer's checks
+#                      kit's GameKitShell plugin is enabled; test and smoke build first, as check does, when a C++
+#                      source is newer than its built module); without --filter also the Dotwork importer's checks
 #                      (Content/Python/kit_dotwork: the golden pack and every manifest of the game, pythonscript commandlet)
 #                      and the rigged character check (Content/Python/kit_character: the golden glTF imported, walk played)
 #             smoke    run automation tests named <Game>.Smoke (--filter, --until, --fail-on for scenario runs;
@@ -103,6 +104,8 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm in
 #           the help (the Display tab's Apply, #308)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): test and smoke build first when a C++ source is newer
+#           than its built module (they ran the old binaries and passed on code that was never compiled)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -138,6 +141,8 @@ NO_TESTS_PATTERN = r"No automation tests matched"  # logged before the editor ex
 AUTOMATION_LOG = ROOT / "Saved" / "Logs" / "dev_automation.log"  # UnrealEditor-Cmd does not log to stdout
 EXEC_LOG = ROOT / "Saved" / "Logs" / "dev_exec.log"
 EXEC_TIMEOUT_S = 3600                         # a first import of many assets is slow; a hang still ends
+SOURCE_SUFFIXES = (".cpp", ".h", ".hpp", ".inl")   # a change to one of these needs a build before test or smoke
+MODULE_SUFFIXES = (".dll", ".dylib", ".so")        # a built editor module: Binaries/<platform>/UnrealEditor-*
 BUILD_TIMEOUT_S = 4 * 3600                    # build, package, project files: longer than this is a hang (#250)
 KILL_TIMEOUT_S = 10                           # after a timeout: seconds to wait for the killed tree's pipe
 PYTHON_ERROR_PATTERN = r"\]LogPython: Error"
@@ -572,12 +577,26 @@ def cmd_check(args):
         print(f"[error] --config {args.config} applies to `package` only; `check` builds the editor (Debug, DebugGame or "
               "Development)", file=sys.stderr)
         return 2
+    rc = build_editor(args)
+    if rc == NOTHING_TO_BUILD:
+        # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
+        print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
+        return check_shaders(args)
+    if rc != 0:
+        return rc
+    return check_shaders(args)
+
+
+NOTHING_TO_BUILD = -1
+
+
+def build_editor(args):
+    """The editor build check does (UnrealBuildTool): 0 compiled, 1 failed, 2 environment, NOTHING_TO_BUILD for a
+    Blueprint-only project without the kit's plugin."""
     target = target_name()
     if not (ROOT / "Source").is_dir():
         if kit_plugin_state() != "enabled":
-            # Blueprint-only project: the engine's prebuilt editor runs it, there is no C++ to compile
-            print("[ OK ] Blueprint-only project (no Source/), nothing to compile. `test` loads the project.")
-            return check_shaders(args)
+            return NOTHING_TO_BUILD
         # Blueprint-only with the kit's C++ plugin: the engine's editor target compiles just the project's plugins
         # into Plugins/<name>/Binaries/ (the engine itself is prebuilt). Needs the same C++ toolchain as a C++ project.
         print(f"[info] Blueprint-only project with the {KIT_PLUGIN} plugin enabled: building its C++ "
@@ -585,7 +604,7 @@ def cmd_check(args):
         target = ENGINE_EDITOR_TARGET
     plat = platform_name(args.platform)
     bf = batch_file("Build")
-    cmd = [bf, target, plat, args.config, f"-Project={find_uproject()}", "-WaitMutex"]
+    cmd = [bf, target, plat, getattr(args, "config", None) or "Development", f"-Project={find_uproject()}", "-WaitMutex"]
     missing = missing_tool(bf)
     if missing:
         return missing
@@ -605,9 +624,41 @@ def cmd_check(args):
               "workload (MSVC + Windows SDK) and the .NET Framework 4.8 SDK component. See docs/ENGINE.md.", file=sys.stderr)
         return 2
     print("[ OK ] compiled" if rc == 0 else "[FAIL] build failed")
-    if rc != 0:
-        return 1
-    return check_shaders(args)
+    return 0 if rc == 0 else 1
+
+
+def stale_source(plat):
+    """A C++ source newer than the editor module built from it, else None. Each module folder (Source/<Module>/ of
+    the project or of a plugin) against its own Binaries/<platform>/UnrealEditor-<Module>[-...] file, because a
+    build relinks only the modules that changed. A module never built does not count: that is module_missing()'s
+    "run check first"."""
+    roots = [(ROOT / "Source", ROOT / "Binaries" / plat)]
+    plugins = ROOT / "Plugins"
+    if plugins.is_dir():
+        roots += [(p / "Source", p / "Binaries" / plat) for p in sorted(plugins.iterdir()) if p.is_dir()]
+    for src, bins in roots:
+        if not src.is_dir() or not bins.is_dir():
+            continue
+        for module in sorted(m for m in src.iterdir() if m.is_dir()):
+            built = [b.stat().st_mtime for pattern in (f"UnrealEditor-{module.name}.*", f"UnrealEditor-{module.name}-*")
+                     for b in bins.glob(pattern) if b.suffix.lower() in MODULE_SUFFIXES]
+            if not built:
+                continue
+            for f in module.rglob("*"):
+                if f.suffix.lower() in SOURCE_SUFFIXES and f.is_file() and f.stat().st_mtime > max(built) + 1:
+                    return f
+    return None
+
+
+def build_if_stale(args):
+    """test and smoke run the built editor modules: when a source is newer, build first (as check does) instead of
+    running the old binaries. 0 when nothing was stale or the build passed, else the build's exit code."""
+    newer = stale_source(platform_name(getattr(args, "platform", None)))
+    if newer is None:
+        return 0
+    print(f"[info] {newer.relative_to(ROOT).as_posix()} changed since the last build: building first (as check does)")
+    rc = build_editor(args)
+    return 0 if rc == NOTHING_TO_BUILD else rc
 
 
 def check_shaders(args):
@@ -719,6 +770,9 @@ def run_automation(filter_, args, until=None, fail_on=None, extra_args=None, mar
         # ';' and ',' separate -ExecCmds commands and '"' breaks UE's quoting: a filter must stay a filter
         print(f"[error] test filter {filter_!r} may only contain letters, digits, spaces and _ . + -", file=sys.stderr)
         return 2
+    rc = build_if_stale(args)
+    if rc:
+        return rc
     plat = platform_name(args.platform)
     exe = editor_cmd(plat)
     if not exe or not exe.exists():
@@ -1359,7 +1413,7 @@ def build_parser():
     p = sub.add_parser("build", help="same as check")
     p.add_argument("--no-shaders", action="store_true", help="skip the shader recipes")
     p.set_defaults(fn=cmd_build)
-    p = sub.add_parser("test", help="run automation tests headless, then the Dotwork importer's checks")
+    p = sub.add_parser("test", help="run automation tests headless (building first when a C++ source changed since the last build), then the Dotwork importer's checks")
     p.add_argument("--filter", help='automation filter, e.g. "MyGame.Logic" (default: the game name, plus GameKit. '
                                     'when the GameKitShell plugin is enabled)')
     p.set_defaults(fn=cmd_test)

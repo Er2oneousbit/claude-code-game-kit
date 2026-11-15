@@ -24,7 +24,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, with a hint line
 //           and a keep-or-revert confirm counted in real time (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning goes with the next Display change
-//           (it stayed up after the player stepped back to the applied value, with nothing left to apply)
+//           (it stayed up after the player stepped back to the applied value, with nothing left to apply); the
+//           confirm closing cancels a rebind still waiting for its key
 // ---------------------------------------------------------------------------
 import presetData from "../../data/input/presets.json";
 import { DEFAULT_BINDINGS, GLYPH_SETS, findConflicts, glyphName, glyphSet, rebind } from "../core/bindings";
@@ -236,6 +237,8 @@ export function settingsScreen(shell: Shell): Screen {
     if (focus && !s.menu?.focusId(focus)) s.menu?.focusId("settings.back");
   };
   const closed = (calls: [string, unknown][]) => {
+    // the redraw below drops a rebind prompt: a capture still waiting would bind the next key the player presses
+    if (shell.input.capturing) shell.input.cancelCapture();
     if (calls.length) shell.setDisplay(calls, "REVERTED");
     shell.saveSettings();
     message = "";

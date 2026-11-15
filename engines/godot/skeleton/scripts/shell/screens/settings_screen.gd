@@ -25,7 +25,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply with a keep-or-revert confirm,
 #           its hint line, and the status line on a row of its own above the buttons (#308)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning stays up across tabs while Back's
-#           next press would discard (a tab switch hid it, and the second Back then discarded without one)
+#           next press would discard (a tab switch hid it, and the second Back then discarded without one); a
+#           revert while a rebind waits for its key cancels the rebind
 # ---------------------------------------------------------------------------
 class_name SettingsScreen
 extends ShellScreen
@@ -204,6 +205,10 @@ func _revert_display() -> void:
 
 
 func _after_revert(calls: Array) -> void:
+	if capturing():
+		# the rows rebuild below and drop the "press a key" prompt: a capture left armed would bind the next key
+		_capture = []
+		_status_text = ""
 	_send(calls)
 	Log.info("display", "reverted " + JSON.stringify(calls))
 	Shell.save_settings()

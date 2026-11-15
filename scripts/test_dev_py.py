@@ -42,6 +42,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): GodotDummyAudio, windowed runs take no sound device
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): CppCaptureFormats, C++ smoke --screenshot is PNG for .png and
 #           BMP for .bmp, any other name refused before the build, BMP bytes in a .png fail, PNG frames (#314)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): UnrealStaleBuild, test and smoke build first when a
+#           C++ source is newer than its built module
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -683,6 +685,72 @@ class UnrealAutomation(TempRoot):
         """#250: the pattern \\bTest Failed\\b matched a passing test's own name."""
         rc, text = self.automation(0, "Test Completed. Result={Success} Name={Test Failed Handling}\n")
         self.assertEqual(rc, 0, text)
+
+
+# ---- Unreal test and smoke never run binaries older than their sources --------------------
+class UnrealStaleBuild(TempRoot):
+    """test ran the built editor modules as they were: a source edited after the last check ran the old code (a
+    new test passed without running). A source newer than its module now builds first, as check does."""
+    def automation(self, build_rc=0, newer=True):
+        dev = load("unreal")
+        dev.ROOT = self.root
+        dev.AUTOMATION_LOG = self.root / "Saved" / "Logs" / "dev_automation.log"
+        exe = self.root / "UnrealEditor-Cmd.exe"
+        exe.write_bytes(b"")
+        plugin = self.root / "Plugins" / "GameKitShell"
+        (plugin / "Binaries" / "Win64").mkdir(parents=True)
+        (plugin / "Source" / "GameKitShellUI" / "Private").mkdir(parents=True)
+        (plugin / "Source" / "GameKitShell").mkdir(parents=True)
+        dll = plugin / "Binaries" / "Win64" / "UnrealEditor-GameKitShellUI.dll"
+        src = plugin / "Source" / "GameKitShellUI" / "Private" / "Tests.cpp"
+        # the plugin's other module, untouched since an older build: a build relinks only what changed, so this
+        # older module must not make every run build again
+        other = plugin / "Binaries" / "Win64" / "UnrealEditor-GameKitShell.dll"
+        other_src = plugin / "Source" / "GameKitShell" / "Shell.cpp"
+        for f in (dll, other):
+            f.write_bytes(b"")
+        for f in (src, other_src):
+            f.write_text("// code\n", encoding="utf-8")
+        built, edited = (1_000_000, 1_000_100) if newer else (1_000_200, 1_000_100)
+        os.utime(dll, (built, built))
+        os.utime(src, (edited, edited))
+        os.utime(other_src, (900_000, 900_000))
+        os.utime(other, (950_000, 950_000))
+        dev.preflight = lambda *a, **kw: None
+        dev.editor_cmd = lambda plat: exe
+        dev.find_uproject = lambda: self.root / "Test.uproject"
+        dev.kit_plugin_state = lambda: "enabled"
+        dev.missing_tool = lambda tool: None
+        calls = []
+
+        def fake_tee(cmd, **kwargs):            # UnrealBuildTool
+            calls.append("build")
+            return build_rc, ""
+
+        def fake_run(cmd, **kwargs):            # the editor running the tests
+            calls.append("tests")
+            dev.AUTOMATION_LOG.write_text("Test Completed. Result={Success} Name={A}\n", encoding="utf-8")
+            return 0, ""
+        dev.run_tee = fake_tee
+        dev.run = fake_run
+        rc, text = quiet(dev.run_automation, "Test", argparse.Namespace(platform="Win64"))
+        return rc, text, calls
+
+    def test_a_source_newer_than_its_module_builds_first(self):
+        rc, text, calls = self.automation()
+        self.assertEqual(calls, ["build", "tests"], text)
+        self.assertEqual(rc, 0, text)
+        self.assertIn("Plugins/GameKitShell/Source/GameKitShellUI/Private/Tests.cpp changed since the last build", text)
+
+    def test_an_up_to_date_module_runs_without_a_build(self):
+        rc, text, calls = self.automation(newer=False)
+        self.assertEqual(calls, ["tests"], text)
+        self.assertEqual(rc, 0, text)
+
+    def test_a_failed_build_runs_no_tests(self):
+        rc, text, calls = self.automation(build_rc=6)
+        self.assertEqual(calls, ["build"], text)
+        self.assertEqual(rc, 1, text)
 
 
 # ---- #58: Unreal test also runs the Dotwork importer's checks through the commandlet ----------
@@ -2483,6 +2551,117 @@ class GodotShaderCrash(TempRoot):
         self.assertEqual(rc, 2, text)
         self.assertIn("it needs a window", text)
         self.assertNotIn("crashed", text)
+
+    def runs(self, results):
+        """shader_pass over a list of (rc, out) for the shader runs in turn; returns (rc, text, runs made)."""
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "shaders" / "kit").mkdir(parents=True, exist_ok=True)
+        made = []
+
+        def fake_run(cmd, **kw):
+            if "shader_gen.py" in " ".join(map(str, cmd)):
+                return 0, ""
+            made.append(cmd)
+            return results[min(len(made), len(results)) - 1]
+        dev.run = fake_run
+        rc, text = quiet(dev.shader_pass, "godot", False)
+        return rc, text, len(made)
+
+    def test_a_crash_runs_the_shader_check_again_and_says_so(self):
+        """Shader runs crashed on 2 of 6 checks on a busy GPU and on about half of fresh projects' first checks (old
+        code too): a crashed run runs again, up to SHADER_CRASH_TRIES runs, and says so."""
+        done = "SHADER_OK flash\nSHADER_CHECK_DONE failed=0\n"
+        rc, text, made = self.runs([(3221226356, "Godot Engine v4.7.2.stable\n"), (0, done)])
+        self.assertEqual((rc, made), (0, 2), text)
+        self.assertIn("[info] Godot crashed before drawing a recipe (exit 3221226356 = 0xC0000374); running the "
+                      "shader check again (2 of 3)", text)
+        self.assertIn("[ OK ] 1 shader recipe(s) compile", text)
+
+    def test_an_unreadable_shader_cache_is_cleared_for_the_next_run(self):
+        """A run after a crash once failed with Godot's own "Reflection of SPIR-V shader stage 'Vertex' failed" and
+        no recipe named: a half-written cache. That run clears user://shader_cache and user://vulkan and runs again;
+        a plain crash keeps them (a warm cache crashed less: 12 checks in a row passed on one)."""
+        user = self.root / "userdata"
+        for name in ("shader_cache", "vulkan", "logs"):
+            (user / name).mkdir(parents=True)
+        dev = load("godot")
+        seen = {}
+
+        def runs(results):
+            dev.ROOT = self.root
+            (self.root / "shaders" / "kit").mkdir(parents=True, exist_ok=True)
+            dev.user_data_dir = lambda: user
+            made = []
+
+            def fake_run(cmd, **kw):
+                if "shader_gen.py" in " ".join(map(str, cmd)):
+                    return 0, ""
+                made.append(cmd)
+                seen[len(made)] = sorted(p.name for p in user.iterdir())
+                return results[len(made) - 1]
+            dev.run = fake_run
+            return quiet(dev.shader_pass, "godot", False)
+        bad = ("ERROR: Reflection of SPIR-V shader stage 'Vertex' failed parsing shader.\n"
+               "ERROR: Condition \"reflect_spirv(p_shader_name, p_spirv, shader) != OK\" is true. Returning: false\n"
+               "ERROR: Failed to compile code to native for SPIR-V.\nERROR: Condition \"shader_data.is_empty()\" is true.\n")
+        done = (0, "SHADER_OK flash\nSHADER_CHECK_DONE failed=0\n")
+        rc, text = runs([(3221226356, ""), (0, bad), done])
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(seen[2], ["logs", "shader_cache", "vulkan"], "a plain crash keeps the caches")
+        self.assertEqual(seen[3], ["logs"], "after the SPIR-V errors they go; the rest of user:// stays")
+        self.assertIn("could not read its shader cache (SPIR-V errors); cleared shader_cache, vulkan", text)
+        for name in ("shader_cache", "vulkan"):
+            (user / name).mkdir()
+        seen.clear()
+        rc, text = runs([(0, "SHADER ERROR: res://shaders/kit/flash.gdshader:3: Expected ';'\nSHADER_CHECK_DONE failed=1\n")])
+        self.assertEqual(rc, 1, text)
+        self.assertEqual(len(seen), 1, "a recipe's own error runs once")
+
+    def test_user_data_dir_follows_project_godot(self):
+        dev = load("godot")
+        dev.ROOT = self.root
+        (self.root / "project.godot").write_text('[application]\n\nconfig/name="My Game"\n', encoding="utf-8")
+        self.assertEqual(dev.user_data_dir().parts[-2:], ("app_userdata", "My Game"))
+        (self.root / "project.godot").write_text('[application]\n\nconfig/name="My Game"\nconfig/use_custom_user_dir=true\n'
+                                                 'config/custom_user_dir_name="mygame"\n', encoding="utf-8")
+        self.assertEqual(dev.user_data_dir().name, "mygame")
+        self.assertNotIn("app_userdata", dev.user_data_dir().parts)
+
+    def test_crashes_on_every_run_fail(self):
+        rc, text, made = self.runs([(3221225477, "SHADER_OK flash\n")])
+        self.assertEqual((rc, made), (1, 3), text)
+        self.assertIn("Godot crashed after 1 recipe(s) (exit 3221225477 = 0xC0000005), 3 times in a row", text)
+
+    def imports(self, results):
+        dev = load("godot")
+        dev.ROOT = self.root
+        dev.class_names = lambda: ""
+        made = []
+
+        def fake_run(cmd, **kw):
+            made.append(cmd)
+            return results[min(len(made), len(results)) - 1]
+        dev.run = fake_run
+        rc, text = quiet(dev.cmd_import, None, "godot")
+        return rc, text, len(made)
+
+    def test_a_crashed_import_runs_again(self):
+        """The headless import crashed (0xC0000005 while importing a font) on 4 fresh projects in 10, and check failed
+        with only "[FAIL] import failed": a crashed import runs again, up to IMPORT_CRASH_TRIES runs."""
+        rc, text, made = self.imports([(3221225477, ""), (0, "")])
+        self.assertEqual((rc, made), (0, 2), text)
+        self.assertIn("[info] the import crashed (exit 3221225477 = 0xC0000005); running it again (2 of 3)", text)
+        rc, text, made = self.imports([(3221225477, "")])
+        self.assertEqual((rc, made), (1, 3), text)
+        self.assertIn("[FAIL] import failed (exit 3221225477)", text)
+        rc, text, made = self.imports([(1, "")])            # a plain failure is not a crash: no second run
+        self.assertEqual((rc, made), (1, 1), text)
+
+    def test_a_shader_error_is_not_retried(self):
+        rc, text, made = self.runs([(0, "SHADER ERROR: flash.gdshader:3\nSHADER_CHECK_DONE failed=1\n")])
+        self.assertEqual((rc, made), (1, 1), text)
+        self.assertNotIn("once more", text)
 
 
 # ---- #263: no engine's smoke keeps its --data-dir inside the player or build output ---------

@@ -9,6 +9,7 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): App.window_size under Windows display scaling (#308);
 --           the first run takes the window's size as the setting
+--           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): on_look_changed's stop function
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Settings = require("src.core.settings")
@@ -158,6 +159,16 @@ function T.test_app_hud_size_and_look_listeners()
   app.settings.audio.master = 0.3
   app:apply_settings()
   A.eq(heard, 1, "a volume change is not a look change")
+  -- a screen that listens on each visit stops when it leaves: without that every visit adds a listener
+  local other = 0
+  local stop = app:on_look_changed(function() other = other + 1 end)
+  A.eq(type(stop), "function", "on_look_changed returns its stop function")
+  stop()
+  app.settings.access.text_scale = 2.0
+  app:apply_settings()
+  A.eq(other, 0, "a stopped listener hears nothing")
+  A.eq(heard, 2, "the others still hear")
+  A.eq(#app.look_listeners, 1, "and it is gone from the list")
 end
 
 -- the windowed size in window units (#308, seen on a real window): Windows at 125 % scales a LÖVE window, so a
