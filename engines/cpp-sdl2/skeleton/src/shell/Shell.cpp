@@ -18,6 +18,8 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): with reduce motion a tall CREDITS.md starts at the
 //           top and up/down move it a row at a time (#302)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png, a PNG like every engine's (#314)
+//           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): Back's unapplied warning stays up while the next Back
+//           discards (it timed out after kMessageS)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a windowed size fits the usable screen and is centred
 //           (core::fit_window); a first run takes the window's own size as display.resolution, so a revert puts
 //           back the window that was on screen (#308, seen on a real window)
@@ -1175,7 +1177,14 @@ void Shell::update(double dt) {
         it->second.t -= dt;
         it = it->second.t <= 0 ? captions_.erase(it) : std::next(it);
     }
-    if (message_t_ > 0) {
+    // Back's unapplied warning shows exactly while the next Back would discard (staging warned), not for kMessageS:
+    // timed out, the second Back discarded with nothing on screen
+    if (message_ == t("settings.unapplied")) {
+        if (!settings_menu_ || !settings_menu_->staging().warned()) {
+            message_.clear();
+            message_t_ = 0;
+        }
+    } else if (message_t_ > 0) {
         message_t_ -= dt;
         if (message_t_ <= 0) {
             message_.clear();

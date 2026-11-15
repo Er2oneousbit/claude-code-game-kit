@@ -20,6 +20,8 @@
 //           entities (bare_game_app)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply, its confirm on real seconds
 //           and Back's warning (#308); HudScale follows text_scale and an applied ui_scale (#309)
+//           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an Apply that waits for Keep is not saved, Keep saves it; Back's
+//           warning outlasts a settings message
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -279,7 +281,10 @@ fn a_new_window_size_asks_to_keep_it_and_only_real_seconds_run_the_countdown() {
     focus(&mut app, "display.apply");
     press(&mut app, "ui_accept");
     assert_eq!(shell(&app).settings["display"]["resolution"], json!([1600, 900]));
-    assert_eq!(saved(&dir)["display"]["resolution"], json!([1600, 900]));
+    assert!(
+        !dir.0.join("settings.json").exists(),
+        "an Apply that waits for Keep is not saved"
+    );
     assert_eq!(shell(&app).focus_id(), "confirm.keep", "focus on Keep");
     assert_eq!(shell(&app).staging.seconds(), Some(15));
     // 16 s of game time (the test steps one 1/60 s tick per update) pass in far less real time: still open
@@ -311,6 +316,11 @@ fn keep_confirms_revert_and_back_put_the_old_size_back_and_back_warns_once() {
     press(&mut app, "ui_accept");
     press(&mut app, "ui_accept"); // Keep
     assert!(!shell(&app).staging.confirming());
+    assert_eq!(
+        saved(&dir)["display"]["resolution"],
+        json!([1600, 900]),
+        "Keep saves what the confirm held back"
+    );
     shell_mut(&mut app).tick_display(30.0);
     assert_eq!(
         shell(&app).settings["display"]["resolution"],
@@ -343,7 +353,13 @@ fn keep_confirms_revert_and_back_put_the_old_size_back_and_back_warns_once() {
     press(&mut app, "ui_cancel");
     assert_eq!(shell(&app).top_name(), Some(ScreenName::Settings));
     let warning = shell(&app).t("settings.unapplied");
-    assert_eq!(shell(&app).message.as_ref().map(|m| m.0.clone()), Some(warning));
+    assert_eq!(shell(&app).message.as_ref().map(|m| m.0.clone()), Some(warning.clone()));
+    frames(&mut app, 300); // 5 s: longer than a settings message lasts
+    assert_eq!(
+        shell(&app).message.as_ref().map(|m| m.0.clone()),
+        Some(warning),
+        "the warning stays up while the next Back discards"
+    );
     press(&mut app, "ui_cancel");
     until_screen(&mut app, ScreenName::MainMenu);
     assert_eq!(shell(&app).num("display", "ui_scale"), 1.0);

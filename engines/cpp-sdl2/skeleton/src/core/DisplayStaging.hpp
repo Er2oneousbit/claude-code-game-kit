@@ -27,6 +27,8 @@
 //   tick   : left -= dt; left <= 0 -> revert()
 //   back   : confirm open -> ("revert", revert()) ; pending and not warned -> warned, ("warn") ; else discard, ("leave")
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): warned(), so the shell can show Back's warning
+//           while it holds
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -143,6 +145,7 @@ public:
     }
 
     bool confirming() const { return left_.has_value(); }
+    bool warned() const { return warned_; }   // Back warned: the next Back discards
     bool has_pending() const { return !pending_.empty(); }
     const nlohmann::json& pending() const { return pending_; }
     const nlohmann::json& applied() const { return applied_; }

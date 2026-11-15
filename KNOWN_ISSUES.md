@@ -147,8 +147,6 @@ model-free example packs, not yet on a real game's art.
 - **Starting a game:** genre starters with a tested core loop ([#89](https://github.com/Er2oneousbit/claude-code-game-kit/issues/89)).
 - **Examples:** bring them onto the 0.8 systems ([#88](https://github.com/Er2oneousbit/claude-code-game-kit/issues/88)); designed-voice dialogue in one example
   ([#93](https://github.com/Er2oneousbit/claude-code-game-kit/issues/93)).
-- **Kit tools for recurring jobs:** a coverage run over every exam, to find code no exam executes
-  ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
 - **Game feel:** recipes for common effects built from the juice primitives, added per game as needed [#170](https://github.com/Er2oneousbit/claude-code-game-kit/issues/170);
   shooting effects (muzzle flash, tracer, firing light, wall debris) [#164](https://github.com/Er2oneousbit/claude-code-game-kit/issues/164); a blood on/off setting [#171](https://github.com/Er2oneousbit/claude-code-game-kit/issues/171).
 - **More local 3D lanes after Bozzetto:** tiling PBR materials on FLUX.2 klein
@@ -204,9 +202,9 @@ model-free example packs, not yet on a real game's art.
 ### Bugs and doubts
 - **Docs marked (verify):** facts about outside services (prices, plans, menu paths, license terms) that were not
   checked live. They are the most likely to be out of date.
-- **Code no exam runs:** the 0.14.5 pass gave doctor, `frames_to_gif.py` and Dotwork's unrun commands exams; Dotwork's
-  audition render and qa_pack's fallback for rows without a `source` still have none
-  ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)).
+- **Code no exam runs:** `uv run --with coverage python scripts/run_exams.py --coverage` lists the shipped files no
+  exam executes ([#282](https://github.com/Er2oneousbit/claude-code-game-kit/issues/282)); scripts that run only inside
+  a Blender executable, and the live exams, are not measured there.
 - **Bozzetto:** TRELLIS.2 characters with baked textures
   landed under the `npc` class's 55% UV coverage floor on two seeds; 0.15.1's `--rebake auto` (the local default)
   lifts both to 59 and 60%, on those two models only so far

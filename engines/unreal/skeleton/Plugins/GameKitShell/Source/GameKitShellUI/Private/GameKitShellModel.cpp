@@ -17,6 +17,9 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Display rows stage through FGameKitDisplayStaging, the
 //           Apply row, the keep-or-revert confirm on the wall clock, Back that warns once, disabled rows skipped
 //           (#308); hud_scale_changed when ui_scale times text_scale changes (#309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): SetDisplay saves only once no confirm is open, Keep saves: an
+//           Apply that waits for Keep never reaches settings.json; Back's unapplied warning stays up while the next
+//           Back discards (it timed out after MessageS)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -592,7 +595,10 @@ void FGameKitShellModel::SetDisplay(const FGameKitDisplayStaging::FCalls& Calls)
 	}
 	Changed();
 	Event(TEXT("display_applied"));   // the subsystem sets the window from settings.display
-	SaveSettings();
+	if (!Staging.Confirming())        // a mode the screen cannot show is never saved: Keep saves it
+	{
+		SaveSettings();
+	}
 }
 
 void FGameKitShellModel::CloseDisplayConfirm()
@@ -634,6 +640,8 @@ bool FGameKitShellModel::ApplyDisplay()
 void FGameKitShellModel::KeepDisplay()
 {
 	Staging.Keep();
+	SaveSettings();   // the values the confirm held back from settings.json
+	Event(TEXT("display_kept"));   // the subsystem writes GameUserSettings.ini now
 	CloseDisplayConfirm();
 }
 
@@ -1797,7 +1805,18 @@ void FGameKitShellModel::Update(double Dt)
 			++Version;               // "Reverting in N s" redraws once a second
 		}
 	}
-	if (MessageT > 0.0)
+	// Back's unapplied warning shows exactly while the next Back would discard (Staging.Warned()), not for MessageS:
+	// timed out, the second Back discarded with nothing on screen
+	if (!Message.IsEmpty() && Message == T(TEXT("settings.unapplied")))
+	{
+		if (!Staging.Warned())
+		{
+			Message.Empty();
+			MessageT = 0.0;
+			++Version;
+		}
+	}
+	else if (MessageT > 0.0)
 	{
 		MessageT -= Dt;
 		if (MessageT <= 0.0)

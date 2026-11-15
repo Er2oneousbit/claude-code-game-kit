@@ -60,8 +60,9 @@ ProjectSettings/         project config (text, edit with care)
 - Settings rows come from `GameSettings.Fields(section)` (the schema): a new field needs its `setting.<section>.<field>`
   string in `data/i18n/en.json` (and `value.<field>.<choice>` for a choice) and shows up on its tab.
 - The Display tab waits for Apply (#308): its rows stage through `DisplayStaging` (`Assets/Scripts/Core/`, held to
-  `data/golden/shell.json`), Apply sets the changed fields through `Shell.SetValue` (mode before resolution) and saves,
-  and a new window mode or size asks "Keep these display settings?", putting the old values back after 15 real seconds
+  `data/golden/shell.json`), Apply sets the changed fields through `Shell.SetValue` (mode before resolution) and saves
+  (a new window mode or size only once kept), and a new mode or size asks "Keep these display settings?", putting the
+  old values back after 15 real seconds
   (a Stopwatch: paused games and `Time.timeScale` do not stop it). Back with a change waiting warns once. The other
   tabs apply at once. `smoke --drive display` runs it; `show:apply` and `show:confirm` photograph it.
 - A game HUD's text size (#309): `Shell.I.HudFontSize(basePx)` (`HudScale.FontSize`, `display.ui_scale` times

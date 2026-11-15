@@ -13,6 +13,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive (DRIVE_DISPLAY lines; the confirm
 //           must revert on the wall clock), show:apply and show:confirm, the pseudo drive's Display checks, the
 //           confirm and the play HUD in the text report, disabled rows not counted as controls (#308, #309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old size while
+//           the confirm waits
 // ---------------------------------------------------------------------------
 #include "GameKitShellDrive.h"
 
@@ -466,9 +468,10 @@ bool FGameKitShellDrive::Display()
 		return false;
 	}
 	const TOptional<int32> Secs = Model->DisplayStaging().Seconds();
-	if (!Secs.IsSet() || Setting() == Before || Saved() != Setting() || Model->FocusId() != TEXT("confirm.keep"))
+	// set and confirmed, and not saved: settings.json keeps the old size (a missing file reads as the defaults) until Keep
+	if (!Secs.IsSet() || Setting() == Before || Saved() != Before || Model->FocusId() != TEXT("confirm.keep"))
 	{
-		return Fail(FString::Printf(TEXT("Apply did not set, save and confirm the window size (settings %s, file %s, focus %s)"),
+		return Fail(FString::Printf(TEXT("Apply did not confirm the window size, or saved it before Keep (settings %s, file %s, focus %s)"),
 		                            *Setting(), *Saved(), *Model->FocusId()));
 	}
 	const double AppliedAt = FPlatformTime::Seconds();

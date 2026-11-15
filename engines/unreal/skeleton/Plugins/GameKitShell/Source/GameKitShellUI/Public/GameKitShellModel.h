@@ -49,6 +49,7 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply (FGameKitDisplayStaging):
 //           an Apply row, a Keep/Revert confirm counted down in real time (FPlatformTime, not Update's Dt), Back that
 //           warns once (#308); disabled rows; HudScale(), HudFontSize() and the "hud_scale_changed" event (#309)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -347,7 +348,7 @@ public:
 
 	// ---- Events ----
 	TFunction<void(const FString&)> OnEvent;          // "play", "resume", "quit_title", "quit", "settings_changed", "consent",
-	                                                  // "display_applied" (#308), "hud_scale_changed" (#309)
+	                                                  // "display_applied", "display_kept" (#308), "hud_scale_changed" (#309)
 	bool bQuitRequested = false;
 	bool bConsentAsked = false;
 	/** A drive presses for this model (FGameKitShellDrive sets it, #276): a widget showing it takes no real keyboard,
@@ -384,7 +385,7 @@ private:
 	FGameKitRow ButtonRow(const FString& Id, const FString& LabelKey, TFunction<void()> Accept);
 	FGameKitRow BackRow();
 	FGameKitRow BindingRow(const FString& Action);
-	void SetDisplay(const FGameKitDisplayStaging::FCalls& Calls);   // writes Apply's or a revert's calls, applies, saves
+	void SetDisplay(const FGameKitDisplayStaging::FCalls& Calls);   // writes Apply's or a revert's calls, applies, saves unless confirming
 	void CloseDisplayConfirm();
 	double StagedNum(const FString& Field) const;
 	bool StagedFlag(const FString& Field) const;
