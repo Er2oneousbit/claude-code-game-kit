@@ -9,7 +9,9 @@
 #           --live, and the live env vars are hidden without it; a [SKIP] line on exit 0 is a skip; a timeout is a
 #           failure; --only (name, path, unknown), --changed (cover patterns, plus a real git diff when git is here),
 #           --python through a fake uv (one pass per version, --with for modules, pinned rows run once), --jobs
-#           keeps table order, --list prints the table. The real table is checked against the kit tree: every row's
+#           keeps table order, --list prints the table, --coverage (#282: a skip naming coverage when it is missing or
+#           older than 7.10, every exam through `-m coverage run` with the kit's settings under a stand-in coverage
+#           package, the per-file lines and the files no exam executes, Blender scripts marked). The real table is checked against the kit tree: every row's
 #           file exists, names are unique, every exam file has a row (or is loaded by another), and CLAUDE.md
 #           points here.
 # Usage   : python scripts/test_run_exams.py
@@ -19,6 +21,7 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a pinned module uv cannot provide is a SKIP naming
 #           it, the environment probe, the bpy 4.2 floor rows in the real table (#312)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --coverage (#282)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -343,6 +346,75 @@ class RunExamsExam(unittest.TestCase):
         self.assertEqual(self.run_main("--python", "three")[0], 2)
         self.assertEqual(self.run_main("--python", "")[0], 2)
         self.assertEqual(self.run_main("--jobs", "0")[0], 2)
+
+    # ---- --coverage (#282) ---------------------------------------------------
+    FAKE_COVERAGE = """\
+import json, runpy, sys
+args = sys.argv[1:]
+with open(%r, "a", encoding="utf-8") as f:
+    f.write(json.dumps(args) + "\\n")
+if args[0] == "run":
+    rest = args[args.index("--rcfile") + 2:]
+    sys.argv = rest
+    runpy.run_path(rest[0], run_name="__main__")
+elif args[0] == "json":
+    with open(args[args.index("-o") + 1], "w", encoding="utf-8") as f:
+        json.dump({"files": {"scripts/tool_a.py": {"summary": {"covered_lines": 3, "num_statements": 4}},
+                             "scripts/tool_empty.py": {"summary": {"covered_lines": 0, "num_statements": 0}}}}, f)
+"""
+
+    def fake_coverage(self):
+        """A stand-in coverage package on PYTHONPATH: `-m coverage run` logs its arguments and runs the exam,
+        `json` writes a canned report. Returns the log path."""
+        log = Path(self.tmp.name) / "coverage_calls.jsonl"
+        pkg = Path(self.tmp.name) / "fakecov" / "coverage"
+        write(pkg / "__init__.py", "__version__ = '7.17.0'\n")
+        write(pkg / "__main__.py", self.FAKE_COVERAGE % str(log))
+        for rel, text in (("scripts/tool_a.py", "x = 1\n"), ("scripts/tool_b.py", "y = 2\n"),
+                          ("scripts/tool_empty.py", "\n"), ("scripts/test_tool.py", "pass\n"),
+                          ("core/tools/blender/bl.py", "import bpy\n"), ("core/tools/art/tests/helper.py", "\n")):
+            write(self.kit / rel, text)
+        return log
+
+    def test_coverage_without_the_module_is_a_skip_naming_it(self):
+        with mock.patch.object(rx, "coverage_version", lambda interpreter=None: None):
+            code, out = self.run_main("--coverage")
+        self.assertEqual(code, 0, out)
+        self.assertIn("[SKIP] --coverage needs the coverage module 7.10 or newer", out)
+        self.assertEqual(self.exam_paths(out), [], "no exam runs")
+        with mock.patch.object(rx, "coverage_version", lambda interpreter=None: (7, 9, 2)):
+            code, out = self.run_main("--coverage")
+        self.assertIn("found 7.9.2", out, "too old for subprocess measurement")
+        self.assertEqual(self.run_main("--coverage", "--python", "3.8")[0], 2, "one Python only")
+
+    def test_coverage_runs_every_exam_under_it_and_lists_files_no_exam_executes(self):
+        log = self.fake_coverage()
+        rx.EXAMS = [r for r in self.rows if r.name in ("twice", "cases")]
+        with mock.patch.dict(os.environ, {"PYTHONPATH": str(Path(self.tmp.name) / "fakecov")}):
+            code, out = self.run_main("--coverage")
+        self.assertEqual(code, 0, out)
+        self.assertRegex(self.line_for(out, "test_twice.py"), r"^\[ OK \].* 2 tests", "the exam still judged")
+        calls = [json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines()]
+        runs = [c for c in calls if c[0] == "run"]
+        self.assertEqual(len(runs), 2, calls)
+        self.assertTrue(all(c[1] == "--rcfile" for c in runs))
+        self.assertIn("-v", runs[0], "a unittest row keeps -v")
+        self.assertEqual([c[0] for c in calls[2:]], ["combine", "json"])
+        self.assertFalse(Path(runs[0][2]).parent.exists(), "the data folder (outside the tree) is removed afterwards")
+        self.assertRegex(out, r"75\.0%\s+3/4\s+scripts/tool_a\.py")
+        never = out.split("== files no exam executes", 1)[1]
+        self.assertIn("scripts/tool_b.py", never)
+        self.assertRegex(never, r"core/tools/blender/bl\.py +\[Blender script")
+        for gone in ("tool_a.py", "tool_empty.py", "test_tool.py", "helper.py"):
+            self.assertNotIn(gone, never, "measured, empty or an exam's own file")
+
+    def test_coverage_settings_measure_subprocesses_outside_the_tree(self):
+        rc = rx.coverage_rc(self.tmp.name)
+        text = rc.read_text(encoding="utf-8")
+        self.assertIn("patch = subprocess", text)
+        self.assertIn("parallel = True", text)
+        self.assertIn(str(Path(self.tmp.name) / ".coverage"), text)
+        self.assertIn(str(self.kit / "core/tools"), text)
 
     # ---- counting ----------------------------------------------------------
     def test_count_tests_dedupes_both_verbose_formats(self):
