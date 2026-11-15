@@ -6,10 +6,12 @@
 > (2026-11-14, `dev.py build`, a 1920x1200 screen; the display drive armed in the player, the window's size read back
 > from the OS every 100 ms): Apply of 1600x900 resized the window, and of 2560x1440 gave the largest window the screen
 > takes (1920x1200), and each time the countdown put the 1920x1080 window back after 15.0 s. Fullscreen and borderless
-> on Apply stay **(verify)**: on that machine (a disconnected remote session, which refused display mode changes)
-> Unity logged "Failed to find a valid fullscreen resolution ... trying without exclusive fullscreen mode" for both and
-> made a titled 1920x1200 window. Borderless needs no mode change and worked in the Bevy, C++ and LÖVE windows on the
-> same machine, so why Unity's did not is open.
+> on Apply stay **(verify)**: on that machine (a disconnected remote session) Unity listed no display modes at all
+> (`Screen.resolutions` empty, `Display.main.systemWidth` 0), so both its full-screen kinds failed ("Failed to find a
+> valid fullscreen resolution ... trying without exclusive fullscreen mode") and left a titled window. The shell now
+> maximizes the window when Unity lists no modes (`PlayerRun.FullScreenKind`, with a warning): there both kinds gave a
+> maximized window filling the work area and the countdown put 1920x1080 back. A player started with `--drive display`
+> runs the drive and quits (exit 0) when it ends; without `--drive` (`GAMEKIT_DRIVE` alone) it does not run.
 
 ## Setup
 1. Create the project in Unity Hub with the editor version you want. Pick the template (2D, 3D, URP) and record it in an ADR.

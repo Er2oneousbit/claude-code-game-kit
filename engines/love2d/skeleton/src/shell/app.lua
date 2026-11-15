@@ -28,7 +28,8 @@
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size, hud_font and on_look_changed, so a game
 --           HUD follows access.text_scale and display.ui_scale like the menus (#309)
 -- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the windowed size follows Windows display scaling
---           (App.window_size), and a refused exclusive fullscreen falls back to borderless (#308, seen on a real window)
+--           (App.window_size), and a refused exclusive fullscreen falls back to borderless (#308, seen on a real window);
+--           a first run takes the window's own size as display.resolution (adopt_window_size), so a revert restores it
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -187,7 +188,9 @@ function App:load()
     if not ok then Log.warn("audio", "no sounds: " .. tostring(err)) end
   end
   self:apply_settings()
-  if self.settings_existed then self:apply_display() end
+  -- the window and the Display tab agree from the start: a saved setting sets the window; on a first run (no
+  -- settings.json) the setting takes the window's own size, so a revert puts back what was on screen (#308)
+  if self.settings_existed then self:apply_display() else self:adopt_window_size() end
   Log.info("shell", string.format("data folder %s (%s), locale %s, %s build", self.store:path(""), self.store.kind,
            self.i18n.locale, self.debug_build and "debug" or "release"))
   self.telemetry:event("session_start", Version.version)
@@ -243,6 +246,13 @@ function App.window_size(res, desktop, logical)
   return w, h
 end
 
+-- The inverse of App.window_size: a window of `size` window units, in real pixels (the unit of the setting).
+function App.real_size(size, desktop, logical)
+  local scale = 1
+  if logical and logical[1] > 0 and logical[2] > 0 then scale = desktop[1] / logical[1] end
+  return math.floor(size[1] * scale + 0.5), math.floor(size[2] * scale + 0.5)
+end
+
 -- The primary screen in window units on Windows (GetSystemMetrics answers a program that is not DPI-aware in
 -- scaled units), else nil: the window units are the real pixels there.
 local function logical_desktop()
@@ -254,6 +264,15 @@ local function logical_desktop()
   end)
   if ok and w > 0 and h > 0 then return { w, h } end
   return nil
+end
+
+-- First run: display.resolution becomes the size of the window conf.lua opened (not saved until settings are).
+-- Never in automated runs (their window is the run's, not the player's).
+function App:adopt_window_size()
+  if self.kit.automated or not love.window or not love.window.isOpen() or love.window.getFullscreen() then return end
+  local dw, dh = love.window.getDesktopDimensions()
+  local w, h = App.real_size({ love.graphics.getDimensions() }, { dw, dh }, logical_desktop())
+  self.settings.display.resolution = Json.array({ w, h })
 end
 
 -- Window mode, size and vsync. Never in automated runs (the smoke window must stay small and off-screen).

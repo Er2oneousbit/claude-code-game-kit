@@ -13,9 +13,11 @@ Engine-specific workflow for a custom C++ engine on SDL3. Universal process live
 > screen at 125 %; the display drive run in a normal window with the automated-run guard lifted, the window's size and
 > style read back from the OS every 100 ms): a size change (1920x1080 to 1600x900) resized the window on Apply and the
 > countdown put 1920x1080 back after 15.0 s; fullscreen made a 1920x1200 window without a title bar (SDL3's desktop
-> fullscreen) and the countdown put the titled 1920x1080 window back. A first run has no settings.json, so the window
-> opens at 1280x720 while the Display tab says 1920x1080; a revert then sets 1920x1080, not the window seen before.
-> With settings.json holding 1280x720 (the window's size) both runs went back to exactly the 1280x720 window.
+> fullscreen) and the countdown put the titled 1920x1080 window back. Two bugs that run found are fixed: a first run
+> (no settings.json) opened a 1280x720 window while the setting said 1920x1080, so a revert grew the window (the setting
+> now takes the window's size; a first-run revert went back to exactly 1280x720), and a windowed size kept the old
+> top-left and ran past the screen's bottom edge (`core::fit_window` fits the usable area with the frame and centres
+> it: 2560x1440 on that screen gave a 1902x1093 window inside the work area).
 > Before the SDL3 move (SDL2 2.32.10, 2026-10-20) a planted compile error, failing test and boot-time `LOG_ERROR` each failed
 > the right command. `run` (opens a window), a real gamepad, the spoken narration, Metal (MSL) and Linux/macOS are untested.
 > Anything marked **(verify)** is the likeliest to need tweaks. Paste errors to Claude verbatim.
