@@ -268,7 +268,8 @@ function App:apply_display()
       local cw, ch = love.graphics.getDimensions()
       if w and (w ~= cw or h ~= ch) then love.window.updateMode(w, h) end
     elseif not love.window.setFullscreen(true, d.mode == "fullscreen" and "exclusive" or "desktop") then
-      -- exclusive needs a video mode of the window's size; without one LÖVE refuses and the window stays as it was
+      -- exclusive asks for a video mode of the window's size; when the system refuses (no such mode, or no mode
+      -- changes allowed), LÖVE returns false and the window stayed as it was under the confirm
       Log.warn("display", d.mode .. " refused by the system: borderless fullscreen instead")
       love.window.setFullscreen(true, "desktop")
     end
