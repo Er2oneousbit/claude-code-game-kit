@@ -19,6 +19,8 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a pinned module uv cannot provide is a SKIP naming
 #           it, the environment probe, the bpy 4.2 floor rows in the real table (#312)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a uv probe past its limit is a SKIP, not a hang; a
+#           forced env var survives the live-var hiding
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -99,6 +101,9 @@ for i, a in enumerate(argv):                 # a package with no wheel: uv fails
     if a == "--with" and argv[i + 1].startswith("nowheel"):
         sys.stderr.write("error: no wheel for %%s\\n" %% argv[i + 1])
         sys.exit(1)
+    if a == "--with" and argv[i + 1].startswith("slowwheel") and argv[-2:] == ["-c", "pass"]:
+        import time
+        time.sleep(60)                       # a download that never ends: the probe's limit must stop it
 rest = argv[argv.index("python") + 1:]
 sys.exit(subprocess.run([sys.executable] + rest).returncode)
 """
@@ -136,11 +141,11 @@ class RunExamsExam(unittest.TestCase):
             E("fake/test_nomodule.py", needs=(rx.module("nosuchpackage_xyz"),), covers=("*.md",)),
             E("fake/test_notool.py", needs=(rx.tool("no_such_tool_xyz"),)),
         ]
-        self.saved = (rx.KIT, rx.EXAMS, rx.UV, rx.TIMEOUT_S)
+        self.saved = (rx.KIT, rx.EXAMS, rx.UV, rx.TIMEOUT_S, getattr(rx, "UV_PROBE_TIMEOUT_S", None))
         rx.KIT, rx.EXAMS, rx.UV = self.kit, self.rows, None
 
     def tearDown(self):
-        rx.KIT, rx.EXAMS, rx.UV, rx.TIMEOUT_S = self.saved
+        rx.KIT, rx.EXAMS, rx.UV, rx.TIMEOUT_S, rx.UV_PROBE_TIMEOUT_S = self.saved
         self.tmp.cleanup()
 
     # ---- helpers ------------------------------------------------------------
@@ -322,6 +327,31 @@ class RunExamsExam(unittest.TestCase):
         self.assertIn(["--with", "bpyfake==4.2.0"], [c[i:i + 2] for c in calls for i in range(len(c) - 1)])
         self.assertFalse([c for c in calls if "nowheel==4.2.0" in c and c[-2:] != ["-c", "pass"]],
                          "a row uv cannot provide never runs")
+
+    def test_a_uv_probe_that_never_ends_is_a_skip_not_a_hang(self):
+        """The environment probe (`-c pass`) had no limit: a stalled first bpy download hung the whole run. Past
+        UV_PROBE_TIMEOUT_S it is a SKIP naming the package and the limit."""
+        import time
+        rx.UV = self.fake_uv
+        rx.UV_PROBE_TIMEOUT_S = 2
+        rx.EXAMS = [rx.Exam("fake/test_pinned.py", needs=(rx.module("slowwheel==1.0"),), python="3.11")]
+        t0 = time.monotonic()
+        code, out = self.run_main()
+        self.assertLess(time.monotonic() - t0, 30, "the probe was not stopped")
+        self.assertEqual(code, 0, out)
+        self.assertRegex(self.line_for(out, "test_pinned.py"),
+                         r"^\[SKIP\].*needs slowwheel==1\.0 on Python 3\.11 \(uv could not provide it: no answer "
+                         r"within 2 s")
+        self.assertGreaterEqual(self.saved[4], 600, "the real limit leaves room for a first bpy download")
+
+    def test_a_forced_env_var_survives_the_live_var_hiding(self):
+        """set_env is the row's own value: another row listing the same var as a live var must not pop it again
+        (without --live every live var is hidden, and the forced one went with it)."""
+        rx.EXAMS = [rx.Exam("fake/test_envpeek.py", set_env={"FAKE_LIVE_BIN": "forced"}),
+                    rx.Exam("fake/test_live.py", style="cases", live=True, env=("FAKE_LIVE_BIN",))]
+        code, out = self.run_main("--debug")
+        self.assertEqual(code, 0, out)
+        self.assertIn("FAKE_LIVE_BIN=forced", out)
 
     def test_set_env_overrides_the_callers_value(self):
         """#312: rebake_bpy42 forces BOZZETTO_TEST_BLENDER=bpy, so a caller's Blender path or `skip` cannot turn the

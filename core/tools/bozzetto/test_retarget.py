@@ -26,7 +26,8 @@
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig refreshes the backup, a chain does not;
-#           a new clip name with '|' or ';' is refused, a pack's clip or path with them keeps the log row whole
+#           a new clip name with '|' or ';' is refused, a pack's clip or path with them keeps the log row whole;
+#           one retarget note per row, naming the rig's clips from packs now
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -175,7 +176,8 @@ class CliExam(unittest.TestCase):
         argv = [str(a) for a in argv]
         self.calls.append(argv)
         self.assertEqual(Path(script).name, "rig_retarget.py")
-        rep = {"map": "ual", "clips": {"walk_ual": {"from": getattr(self, "src_clip", "Walk_Loop"), "frames": 24}},
+        rep = {"map": "ual", "clips": {getattr(self, "new_clip", "walk_ual"):
+                                       {"from": getattr(self, "src_clip", "Walk_Loop"), "frames": 24}},
                "clips_in_file": ["idle", "walk", "walk_ual"],
                "failures": [] if self.rc == 0 else ["the pack and the target face different ways"]}
         if self.rc == 0:
@@ -289,6 +291,38 @@ class CliExam(unittest.TestCase):
         notes = [n.strip() for n in row.split("|")[-2].split(";")]
         self.assertEqual(sum(n.startswith(rt.NOTE_PREFIX) for n in notes), 1, notes)
         self.assertTrue(notes[-1].startswith(rt.NOTE_PREFIX) and "as walk_ual from" in notes[-1], notes)
+
+    def retarget_notes(self):
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        row = [l for l in log.splitlines() if l.startswith("| A-0002")][0]
+        self.assertEqual(len(row.split("|")), len(LOG.splitlines()[-1].split("|")), row)
+        return [n.strip() for n in row.split("|")[-2].split(";") if n.strip().startswith(rt.NOTE_PREFIX)]
+
+    def test_the_retarget_note_holds_the_rigs_clips_now(self):
+        """Every --replace re-run appended another "retarget: ..." note; the row now holds one, naming the clips the
+        rig has from packs now (a re-run of one clip replaces it, a new clip joins it), as `rig chain` does."""
+        self.rig_make(b"glTF-rigged-v1")
+        for _ in range(3):
+            code, out = self.retarget("--replace")
+            self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("Walk_Loop as walk_ual from A-0003", notes[0])
+        self.new_clip, self.src_clip = "idle_ual", "Idle_Loop"
+        code, out = self.retarget(pack="assets_src/packs/unlogged.glb")
+        self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertIn("Walk_Loop as walk_ual from A-0003", notes[0])
+        self.assertIn("Idle_Loop as idle_ual from `assets_src/packs/unlogged.glb`", notes[0])
+        self.assertIn("rig of A-0001", (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8"))
+        self.rig_make(b"glTF-rigged-v2")                    # a re-rig: the old rig's clips are gone with it
+        self.new_clip, self.src_clip = "walk_ual", "Walk_Loop"
+        code, out = self.retarget()
+        self.assertEqual(code, 0, out)
+        notes = self.retarget_notes()
+        self.assertEqual(len(notes), 1, notes)
+        self.assertNotIn("idle_ual", notes[0])
 
     def test_a_refused_transfer_and_no_replace_leave_the_model_alone(self):
         self.rc = 1

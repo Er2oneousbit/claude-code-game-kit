@@ -36,6 +36,8 @@
 #           rebake on bpy==4.2.0, Python 3.11); a module need may pin a version; a uv run whose packages uv cannot
 #           provide is SKIP naming them, not FAIL; a row may set env vars (rebake_bpy42 forces
 #           BOZZETTO_TEST_BLENDER=bpy, so it cannot pass on another Blender) (#312)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the uv environment probe has a limit
+#           (UV_PROBE_TIMEOUT_S, a SKIP naming it); set_env goes on after the live vars are hidden, so it survives
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -66,6 +68,7 @@ from pathlib import Path
 # ---- constants -------------------------------------------------------------------------------------------------
 KIT = Path(__file__).resolve().parents[1]
 TIMEOUT_S = 1800              # one exam; the longest offline ones (Wavesmith loudness, Dotwork) take a few minutes
+UV_PROBE_TIMEOUT_S = 1200     # uv building a row's environment: a first bpy download (about 400 MB) on a slow line
 TAIL_LINES = 25               # of a failed exam's output, printed after the table
 UV = [shutil.which("uv")] if shutil.which("uv") else None       # a command prefix, so a test can swap in a fake
 PYTHON_RE = re.compile(r"^3\.\d{1,2}$")
@@ -373,7 +376,12 @@ def uv_cannot_provide(prefix, cache):
     missing wheel (bpy 4.2 has cp311 only) or no network would otherwise fail the exam instead of skipping it."""
     key = ("uv",) + tuple(prefix)
     if key not in cache:
-        r = subprocess.run(prefix + ["-c", "pass"], capture_output=True, encoding="utf-8", errors="replace")
+        try:
+            r = subprocess.run(prefix + ["-c", "pass"], capture_output=True, encoding="utf-8", errors="replace",
+                               timeout=UV_PROBE_TIMEOUT_S)
+        except subprocess.TimeoutExpired:      # a stalled download: a skip naming the limit, never a hung run
+            cache[key] = "no answer within %d s (a stalled download?)" % UV_PROBE_TIMEOUT_S
+            return cache[key]
         lines = [ln.strip() for ln in ((r.stderr or "") + (r.stdout or "")).splitlines() if ln.strip()]
         cache[key] = None if r.returncode == 0 else (lines[-1][:120] if lines else "exit %d" % r.returncode)
     return cache[key]
@@ -415,14 +423,15 @@ def run_one(row, version, opts, cache, hidden_env, first_pass=True):
     if prefix is None:
         return Result(row, SKIP, note)
     cmd = prefix + ["-B", str(KIT / row.path)] + (["-v"] if row.style == "unittest" else [])
-    env = dict(os.environ, PYTHONIOENCODING="utf-8", **row.set_env)
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
     unset = []
     for var in hidden_env:
         if opts.live:
-            if var in row.env and not env.get(var):
+            if var in row.env and not env.get(var) and var not in row.set_env:
                 unset.append(var)
         else:
             env.pop(var, None)
+    env.update(row.set_env)                    # last: a row's forced value survives the live-var hiding
     if unset:
         note = (note + "; " if note else "") + "%s unset: live part skipped" % ", ".join(unset)
     if opts.debug:

@@ -12,6 +12,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): Pro Flash, style images, --quote, pinned last
 #           and end frames (#16)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --end-frame without --directions sends south
 # ---------------------------------------------------------------------------
 import base64
 import contextlib
@@ -933,10 +934,16 @@ class PixelLabExam(unittest.TestCase):
         body = self.sent(fake, "/characters/animations")
         self.assertEqual((body["mode"], body["directions"]), ("pixminimax", ["south"]))
         self.assertEqual(base64.b64decode(body["end_frame"]["base64"]), PNG)
+        # no --directions: -h says a custom mode's default is south, so --end-frame takes south (it was refused
+        # with "needs exactly one direction") and says so in the request
+        fake = Fake()
+        rc, out = self.run_tool("animate-character", "--from", "knight", "--mode", "v3", "--action", "wave",
+                                "--end-frame", "pose.png", "--out", "kd", fake=fake)
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(self.sent(fake, "/characters/animations")["directions"], ["south"])
         (self.root / "big.png").write_bytes(real_png(4, 4))
         for argv, words in ((["--mode", "template", "--template", "walk", "--directions", "south"], "--mode v3 or"),
                             (["--mode", "v3", "--action", "wave", "--directions", "south,east"], "exactly one"),
-                            (["--mode", "v3", "--action", "wave"], "exactly one"),
                             (["--mode", "v3", "--action", "wave", "--directions", "south", "--end-frame", "big.png"],
                              "one size")):
             if "--end-frame" not in argv:

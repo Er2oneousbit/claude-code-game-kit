@@ -24,7 +24,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG colour map stays JPEG, --png (#303)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a coverage a hair under the floor never reads as it;
-#           `make --rebake <name>` is the switch again
+#           `make --rebake <name>` is the switch again; --rebake-png with --no-rebake or vertex colours is refused
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -154,6 +154,14 @@ class RouteDefaults(TripoBase):
         self.assertTrue(cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake", "--rebake-png"]).rebake_png)
         with self.assertRaises(SystemExit), contextlib.redirect_stderr(io.StringIO()):
             cleanup.parse_args(["raw.glb", "--out", "c.glb", "--rebake-png"])   # nothing to bake without --rebake
+        # make's own --rebake-png with nothing to rebake was dropped without a word: refused like cleanup's, before
+        # anything is paid for
+        calls = len(self.fake.calls)
+        rc, out = self.make("--image", "art_src/crate.png", "--rebake-png", "--no-rebake", "--overwrite")
+        self.assertEqual(rc, 2, out)
+        self.assertIn("[error] --rebake-png", out)
+        self.assertIn("--no-rebake", out)
+        self.assertEqual(len(self.fake.calls), calls, "Blender ran before the options were checked")
 
     def test_texture_override_reaches_the_rebake(self):
         rc, out = self.make("--image", "art_src/crate.png", "--texture", "512")
@@ -163,6 +171,16 @@ class RouteDefaults(TripoBase):
 
 
 class LocalDefaults(LocalBase):
+    def test_rebake_png_with_nothing_to_rebake_is_refused(self):
+        """make --rebake-png with --no-rebake or --material vertex was dropped without a word: refused, exit 2."""
+        for flags, says in ((["--no-rebake"], "--no-rebake"), (["--material", "vertex"], "--material vertex")):
+            rc, out = self.run_tool("make", "prop_crate", "--image", "art_src/crate.png", "--seed", "7",
+                                    "--rebake-png", *flags)
+            self.assertEqual(rc, 2, (flags, out))
+            self.assertIn("[error] --rebake-png", out)
+            self.assertIn(says, out)
+        self.assertEqual(self.fake.calls, [], "Blender ran before the options were checked")
+
     def test_a_bare_rebake_before_the_name_is_still_the_switch(self):
         """Until 0.15.1 --rebake was a switch, so `make --rebake <name>` worked; with its optional mode argparse took
         the name for the mode ("invalid choice: 'prop_crate'"). A value that is no mode stays the name."""
