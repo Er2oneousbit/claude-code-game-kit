@@ -210,7 +210,7 @@ EXAMS = [
     Exam("core/tools/bozzetto/test_retarget.py", "animation packs (#205): bone maps and `rig retarget` offline; its Blender part (a made-up pack with Quaternius UAL bone names onto the golden character, about 30 s) runs when Blender or bpy is found",
          covers=("core/tools/bozzetto/", "core/data/golden/character/")),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
-    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; about 5 min) runs when Blender or bpy is found",
+    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; a JPEG metallic-roughness map through the measured gate, smooth and harsh, #313; about 6 min) runs when Blender or bpy is found",
          covers=REBAKE_COVERS),
     Exam("core/tools/bozzetto/test_rebake.py", "the same on the bpy 4.2 floor (#312): its Blender part through the bpy 4.2.0 module, about 1.5 min",
          covers=REBAKE_COVERS, name="rebake_bpy42", set_env={"BOZZETTO_TEST_BLENDER": "bpy"}, **BPY42),

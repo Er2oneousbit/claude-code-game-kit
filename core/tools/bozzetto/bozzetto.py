@@ -46,6 +46,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto, the local route's default (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png; a JPEG colour map stays JPEG (#303)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `rig retarget` (animation packs, #205) and its exam
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png help names the data-map JPEG gate (#313)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -1087,7 +1088,8 @@ def build_parser():
     p.add_argument("--no-rebake", dest="rebake", action="store_const", const="off", help="keep the model's own atlas")
     p.add_argument("--rebake-png", action="store_true",
                    help="the rebake writes every map as PNG (default: a colour map whose source was JPEG, as "
-                        "Tripo's are, stays JPEG; normal and data maps are always PNG): README 'UV coverage'")
+                        "Tripo's are, stays JPEG, a JPEG metallic-roughness map is JPEG when measured under the limits; "
+                        "normal maps are always PNG): README 'UV coverage'")
     p.add_argument("--accept-uv", action="store_true",
                    help="ship a model that fails the UV coverage floor alone (sprite sources, a rebake that lands "
                         "under the floor); the waiver goes on its asset log row")
