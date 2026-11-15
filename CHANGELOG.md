@@ -3,22 +3,64 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
-## 0.15.6 (2026-11-14): no known bugs left: C++ capture formats, the Blender 4.2 floor (#312, #314)
-- **C++ captures in the format their name asks for (#314):** `smoke --screenshot x.png` wrote BMP bytes under a .png
-  name. `.png` now writes PNG (SDL 3.4's `SDL_SavePNG`), `.bmp` writes BMP, any other name is refused before the build
-  (`dev.py`, exit 2) and at startup (the game); `--record` frames, the F8 bug report and the access sweep's frame are
-  PNG like every other engine's. `dev.py` checks the saved file's first bytes, so a game whose `main.cpp` predates the
-  fix is told so. Fixed on the way: the time a capture takes to save was counted in smoke's frame times (a recording's
-  p95 read 34 ms instead of 5).
-- **Blender 4.2 exit crash (#312):** the bpy 4.2 module crashes while the process ends after any glTF import, not
-  only after an export, and `validate_asset.py` was the one Blender script ending with a plain `sys.exit`: its 0 or 1
-  became 0xC0000005, so a rebake on the 4.2 floor reported "validate_asset.py did not finish". It ends through
-  `bpy_common.end_process` now, and so does its exam. `scripts/run_exams.py` gains floor rows on bpy 4.2.0
-  (`validate_asset_bpy42`, `prep_export_bpy42`, `rebake_bpy42`), so the oldest Blender the kit supports is tested on
-  every run; a uv that cannot build an environment is a skip naming the reason, never a fail.
-- **Upgrade notes:** C++ games add `tests/test_capture_format.cpp` to the `unit_tests` list if their `CMakeLists.txt`
-  comes back as `.gold`; a screenshot named other than .png or .bmp is refused; captures that wrote into `build/` in
-  older docs belong in `captures/` (`clean` wipes `build/`).
+## 0.15.6 (2026-11-15): a bug hunt over 0.15, the Display Apply on real windows, smaller rebaked models (#312, #313, #314, #282)
+A review of everything 0.15.0 to 0.15.5 shipped, and live runs of what was marked (verify); every bug found is fixed
+here, each with a test that fails on the old code.
+- **Display Apply, on real windows (#308 follow-ups):** checked in a real window on Godot, LÖVE, C++, Bevy, Unity and
+  Unreal (the OS read back the window's size and style). Fixed:
+  - C++, Bevy, Unity and Unreal saved a trial mode or size while the keep-or-revert confirm was still open, so a game
+    killed on a black screen started in it again (Unreal also wrote GameUserSettings.ini). Now it is saved only once
+    kept; Unreal gets a `display_kept` event.
+  - Back's "not applied" warning vanished (a tab switch, a 3 s timer) while the next Back still discarded; web kept it
+    after the change was undone. It now shows exactly while it applies.
+  - A Controls rebind waiting for a key outlived the confirm's revert (Godot, web): the revert cancels it.
+  - LÖVE: a 1920x1080 setting made a 2400x1350 window at 125 % display scaling; a refused exclusive fullscreen left the
+    confirm over an unchanged window (now it falls back to borderless).
+  - LÖVE and C++: the first run (no settings.json) booted at another size than the setting, so a revert grew the
+    window; the setting now takes the boot window's size.
+  - Bevy: a refused exclusive fullscreen crashed in winit (Windows now asks for borderless); the confirm's overlay was
+    despawned twice a second.
+  - C++ and Bevy: a window larger than the screen ran past its edge; it is fitted to the usable area and centred.
+  - Unreal: window sizes were wrong under default display scaling (1600x900 became 1920x1125); corrected in code.
+  - Unity: `--drive` did nothing in a player build (it does with `--drive` on the command line); with no display modes
+    listed, fullscreen and borderless fall back to a maximized window instead of a titled one.
+  - LÖVE `app:on_look_changed(fn)` returns a function that stops it (listeners leaked across screens).
+- **C++ captures in the format their name asks for (#314):** `.png` writes PNG, `.bmp` BMP, any other name is refused;
+  `--record` frames, the F8 report and the access sweep frame are PNG. The time a capture takes to save no longer
+  counts in smoke's frame times (a recording's p95 read 34 ms instead of 5).
+- **Godot:** an imported Dotwork bitmap font drew scaled and blurred instead of 1:1; `check` now runs a crashed headless
+  import or shader run again (up to 3 runs, said in its output; Godot 4.7.2 crashes there under GPU load).
+- **Dotwork, every engine:** the variant pick walks atlases as listed, as the spec says (Godot, LÖVE, web, web-3d, C++
+  and Unity sorted them by id); a `normal_map` without its optional `size` loads (LÖVE, web-3d and Godot refused it);
+  the validator and spec say map objects are sprites, as the importers do; a tile taller than its cell measures
+  collision from the cell's centre (stated). The golden fixture gains a map with atlases out of id order.
+- **Bozzetto and Blender:**
+  - The rebaked metallic-roughness map is JPEG when its source was, through a measured gate (mean and 99.9th-percentile
+    error per channel, and a lit-render difference, each under a named limit); else PNG. A Tripo character's main
+    .glb went from 9.08 to 6.06 MB (11.51 before #303) (#313).
+  - bpy 4.2 crashed on exit after any glTF import, so `validate_asset.py` lost its exit code on the 4.2 floor; it ends
+    through `bpy_common.end_process`, and so does its exam (#312).
+  - `bozzetto.py make --rebake <name>` broke in 0.15.1 (the optional mode took the name); `--rebake-png` with nothing to
+    rebake is refused; a re-rig refreshes `rig retarget`'s backup; `|` or `;` in a clip or pack name no longer breaks
+    the asset log row; the retarget note holds the rig's clips now instead of piling up; a coverage of 54.97 % no
+    longer reads "55.0 % is under 55 %"; LOD images keep their names at Blender's name length limit.
+- **Other tools:** `dev.py ship --target itch` scanned one folder and pushed another when `--site` was relative;
+  `check_links --baseline` missed a second copy of a known break and misread a baseline saved with a BOM;
+  `pixellab.py animate-character --end-frame` defaults to south as its help says; Dotwork's qa_pack skipped its colour
+  check for a game whose source folder is not `assets_src/`; Unreal `dev.py test` ran stale binaries (it builds a
+  module whose sources are newer first).
+- **Kit tools:** `scripts/run_exams.py --coverage` measures line coverage per file and lists files no exam runs (85.9 %
+  on its first run; Blender scripts are measured too, coverage saving before the bpy exit) (#282); floor rows on bpy
+  4.2.0 test the oldest Blender the kit supports; a uv that cannot build an environment, or stalls, is a skip naming why;
+  Dotwork's audition render gets an exam; the link checker's quadratic-time test checks growth instead of a 5 s clock.
+- **Docs:** the start interview says every engine's importer loads Dotwork art; the game's CLAUDE.md lists `ship`;
+  SOP-19 says a display change is saved only once kept.
+- **Upgrade notes:** C++ games add `tests/test_capture_format.cpp` (and `tests/test_window_fit.cpp`) to `unit_tests` if
+  their `CMakeLists.txt` comes back as `.gold`; a C++ screenshot named other than .png or .bmp is refused. A game whose
+  tests expected a save at Apply of a mode or size now sees it at Keep. Unreal games with their own window code handle
+  `display_kept`; `test` and `smoke` may build first. Bevy's `Cargo.toml` gains two Windows-only dependencies.
+- **Still (verify):** exclusive fullscreen on LÖVE, C++, Bevy, Unity and Unreal, and true Unity borderless: the test
+  machine's Windows session could not change display modes. Unreal's GameUserSettings.ini in a packaged game.
 
 ## 0.15.5 (2026-11-14): bug fixes: still credits, smaller rebaked models, C++ tests that never ran, exams that held under load (#302, #303, #305)
 - **Still credits start at the top (#302):** with reduce motion on, LÖVE and C++ started a CREDITS.md taller than the
