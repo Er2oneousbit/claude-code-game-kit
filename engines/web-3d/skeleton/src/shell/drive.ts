@@ -27,7 +27,7 @@
 //           stands still for the tour (holdTime), so the count is the same on every run of a build, however
 //           long loading takes
 //   display: settings -> Display: mode one step on (staged) -> Back warns -> a step back and on again (the warning
-//           goes with the change) -> Apply -> the confirm (15 s of real
+//           goes with the change) -> Apply -> a rebind on Controls 3 s before the end -> the confirm (15 s of real
 //           time; sooner than 14 s fails) runs out and reverts -> the mode and settings.json are back where they
 //           were -> a second staged change, Back twice: discarded, back on the menu
 //   show  : open one screen, settle, freeze the game (credits: the text at its top, standing still), SHOWN <screen>
@@ -38,7 +38,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 //           and the pseudo tour checks the Display tab's pending, warning and confirm states (#308)
-// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning goes once the mode is stepped back
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning goes once the mode is stepped back,
+//           and a rebind waiting when the confirm reverts is cancelled
 // ---------------------------------------------------------------------------
 import { glyphName, glyphSet, promptBinding } from "../core/bindings";
 import { PSEUDO_LOCALE } from "../core/i18n";
@@ -58,6 +59,7 @@ import { glyphText } from "./ui";
 const WAIT_MS = 8000; // longest wait for one screen
 const CONFIRM_WAIT_MS = 20000; // the display drive's wait for the 15 s confirm to run out (real time)
 const CONFIRM_MIN_MS = 14000; // a revert sooner than this did not count real time
+const CAPTURE_AT_S = 3; // the display drive starts a rebind this close to the revert (a rebind gives up after 6 s)
 const STEP_FRAMES = 2; // frames after each injected press (DOM and layout settle)
 export const DRIVE_PARAM = "drive";
 
@@ -228,7 +230,17 @@ async function display(shell: Shell, d: Driver): Promise<void> {
   if (!st || st.seconds() === null) throw new Error("Apply did not open the keep-or-revert confirm");
   if (shell.top?.menu?.focused?.id !== "confirm.keep") throw new Error("the confirm did not put the focus on Keep");
   Log.info("drive", "DRIVE_DISPLAY applied");
+  // a rebind still waiting for its key when the countdown runs out: the revert redraws the screen, and a capture
+  // left armed would bind the next key the player presses (the rebind prompt is gone by then)
+  await waitFor("the last seconds of the confirm", () => (st.seconds() ?? 0) <= CAPTURE_AT_S, CONFIRM_WAIT_MS);
+  await d.tab("controls");
+  const action = shell.top?.menu?.items.find((i) => i.id.startsWith("action."))?.id;
+  if (!action) throw new Error("the Controls tab has no action to rebind");
+  await d.focus(action);
+  await d.press("ui_accept");
+  if (!shell.input.capturing || st.seconds() === null) throw new Error("the rebind did not start before the revert");
   await waitFor("the confirm to run out", () => st.seconds() === null, CONFIRM_WAIT_MS);
+  if (shell.input.capturing) throw new Error("the revert left a rebind waiting for a key its prompt no longer shows");
   const took = Math.round(performance.now() - start);
   if (took < CONFIRM_MIN_MS) throw new Error(`the confirm reverted after ${took} ms: it is not counting real time`);
   const { settings } = settingsLoad(shell.store.read(SETTINGS_FILE));
@@ -237,6 +249,7 @@ async function display(shell: Shell, d: Driver): Promise<void> {
   }
   Log.info("drive", `DRIVE_DISPLAY reverted ${took} ms`);
   // a second staged change, left unapplied: Back warns, Back again discards it and leaves
+  await d.tab("display");
   await d.focus("display.mode");
   await d.press("ui_right");
   await d.press("ui_cancel");

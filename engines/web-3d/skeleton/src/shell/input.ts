@@ -28,6 +28,7 @@
 //           the machine would otherwise reach the tour). inject() and injectPad() still land.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real devices are not read while a drive runs (#276)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): cancelCapture(), for a screen redrawn under a rebind
 // ---------------------------------------------------------------------------
 import { stick, stickActions, trigger, type Vec2 } from "../core/analog";
 import type { Bindings } from "../core/bindings";
@@ -187,6 +188,11 @@ export class ShellInput {
 
   get capturing(): boolean {
     return this.captureCb !== null;
+  }
+
+  /** Ends a capture as Escape would (its callback gets null): the screen that asked is being redrawn. */
+  cancelCapture(): void {
+    if (this.captureCb) this.finishCapture(null);
   }
 
   /** Presses and releases the action's first binding, as if the player had (smoke driver). */
