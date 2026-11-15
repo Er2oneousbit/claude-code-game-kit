@@ -109,7 +109,9 @@ Turn it on:
 2. In your module's `Build.cs`, add `"GameKitShell"` (and `"Json"` if your code touches `FJsonObject`) to
    `PublicDependencyModuleNames`, then `#include "GameKitShake.h"` and so on.
 3. `python tools/dev.py check`, then `python tools/dev.py test`: it runs your `<Game>` tests and the plugin's `GameKit.*`
-   tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's.
+   tests and prints how many of those passed. `test --filter GameKit` runs only the plugin's. After that, `test` and
+   `smoke` build first by themselves when a C++ source is newer than the module built from it (they ran the old
+   binaries before, so a test edited since the last `check` passed without running).
 
 A Blueprint-only project (no `Source/`) has no `Build.cs`, so skip step 2. `check` then compiles the plugin once through
 the engine's own `UnrealEditor` target (the C++ toolchain from docs/ENGINE.md is needed for that), and `test` runs its
