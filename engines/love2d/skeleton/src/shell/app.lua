@@ -27,6 +27,8 @@
 --           keyboard, mouse and pads go through input:real_* and are ignored there (#276)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): hud_font_size, hud_font and on_look_changed, so a game
 --           HUD follows access.text_scale and display.ui_scale like the menus (#309)
+-- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the windowed size follows Windows display scaling
+--           (App.window_size), and a refused exclusive fullscreen falls back to borderless (#308, seen on a real window)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -228,6 +230,32 @@ function App:bus_volume(bus)
   return self.settings.audio[bus] or 1
 end
 
+-- The window size for display.resolution, in the units love.window uses, or nil when it does not fit the screen.
+-- `desktop` is getDesktopDimensions (the screen's real pixels); `logical` is the screen in window units, which
+-- differ on Windows with display scaling: LÖVE 11 is not DPI-aware there, so the system scales its window (at 125 %,
+-- a 1920x1080 window covered 2400x1350 real pixels of a 1920x1200 screen). The setting means real pixels, as in the
+-- other engines, so the size is divided by that scale.
+function App.window_size(res, desktop, logical)
+  local scale = 1
+  if logical and logical[1] > 0 and logical[2] > 0 then scale = desktop[1] / logical[1] end
+  local w, h = math.floor(res[1] / scale + 0.5), math.floor(res[2] / scale + 0.5)
+  if w > desktop[1] / scale or h > desktop[2] / scale then return nil end
+  return w, h
+end
+
+-- The primary screen in window units on Windows (GetSystemMetrics answers a program that is not DPI-aware in
+-- scaled units), else nil: the window units are the real pixels there.
+local function logical_desktop()
+  if love.system.getOS() ~= "Windows" then return nil end
+  local ok, w, h = pcall(function()
+    local ffi = require("ffi")
+    pcall(ffi.cdef, "int GetSystemMetrics(int nIndex);")   -- a second cdef of the same name errors: ignored
+    return ffi.C.GetSystemMetrics(0), ffi.C.GetSystemMetrics(1)   -- SM_CXSCREEN, SM_CYSCREEN
+  end)
+  if ok and w > 0 and h > 0 then return { w, h } end
+  return nil
+end
+
 -- Window mode, size and vsync. Never in automated runs (the smoke window must stay small and off-screen).
 function App:apply_display()
   if self.kit.automated or not love.window or not love.window.isOpen() then return end
@@ -236,11 +264,14 @@ function App:apply_display()
     if d.mode == "windowed" then
       if love.window.getFullscreen() then love.window.setFullscreen(false) end
       local dw, dh = love.window.getDesktopDimensions()
-      local w, h = d.resolution[1], d.resolution[2]
+      local w, h = App.window_size(d.resolution, { dw, dh }, logical_desktop())
       local cw, ch = love.graphics.getDimensions()
-      if w <= dw and h <= dh and (w ~= cw or h ~= ch) then love.window.updateMode(w, h) end
-    else
-      love.window.setFullscreen(true, d.mode == "fullscreen" and "exclusive" or "desktop")
+      if w and (w ~= cw or h ~= ch) then love.window.updateMode(w, h) end
+    elseif not love.window.setFullscreen(true, d.mode == "fullscreen" and "exclusive" or "desktop") then
+      -- exclusive asks for a video mode of the window's size; when the system refuses (no such mode, or no mode
+      -- changes allowed), LÖVE returns false and the window stayed as it was under the confirm
+      Log.warn("display", d.mode .. " refused by the system: borderless fullscreen instead")
+      love.window.setFullscreen(true, "desktop")
     end
     love.window.setVSync(d.vsync and 1 or 0)
   end)

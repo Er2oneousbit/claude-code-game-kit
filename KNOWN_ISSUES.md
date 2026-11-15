@@ -103,8 +103,6 @@ examples were built and tested on one Windows 11 machine.
 - **Gemini:** Google calls `generateContent` legacy and points to its Interactions API; moving needs a billed live run
   ([#304](https://github.com/Er2oneousbit/claude-code-game-kit/issues/304)). Whether `gemini-3.1-flash-lite-image`
   accepts `imageSize`, and whether image replies are always PNG, are (verify).
-- **Not seen yet:** Unity's isometric showcase framing (#297) passed its bounds test but the scene was not opened on an
-  isometric pack; Bevy's all-`#[ignore]` `[SKIP]` line is tested against cargo's summary format only (verify).
 - **Flaky exam:** `scripts/test_dev_py.py` failed 7 cases once under a Bevy build's CPU load
   ([#305](https://github.com/Er2oneousbit/claude-code-game-kit/issues/305)).
 

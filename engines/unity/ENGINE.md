@@ -147,7 +147,10 @@ ProjectSettings/         project config (text, edit with care)
 - Fonts and UI kits are already drawn at their `scale` by Dotwork: draw them 1:1 (DotworkLabel does).
 - `exec GameKitDotwork.Verify` (and `dev.py test`, `DotworkImportTests.EveryManifestInTheGameLoads`) fails on a missing
   file, a rect outside its image, a stale or broken import. `exec GameKitDotwork.ShowInStarterScene` puts the first
-  map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`.
+  map, a character walking, a prop and a label in the font in `Assets/Scenes/Main.unity`. On an isometric map the
+  camera frames the diamond by its real extent (#297; seen 2026-11-14 on the golden pack's `isle` map in a fresh
+  project: the scene's camera rendered at 16:9 and 1:1 showed the whole diamond centred, with the hero, the crate and
+  the label).
 - Blend `add` uses a built-in particle shader (Built-in pipeline; URP needs its own particle material **(verify)**).
   The golden tests (`dev.py test --filter Dotwork`) read the three fixture maps back from their Tilemaps and compare
   every terrain cell, placed cell and centre with `data/golden/dotwork/expected.json`, both shapes, and load the

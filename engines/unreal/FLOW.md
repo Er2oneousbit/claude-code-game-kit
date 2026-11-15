@@ -182,6 +182,16 @@ focused)**. Wire the game to it:
   `data/golden/shell.json`): Apply sends only the changed fields, mode before resolution, and saves; a new window mode
   or size asks "Keep these display settings?" and puts the old ones back after 15 real seconds (`FPlatformTime`, not
   game time; it runs while the game is paused), on Revert, or on Back. Back with a change not applied warns once.
+  Seen on a real window (2026-11-14, UE 5.8, a standalone `-game` run of a Blueprint-only project, not the editor and
+  not packaged; a 1920x1200 screen at 125 % display scaling; the drive's steps pressed on the live model, the window
+  read back from the OS): Apply of 1600x900 resized the window and Apply of fullscreen took it out of its title bar,
+  and 15.1 s later the countdown put a titled window back. With the engine's default
+  `bAllowHighDPIInGameMode=False` Windows scales the game window, so the sizes are off: 1600x900 became a 1920x1125
+  window, and the revert to 1920x1080 a 1920x1200 one with its title bar above the screen (`UGameUserSettings` clamps
+  to the scaled desktop, 1536x960). With `bAllowHighDPIInGameMode=True` in the Engine.UserInterfaceSettings section
+  in `Config/DefaultEngine.ini` the window was exactly 1600x900 and then 1920x1080, as the setting says: set it if
+  your players use display scaling. Exclusive fullscreen is **(verify)**: that machine refused display mode changes, so
+  fullscreen at 1600x900 gave a 1600x900 window without a title bar in the screen's corner.
 - A game HUD's text: `HudFontSize(Base)` on the subsystem (`HudTextScale()` is `display.ui_scale` times
   `access.text_scale`; both `BlueprintPure`) and `OnHudScaleChanged` when it changes (#309). The shell's own play
   prompt and every menu font go through the model's `HudFontSize`.

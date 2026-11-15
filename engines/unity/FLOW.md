@@ -2,8 +2,14 @@
 
 > Every command below was run against Unity 6000.6.6f1 on Windows (see "Verified" under Mapped to Unity). Items marked
 > **(verify)** were not. The Display tab's Apply (2026-11-13, #308): `smoke --drive display` (the confirm reverted
-> after 15.0 s of real time), `show:apply`, `show:confirm`, `pseudo`, `test` (210 passed); a player window changing
-> mode or size on Apply is untested (the editor and batchmode never touch the window) **(verify)**.
+> after 15.0 s of real time), `show:apply`, `show:confirm`, `pseudo`, `test` (210 passed). In a Windows player
+> (2026-11-14, `dev.py build`, a 1920x1200 screen; the display drive armed in the player, the window's size read back
+> from the OS every 100 ms): Apply of 1600x900 resized the window, and of 2560x1440 gave the largest window the screen
+> takes (1920x1200), and each time the countdown put the 1920x1080 window back after 15.0 s. Fullscreen and borderless
+> on Apply stay **(verify)**: on that machine (a disconnected remote session, which refused display mode changes)
+> Unity logged "Failed to find a valid fullscreen resolution ... trying without exclusive fullscreen mode" for both and
+> made a titled 1920x1200 window. Borderless needs no mode change and worked in the Bevy, C++ and LÖVE windows on the
+> same machine, so why Unity's did not is open.
 
 ## Setup
 1. Create the project in Unity Hub with the editor version you want. Pick the template (2D, 3D, URP) and record it in an ADR.
