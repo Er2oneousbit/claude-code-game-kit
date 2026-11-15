@@ -20,9 +20,14 @@
 #           Tripo's come; its normal map is PNG): the rebaked colour map is JPEG at prep_export.JPEG_QUALITY, the
 #           normal and metallic-roughness maps PNG, the file smaller than with --png, and the colour map still JPEG
 #           in prep_export's main file and LOD; the PNG fixture stays PNG.
+#           #313: two more JPEG fixtures with a metallic-roughness map that varies: a smooth one (a roughness ramp,
+#           a little grain) is written as JPEG at a gated quality with the measurement in the report and stays JPEG
+#           in the LOD; a harsh one (metal or cloth at random per texel, its source saved at quality 100) breaks the
+#           limits at every quality and stays PNG; the constant one stays PNG on size.
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG colour map stays JPEG, --png (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the data-map JPEG gate, smooth and harsh fixtures (#313)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -393,7 +398,7 @@ BUILD = textwrap.dedent('''
         axis = max(range(3), key=lambda i: abs(n[i]))
         return ("+" if n[axis] > 0 else "-") + "XYZ"[axis]
 
-    def image(name, px, data, fill, jpeg=False):
+    def image(name, px, data, fill, jpeg=False, quality=90):
         img = bpy.data.images.new(name, px, px, alpha=False, is_data=data)
         img.colorspace_settings.name = "Non-Color" if data else "sRGB"
         buf = [0.0] * (px * px * 4)
@@ -405,7 +410,7 @@ BUILD = textwrap.dedent('''
             path = out_dir + "/" + name + ".jpg"
             img.filepath_raw = path
             img.file_format = "JPEG"
-            img.save(quality=90)
+            img.save(quality=quality)
             img = bpy.data.images.load(path)
             img.colorspace_settings.name = "Non-Color" if data else "sRGB"
         img.pack()
@@ -415,7 +420,16 @@ BUILD = textwrap.dedent('''
         # a fixed pseudo-random +-0.04 per texel: detail a photo-like colour map has, which PNG stores poorly
         return (((x * 73856093) ^ (y * 19349663)) % 1009) / 1009 * 0.08 - 0.04
 
-    def build(n_cubes, path, jpeg=False):
+    def smooth_mr(x, y):
+        # #313: a roughness ramp and a little metal, with mild grain: a data map JPEG keeps under the limits
+        return (1.0, 0.3 + 0.5 * x / 256 + speckle(x, y) / 4, 0.1 + 0.2 * y / 256)
+
+    def harsh_mr(x, y):
+        # #313: metal or cloth at random per texel (saved at JPEG quality 100, so the source keeps it): the worst
+        # case for JPEG's 8x8 blocks and 4:2:0 chroma
+        return (1.0, 0.5, float(((x * 73856093) ^ (y * 19349663)) % 7 < 3))
+
+    def build(n_cubes, path, jpeg=False, orm_fill=None):
         bpy.ops.wm.read_factory_settings(use_empty=True)
         objs = []
         for k in range(n_cubes):
@@ -440,7 +454,8 @@ BUILD = textwrap.dedent('''
                                                                          COLOURS[(x // (px // 2), y // (px // 2))]), True)
         else:
             base = image("fixture_base", px, False, lambda x, y: COLOURS[(x // (px // 2), y // (px // 2))])
-        orm = image("fixture_orm", px, True, lambda x, y: (1.0, 0.6, 0.2), jpeg)
+        orm = image("fixture_orm", px, True, orm_fill or (lambda x, y: (1.0, 0.6, 0.2)), jpeg,
+                    100 if orm_fill is harsh_mr else 90)
         nrm = image("fixture_normal", px, True, lambda x, y: (0.5, 0.5, 1.0))
         mat = bpy.data.materials.new("fixture_mat"); mat.use_nodes = True
         nodes, links = mat.node_tree.nodes, mat.node_tree.links
@@ -459,6 +474,8 @@ BUILD = textwrap.dedent('''
     build(1, out_dir + "/fixture.glb")
     build(2, out_dir + "/two.glb")
     build(1, out_dir + "/fixture_jpeg.glb", jpeg=True)
+    build(1, out_dir + "/fixture_mr_smooth.glb", jpeg=True, orm_fill=smooth_mr)
+    build(1, out_dir + "/fixture_mr_harsh.glb", jpeg=True, orm_fill=harsh_mr)
 ''')
 
 # the probe: every face's colour from the base image at its UV centre against the quadrant its direction names;
@@ -544,9 +561,11 @@ class RealRebake(unittest.TestCase):
         (cls.d / "build.py").write_text(BUILD + END, encoding="utf-8")
         (cls.d / "probe.py").write_text(PROBE + END, encoding="utf-8")
         p = blender_run(cls.d / "build.py", [cls.d, str(bz.TOOLS / "blender")])
-        assert p.returncode == 0 and p.stdout.count("BUILT") == 3, p.stdout[-2000:] + p.stderr[-2000:]
+        assert p.returncode == 0 and p.stdout.count("BUILT") == 5, p.stdout[-2000:] + p.stderr[-2000:]
         cls.fixture = cls.d / "fixture.glb"
         cls.fixture_jpeg = cls.d / "fixture_jpeg.glb"
+        cls.fixture_mr_smooth = cls.d / "fixture_mr_smooth.glb"
+        cls.fixture_mr_harsh = cls.d / "fixture_mr_harsh.glb"
 
     @classmethod
     def tearDownClass(cls):
@@ -671,6 +690,9 @@ class RealRebake(unittest.TestCase):
         fmt = {m["source"]: (m["format"], m["quality"]) for m in rep["maps"]}
         self.assertEqual(fmt, {"fixture_base": ("JPEG", 90), "fixture_orm": ("PNG", None),
                                "fixture_normal": ("PNG", None)})
+        # #313: the constant metallic-roughness map went through the gate and stayed PNG on size (a flat PNG is tiny)
+        gate = next(m for m in rep["maps"] if m["source"] == "fixture_orm")["gate"]
+        self.assertIn("not under the PNG", gate["tried"][-1]["over"][-1], gate)
         self.assertEqual(rep["bake"]["jpeg_quality"], 90)
         self.assertIn("JPEG 90", rebake.rebake_line(rep), "the evidence line names the format")
         self.assertLessEqual(rep["check"]["mean_levels"], 4.0, "the JPEG colour map still matches the original")
@@ -690,6 +712,67 @@ class RealRebake(unittest.TestCase):
         lod = export.with_name("rebaked_jpeg_LOD1.glb")
         self.assertEqual(map_mimes(lod), {"base": "image/jpeg", "orm": "image/png", "normal": "image/png"})
         self.assertLess(lod.stat().st_size, export.stat().st_size)
+
+    def gated(self, fixture, tag, *extra, px=512):
+        """rebake_uvs.py on a fixture at px -> (out .glb, report, the metallic-roughness map's entry)."""
+        out = self.d / f"{tag}.glb"
+        rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "rebake_uvs.py",
+                              [fixture, "--out", out, "--texture", str(px), "--json", self.d / f"{tag}.json",
+                               "--overwrite", *extra], "rebake")
+        self.assertEqual(rc, 0, text)
+        rep = json.loads((self.d / f"{tag}.json").read_text(encoding="utf-8"))
+        return out, rep, next(m for m in rep["maps"] if m["source"] == "fixture_orm")
+
+    def test_a_jpeg_metallic_roughness_map_under_the_limits_stays_jpeg(self):
+        """#313: Tripo's metallic-roughness map is a JPEG too, and the rebake wrote it back as PNG (3.3 MB of a
+        character's 9.1 MB main file). A smooth one is measured against its baked PNG (texel errors on the channels
+        the material reads, lit renders) and written as JPEG at the first quality under the limits; the record holds
+        the measurement; prep_export keeps it JPEG in the LOD; --png still writes PNG."""
+        out, rep, orm = self.gated(self.fixture_mr_smooth, "mr_smooth")
+        self.assertEqual(rep["bake"]["data_jpeg"], {"qualities": [80, 85, 90, 95], "mean_limit": 2.0,
+                                                    "p999_limit": 24.0, "lit_limit": 0.5})
+        self.assertEqual(map_mimes(self.fixture_mr_smooth)["orm"], "image/jpeg", "the fixture's map is a JPEG")
+        self.assertEqual(map_mimes(out), {"base": "image/jpeg", "orm": "image/jpeg", "normal": "image/png"})
+        self.assertEqual(orm["format"], "JPEG")
+        gate = orm["gate"]
+        self.assertEqual(gate["channels"], {"1": "roughness", "2": "metallic"}, "what the material reads")
+        last = gate["tried"][-1]
+        self.assertEqual(orm["quality"], last["quality"])
+        self.assertIn(orm["quality"], (80, 85, 90, 95))
+        self.assertEqual(last["over"], [])
+        for name in ("roughness", "metallic"):
+            self.assertLessEqual(last["errors"][name]["mean"], 2.0, last)
+            self.assertLessEqual(last["errors"][name]["p999"], 24.0, last)
+            self.assertIn("max", last["errors"][name])
+        self.assertLessEqual(last["lit"]["mean_levels"], 0.5, last)
+        self.assertLess(last["bytes"], gate["png_bytes"])
+        for earlier in gate["tried"][:-1]:     # a lower quality was tried first and refused for a reason
+            self.assertTrue(earlier["over"], earlier)
+        self.assertIn(f"JPEG {orm['quality']}", rebake.rebake_line(rep))
+        self.assertLessEqual(rep["check_lit"]["mean_levels"], 8.0)
+        png, rep_png, orm_png = self.gated(self.fixture_mr_smooth, "mr_smooth_png", "--png")
+        self.assertEqual(map_mimes(png)["orm"], "image/png", "--png")
+        self.assertNotIn("gate", orm_png)
+        self.assertIsNone(rep_png["bake"]["data_jpeg"])
+        self.assertLess(out.stat().st_size, png.stat().st_size)
+        export = self.d / "export_mr" / "mr_smooth.glb"
+        rc, text = bz.run_bpy(BLENDER, bz.TOOLS / "blender" / "prep_export.py",
+                              [out, "--out", export, "--lods", "0.5", "--no-validate", "--overwrite"], "prep_export")
+        self.assertEqual(rc, 0, text)
+        self.assertEqual(map_mimes(export)["orm"], "image/jpeg")
+        self.assertEqual(map_mimes(export.with_name("mr_smooth_LOD1.glb"))["orm"], "image/jpeg")
+
+    def test_a_jpeg_metallic_roughness_map_over_the_limits_stays_png(self):
+        """#313: metal and cloth alternating every texel break JPEG at every quality (4:2:0 chroma, 8x8 blocks): the
+        gate refuses each quality and names the limit it broke, and the map stays PNG."""
+        out, rep, orm = self.gated(self.fixture_mr_harsh, "mr_harsh", "--no-check", px=256)
+        self.assertEqual(map_mimes(out)["orm"], "image/png")
+        self.assertEqual((orm["format"], orm["quality"]), ("PNG", None))
+        tried = orm["gate"]["tried"]
+        self.assertTrue(tried)
+        for t in tried:
+            self.assertTrue(any("metallic" in o for o in t["over"]), t)
+        self.assertGreater(tried[0]["errors"]["metallic"]["mean"], 2.0)
 
     def test_the_subcommand_on_a_real_model(self):
         root = self.d / "game"
