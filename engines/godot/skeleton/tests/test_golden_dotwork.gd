@@ -610,6 +610,17 @@ func test_broken_references_are_problems() -> void:
 	assert_eq(DotworkAssets.verify(m).size(), 2, "verify() names them")
 
 
+# The schema makes a normal map's size optional (image, target, convention are required): a manifest without it is
+# valid, so it must load (it was a fatal "field 'size' is missing" for the whole manifest).
+func test_normal_map_without_a_size_loads() -> void:
+	var m: Dictionary = DotworkManifest.parse(_doc({"assets": [{"kind": "normal_map", "name": "n",
+			"image": "art/n.png", "target": "art/t.png", "convention": "opengl"}]}), "res://assets/dotwork/t.assets.json")
+	assert_false(m.has("error"), str(m.get("error", "")))
+	if not m.has("error"):
+		assert_eq(m["normal_map"]["n"]["size"], null)
+		assert_eq(m["normal_map"]["n"]["image"], "res://assets/art/n.png")
+
+
 func test_paths_never_leave_the_game_folder() -> void:
 	var m: Dictionary = DotworkManifest.parse(_doc({"assets": [
 		{"kind": "icon", "name": "i", "sizes": [{"size": 8, "image": "../../x.png"}]}]}), "res://assets/dotwork/t.json")
