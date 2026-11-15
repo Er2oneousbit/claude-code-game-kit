@@ -19,11 +19,14 @@
 #           from (the pack's row id when the pack's path has one). Run it before `rig chain`: a chain's sway is keyed
 #           into the clips the file has when the chain is made.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the backup is written again when the rig changed since
+#           the last retarget wrote it (a `rig make` re-run), as `rig chain` does; it kept the old rig's skeleton
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
 #   options (clip list) -> <name>_rigged.glb exists -> the pack exists -> Blender found
-#   first run: copy the rig to before_retarget.glb -> rig_retarget.py pack --onto rig -> retargeted.glb + report
+#   first run, or the rig changed since the last retarget wrote it (a re-rig): copy the rig to before_retarget.glb
+#   -> rig_retarget.py pack --onto rig -> retargeted.glb + report
 #   failed: say why, replace nothing -> ok: replace the rig (unless --no-replace), record retarget.json (a history
 #   of runs), note the clips in the model's ASSET_LOG row, warn when the pack has no row of its own
 import json
@@ -67,6 +70,19 @@ def resolve(args):
     if pack.suffix.lower() not in (".glb", ".gltf", ".fbx"):
         raise bz.ToolError(f"--from {pack.name}: a .glb, .gltf or .fbx")
     return root, dst, pack.resolve(), root / bz.SRC_ROOT / args.name / "rig" / "retarget"
+
+
+def refresh_backup(root, dst, backup, record):
+    """True when the backup must be (re)written from the rig: there is none yet, or the rig is neither the backup
+    nor the file the last retarget wrote (a `rig make` since replaced it: the old backup is another skeleton's,
+    chain.py's pick_base does the same)."""
+    if not backup.is_file():
+        return True
+    cur = bz.sha256_bytes(dst.read_bytes())
+    if cur == bz.sha256_bytes(backup.read_bytes()):
+        return False
+    wrote = [r for r in record.get("runs", []) if isinstance(r, dict) and r.get("output") == bz.rel(root, dst)]
+    return not (wrote and wrote[-1].get("output_sha256") == cur)
 
 
 def log_rows(text):
@@ -127,7 +143,7 @@ def cmd_rig_retarget(args):
         old = json.loads(rec_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         old = {}
-    if not (work / BACKUP).is_file():
+    if refresh_backup(root, dst, work / BACKUP, old):
         shutil.copyfile(dst, work / BACKUP)
     out, report, sheet = work / "retargeted.glb", work / "retarget_report.json", work / "clips.png"
     for stale in (out, report, sheet):
