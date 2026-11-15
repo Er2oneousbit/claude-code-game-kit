@@ -33,7 +33,7 @@ Formatting: `cargo fmt` fixes what `check` complains about.
 | dev.py | What it runs |
 |---|---|
 | `check` | `cargo fmt --check`, then `cargo clippy --all-targets` (or `cargo check` without clippy) |
-| `test` | `cargo test --no-run` (shows compile progress), then `cargo test`; counts the `test result` lines |
+| `test` | `cargo test --no-run` (shows compile progress), then `cargo test`; counts the `test result` lines. When every test is `#[ignore]`d it prints `[SKIP] all N test(s) ignored (#[ignore]), none ran (exit 2): <the first reason>` (#295; run for real 2026-11-14 on a scaffold with all its tests ignored: 156 ignored, exit 2, the reason shown) |
 | `smoke` | `cargo build`, then `cargo run -- --smoke N [--screenshot F] [--record D] -- --data-dir build/smoke-data [--drive X] [--locale L] [game options]`; needs `BOOT_OK` and `SMOKE_DONE` (and `DRIVE_DONE` with a drive), fails on ` ERROR ` lines, `panicked at` and a non-zero exit; echoes the drives' proof lines (`SETTINGS_WRITTEN`, `CRASH_WRITTEN`, `PSEUDO_*`, `DRIVE_*`, `ACCESS_*`); a panic names its crash file |
 | `build` | `cargo build --release`, prints the exe path |
 | `run` | `cargo build`, then `cargo run [-- game options]` |
