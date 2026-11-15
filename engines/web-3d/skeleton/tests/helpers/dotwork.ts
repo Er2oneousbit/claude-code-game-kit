@@ -104,7 +104,7 @@ export function checkPackFiles(manifestPath: string, pack: PackDef, doc = JSON.p
   const sized: [string, string, Point][] = [
     ...[...pack.backgrounds.values()].flatMap((b) => b.layers.map((L, i): [string, string, Point] => [`background/${b.name}.layers[${i}]`, L.image, L.size])),
     ...[...pack.transitions.values()].map((t): [string, string, Point] => [`transition/${t.name}`, t.image, t.size]),
-    ...[...pack.normalMaps.values()].map((n): [string, string, Point] => [`normal_map/${n.name}`, n.image, n.size]),
+    ...[...pack.normalMaps.values()].filter((n) => n.size).map((n): [string, string, Point] => [`normal_map/${n.name}`, n.image, n.size!]),
     ...[...pack.pictures.values()].map((p): [string, string, Point] => [`image/${p.name}`, p.image, p.size]),
   ];
   for (const [where, image, want] of sized) {

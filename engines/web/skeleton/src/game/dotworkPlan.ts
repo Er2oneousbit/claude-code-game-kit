@@ -31,6 +31,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick, stamps layers, cell centres and placement, the extra kinds loaded
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
 // ---------------------------------------------------------------------------
 
 export const FORMAT = "dotwork-assets";
@@ -702,10 +703,10 @@ class Planner {
       const mode = ts.terrainSets.find((s) => s.id === set)?.mode;
       if (!mode || !ts.terrainSets.find((s) => s.id === set)?.terrains.some((t) => t.id === id)) throw new DotworkError(`${where}: terrain ${set}/${id} is not in tileset ${ts.name}`);
       out.terrain = { set, id, mode };
-      // the candidates per key: this terrain's tiles with that key, in atlas order (atlases by id, tiles in list order)
+      // the candidates per key: this terrain's tiles with that key, in atlas order (atlases as listed, never sorted
+      // by id; tiles in list order): ts.tiles is in exactly that order
       const byKey = new Map<number, [number, PlanTile][]>();
-      const ordered = [...ts.tiles].sort((p, q) => p.atlas - q.atlas); // a stable sort keeps the list order within an atlas
-      for (const t of ordered) {
+      for (const t of ts.tiles) {
         if (t.terrain !== id || (t.terrainSet ?? 0) !== set) continue;
         const k = tileKey(t, mode, ts.shape);
         if (k === null) continue;

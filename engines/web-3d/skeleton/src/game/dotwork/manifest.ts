@@ -31,6 +31,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick, the isometric centre, stamps layers, left/top per cell, the extra kinds loaded
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by
+//           id; a normal map's size is optional, as in the schema
 // ---------------------------------------------------------------------------
 
 // ---- Constants -----------------------------------------------------------------
@@ -295,7 +297,7 @@ export interface TransitionDef {
 export interface NormalMapDef {
   name: string;
   image: string;
-  size: Point;
+  size: Point | null; // optional in the schema (image, target and convention are required)
   target: string;
   convention: string;
 }
@@ -438,13 +440,13 @@ export function pickVariant<T>(candidates: [number, T][], roll: number): T {
 }
 
 /** Each painted cell of a terrain layer (by y, then x) with its key and pick: among the layer's terrain's tiles
- *  with that key, in atlas order (atlases by id, tiles in list order), by probability with cellRoll(x, y,
+ *  with that key, in atlas order (atlases as listed, never sorted by id; tiles in list order), by probability with cellRoll(x, y,
  *  layerIndex) (assetspec.resolve_terrain). */
 export function resolveTerrain(ts: TilesetDef, terrainSet: number, terrain: number, cells: Point[], layerIndex = 0): TerrainCell[] {
   const set = ts.terrainSets.find((s) => s.id === terrainSet);
   if (!set) throw new DotworkError(`tileset ${ts.name}: no terrain set ${terrainSet}`);
   const byKey = new Map<number, [number, [number, number, number]][]>();
-  for (const at of [...ts.atlases].sort((a, b) => a.id - b.id)) {
+  for (const at of ts.atlases) {
     for (const t of at.tiles) {
       if (t.terrain !== terrain || (t.terrainSet ?? 0) !== terrainSet) continue;
       const k = tileKey(t, set.mode, ts.shape);
@@ -766,7 +768,8 @@ export function importManifest(doc: unknown, manifestUrl: string, warn: (msg: st
         break;
       case "normal_map":
         pack.normalMaps.set(name, {
-          name, image: dataImage(a.image, at), size: pair(a.size, `${at}.size`), target: image(a.target, `${at}.target`),
+          name, image: dataImage(a.image, at), size: a.size == null ? null : pair(a.size, `${at}.size`),
+          target: image(a.target, `${at}.target`),
           convention: String(a.convention ?? "opengl"),
         });
         break;
