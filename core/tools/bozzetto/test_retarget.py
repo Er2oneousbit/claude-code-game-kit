@@ -26,7 +26,7 @@
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a re-rig refreshes the backup, a chain does not;
-#           a new clip name with '|' or ';' is refused
+#           a new clip name with '|' or ';' is refused, a pack's clip or path with them keeps the log row whole
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -175,7 +175,7 @@ class CliExam(unittest.TestCase):
         argv = [str(a) for a in argv]
         self.calls.append(argv)
         self.assertEqual(Path(script).name, "rig_retarget.py")
-        rep = {"map": "ual", "clips": {"walk_ual": {"from": "Walk_Loop", "frames": 24}},
+        rep = {"map": "ual", "clips": {"walk_ual": {"from": getattr(self, "src_clip", "Walk_Loop"), "frames": 24}},
                "clips_in_file": ["idle", "walk", "walk_ual"],
                "failures": [] if self.rc == 0 else ["the pack and the target face different ways"]}
         if self.rc == 0:
@@ -274,6 +274,21 @@ class CliExam(unittest.TestCase):
         code, out = self.retarget()
         self.assertEqual(code, 0, out)
         self.assertEqual((self.work / rt.BACKUP).read_bytes(), b"glTF-rigged-v1")
+
+    def test_a_pack_clip_or_path_with_table_characters_keeps_the_log_row_whole(self):
+        """The pack's clip name and path come from outside: a '|' in them added a cell to the model's asset log row,
+        a ';' split the retarget note in two (the notes are split on it)."""
+        odd = self.root / "assets_src" / "packs" / "odd;pack.glb"
+        odd.write_bytes(b"glTF-pack-3")
+        self.src_clip = "Walk;Fast|2"
+        code, out = self.retarget(pack="assets_src/packs/odd;pack.glb")
+        self.assertEqual(code, 0, out)
+        log = (self.root / "docs" / "ASSET_LOG.md").read_text(encoding="utf-8")
+        row = [l for l in log.splitlines() if l.startswith("| A-0002")][0]
+        self.assertEqual(len(row.split("|")), len(LOG.splitlines()[-1].split("|")), row)
+        notes = [n.strip() for n in row.split("|")[-2].split(";")]
+        self.assertEqual(sum(n.startswith(rt.NOTE_PREFIX) for n in notes), 1, notes)
+        self.assertTrue(notes[-1].startswith(rt.NOTE_PREFIX) and "as walk_ual from" in notes[-1], notes)
 
     def test_a_refused_transfer_and_no_replace_leave_the_model_alone(self):
         self.rc = 1

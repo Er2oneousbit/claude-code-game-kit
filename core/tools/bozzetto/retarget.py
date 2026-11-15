@@ -20,7 +20,8 @@
 #           into the clips the file has when the chain is made.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the backup is written again after a `rig make` re-run
-#           (rig.json's hash differs from the one retarget.json kept): it kept the old rig's skeleton
+#           (rig.json's hash differs from the one retarget.json kept): it kept the old rig's skeleton; a pack clip
+#           name or path holding '|' or ';' no longer breaks the model's asset log row
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -100,6 +101,11 @@ def log_rows(text):
     return out
 
 
+def cell_text(text):
+    """A note safe for one ASSET_LOG Notes cell: '|' would start a new table cell, ';' a new note."""
+    return text.replace("|", "/").replace(";", ",")
+
+
 def note_in_log(root, log_path, dst, pack_ref, clips, record_rel):
     """Add (or extend) 'retarget: ...' in the Notes cell of the model's ASSET_LOG row; no row, no change."""
     text = log_path.read_text(encoding="utf-8")
@@ -111,7 +117,8 @@ def note_in_log(root, log_path, dst, pack_ref, clips, record_rel):
             continue
         notes = [n.strip() for n in cells[-2].split(";") if n.strip()]
         what = ", ".join(f"{c['from']} as {name}" for name, c in clips.items())
-        notes.append(f"{NOTE_PREFIX}{what} from {pack_ref}, record `{record_rel}`")   # no ';': notes split on it
+        # no '|' (a table cell) or ';' (the notes split on it): the pack's clip names and path come from outside
+        notes.append(cell_text(f"{NOTE_PREFIX}{what} from {pack_ref}, record `{record_rel}`"))
         cells[-2] = " " + "; ".join(notes) + " "
         lines[i] = "|".join(cells) + line[len(line.rstrip("\r\n")):]
         log_path.write_bytes("".join(lines).encode("utf-8"))
