@@ -16,15 +16,19 @@
 #             current interpreter when uv is not installed (a release runs the oldest supported Python this way)
 #           - the live exams (a real REAPER, Aseprite, Pixelorama, ComfyUI/TRELLIS, a Blender Cycles render) run
 #             only with --live; without it their env vars are hidden from the exams so nothing live runs by accident
+#           - `--coverage` (#282) runs every exam under Python's coverage module (7.10+, its own subprocesses too:
+#             `[run] patch = subprocess`; uv rows get it through --with), then prints each file's line coverage under
+#             core/tools and scripts and the files no exam executes; without coverage it is a [SKIP] naming it
 # Usage   : python scripts/run_exams.py                       # the default set on this Python
 #           python scripts/run_exams.py --python 3.8,3.14     # once per version through uv
 #           python scripts/run_exams.py --only doctor --only new_game
 #           python scripts/run_exams.py --changed main        # just the exams for files changed since that ref
 #           python scripts/run_exams.py --live --jobs 4
 #           python scripts/run_exams.py --list                # the table: name, path, needs, note
+#           uv run --with coverage python scripts/run_exams.py --coverage   # what no exam executes
 # Exit    : 0 every exam that ran passed (skips are fine), 1 an exam failed or timed out, 2 a setup problem
 #           (unknown --only name, bad --changed ref, bad --python)
-# Notes   : Standard library only, Python 3.8+. A kit maintainer's tool: it does not ship into games. Runs from any
+# Notes   : Standard library only, Python 3.8+ (`--coverage` alone needs the coverage module). A kit maintainer's tool: it does not ship into games. Runs from any
 #           folder (the kit is found from this file); the exams themselves run from the kit root, as CLAUDE.md
 #           gives them. The Dotwork lane exams (test_uikit, test_pixelorama, ...) are loaded by test_dotwork.py,
 #           so they have no row of their own; `wavesmith.py test` is the same set as the Wavesmith rows.
@@ -38,6 +42,7 @@
 #           BOZZETTO_TEST_BLENDER=bpy, so it cannot pass on another Blender) (#312)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the uv environment probe has a limit
 #           (UV_PROBE_TIMEOUT_S, a SKIP naming it); set_env goes on after the live vars are hidden, so it survives
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --coverage, the files no exam executes (#282)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -53,6 +58,8 @@
 #       exit 0 -> OK (SKIP when the exam printed a [SKIP] line); exit 2 with declared needs -> SKIP; else FAIL
 #       count unique test names (unittest rows) or [PASS]/[FAIL]/[ OK ] case lines (cases rows)
 #   print the failed exams' output tails and a summary line per Python; exit 1 if anything failed
+#   --coverage: each exam as `-m coverage run --rcfile <temp>` -> combine -> json -> per-file lines, then every
+#     shipped .py under core/tools and scripts with no executed line (Blender scripts marked) -> temp folder removed
 import argparse
 import concurrent.futures
 import fnmatch
@@ -74,6 +81,7 @@ UV = [shutil.which("uv")] if shutil.which("uv") else None       # a command pref
 PYTHON_RE = re.compile(r"^3\.\d{1,2}$")
 MODULES = {"pillow": "PIL", "numpy": "numpy", "bpy": "bpy"}     # pip name -> import name
 PIN_RE = re.compile(r"[=<>!~;\[].*$")                              # "bpy==4.2.0" -> "bpy" (the name part)
+COVERAGE_MIN = (7, 10)       # --coverage: `[run] patch = subprocess` (an exam's own subprocesses measured) is 7.10+
 BPY_FLOOR = "4.2.0"           # the oldest bpy bpy_common.py supports (Blender 4.2 LTS); its wheels are cp311 only
 # unittest's verbose line, on 3.8 ("test_x (mod.Class) ... ok") and 3.11+ ("test_x (mod.Class.test_x) ... ok");
 # with a docstring the "... ok" is on the next line, so only the name part is matched
@@ -213,7 +221,7 @@ EXAMS = [
     Exam("core/tools/bozzetto/test_retarget.py", "animation packs (#205): bone maps and `rig retarget` offline; its Blender part (a made-up pack with Quaternius UAL bone names onto the golden character, about 30 s) runs when Blender or bpy is found",
          covers=("core/tools/bozzetto/", "core/data/golden/character/")),
     Exam("core/tools/bozzetto/test_reference.py", "reference views: stand-in ComfyUI, Gemini and Tripo; caps, journal reuse, failures, the PNG reader"),
-    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; about 5 min) runs when Blender or bpy is found",
+    Exam("core/tools/bozzetto/test_rebake.py", "the UV rebake (#293, #203): make's --rebake/--rebake auto/--accept-uv/--rebake-png and `rebake <name>` offline; its Blender part (a tiny-island cube rebaked, checked and kept over the floor; a JPEG-textured one keeps a JPEG colour map, #303; a JPEG metallic-roughness map through the measured gate, smooth and harsh, #313; about 6 min) runs when Blender or bpy is found",
          covers=REBAKE_COVERS),
     Exam("core/tools/bozzetto/test_rebake.py", "the same on the bpy 4.2 floor (#312): its Blender part through the bpy 4.2.0 module, about 1.5 min",
          covers=REBAKE_COVERS, name="rebake_bpy42", set_env={"BOZZETTO_TEST_BLENDER": "bpy"}, **BPY42),
@@ -308,6 +316,111 @@ def untracked_exams(kit=None, rows=None):
     return sorted(found)
 
 
+# ---- coverage (--coverage, #282) ---------------------------------------------------------------------------------
+def coverage_version(interpreter=None):
+    """The coverage module's version on the interpreter as a tuple, or None when it is not installed."""
+    r = subprocess.run([interpreter or sys.executable, "-c", "import coverage; print(coverage.__version__)"],
+                       capture_output=True, encoding="utf-8", errors="replace")
+    if r.returncode != 0:
+        return None
+    nums = re.findall(r"\d+", r.stdout.strip())
+    return tuple(int(n) for n in nums[:3]) if nums else None
+
+
+def coverage_rc(folder, kit=None):
+    """Write the coverage settings every exam runs with and return the file's path: parallel data files in folder
+    (never the tree), subprocess measurement (an exam that starts the tool it tests), and [paths] that fold a copy
+    of a tool back onto the kit's file: many exams scaffold a project in a temp folder and run its tools/ copy of
+    core/tools (a first run without them listed the SessionStart hook, ship.py and sync_examples.py as never
+    executed). No `source`: it would leave those copies out; the report keeps the kit's files only."""
+    kit = kit or KIT
+    rc = Path(folder) / "coveragerc"
+    rc.write_text("[run]\nparallel = True\ndata_file = %s\npatch = subprocess\n"
+                  "disable_warnings = no-data-collected, module-not-measured, couldnt-parse\n"
+                  "[paths]\ncore_tools =\n    %s\n    */tools/\nscripts =\n    %s\n    */scripts/\n"
+                  % (Path(folder) / ".coverage", str(kit / "core" / "tools") + os.sep, str(kit / "scripts") + os.sep),
+                  encoding="utf-8")
+    return rc
+
+
+def coverage_json(folder, rc, kit=None):
+    """Combine the data files and return coverage's JSON report as a dict (None when nothing was measured)."""
+    kit = kit or KIT
+    out = Path(folder) / "coverage.json"
+    kw = dict(cwd=str(kit), capture_output=True, encoding="utf-8", errors="replace")
+    subprocess.run([sys.executable, "-m", "coverage", "combine", "--rcfile", str(rc)], **kw)
+    r = subprocess.run([sys.executable, "-m", "coverage", "json", "--rcfile", str(rc), "-o", str(out),
+                        "--ignore-errors"], **kw)
+    if r.returncode != 0 or not out.is_file():
+        return None
+    import json
+    return json.loads(out.read_text(encoding="utf-8"))
+
+
+def shipped_files(kit=None):
+    """The .py files under the exam roots that are not exams themselves (test_*.py, tests/ folders), kit-relative."""
+    kit = kit or KIT
+    out = []
+    for root in EXAM_ROOTS:
+        for p in (kit / root).rglob("*.py"):
+            rel = p.relative_to(kit).as_posix()
+            if p.name.startswith("test_") or "/tests/" in "/" + rel or "/__pycache__/" in rel:
+                continue
+            out.append(rel)
+    return sorted(out)
+
+
+def blender_only(path):
+    """True for a script that imports bpy (at the top or inside a function): it runs inside a Blender executable,
+    where the exams' coverage does not reach, or through the bpy module, whose process bpy_common.end_process ends
+    with TerminateProcess on Windows (#312), before coverage writes its data: neither run is measured."""
+    try:
+        text = Path(path).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return bool(re.search(r"^[ \t]*(?:import bpy\b|from bpy\b)", text, re.M))
+
+
+def coverage_report(data, kit=None):
+    """(rows, never) from coverage's JSON: rows = [(rel, executed, statements)] for every shipped file it measured,
+    never = [(rel, why)] for shipped files no exam executed a line of (why: "blender" for a Blender script, "" else)."""
+    kit = kit or KIT
+    measured = {}
+    for name, info in ((data or {}).get("files") or {}).items():
+        p = Path(name)
+        p = p if p.is_absolute() else kit / p
+        try:
+            rel = p.resolve().relative_to(kit.resolve()).as_posix()
+        except ValueError:
+            continue
+        s = info.get("summary", {})
+        measured[rel] = (int(s.get("covered_lines", 0)), int(s.get("num_statements", 0)))
+    rows, never = [], []
+    for rel in shipped_files(kit):
+        done, total = measured.get(rel, (0, None))
+        if total is not None:
+            rows.append((rel, done, total))
+        if not done and total != 0:
+            never.append((rel, "blender" if blender_only(kit / rel) else ""))
+    return rows, never
+
+
+def print_coverage(rows, never):
+    total = sum(t for _, _, t in rows)
+    done = sum(d for _, d, _ in rows)
+    print("== coverage: lines executed per file (core/tools, scripts; exams themselves left out) ==")
+    for rel, d, t in rows:
+        print("%5.1f%%  %5d/%-5d  %s" % (100.0 * d / t if t else 100.0, d, t, rel))
+    print("[info] %d files measured, %d of %d lines executed (%.1f%%)"
+          % (len(rows), done, total, 100.0 * done / total if total else 100.0))
+    print("== files no exam executes (%d) ==" % len(never))
+    for rel, why in never:
+        print("  %s%s" % (rel, "  [Blender script: not measured (inside Blender, or the bpy module's process ends before coverage saves)]"
+                          if why == "blender" else ""))
+    print("[info] live exams (--live), the parts of an exam a missing tool skips, and scripts run inside a Blender "
+          "executable are not measured: a file listed here may still run there")
+
+
 # ---- running -----------------------------------------------------------------------------------------------------
 class Result:
     def __init__(self, row, status, detail="", tests=0, skipped=0, seconds=0.0, output="", note=""):
@@ -350,10 +463,11 @@ def missing_modules(interpreter, modules, cache):
     return cache[key]
 
 
-def interpreter_for(row, version, cache):
-    """(command prefix, note) for this row on the asked version, or (None, why it is skipped)."""
+def interpreter_for(row, version, cache, extra=()):
+    """(command prefix, note) for this row on the asked version, or (None, why it is skipped). extra: modules every
+    row needs in this run (coverage, for --coverage)."""
     want = row.python or version
-    mods = row.modules()
+    mods = row.modules() + [m for m in extra if m not in row.modules()]
     if want is None:
         missing = missing_modules(sys.executable, mods, cache)
         if not missing:
@@ -419,10 +533,12 @@ def run_one(row, version, opts, cache, hidden_env, first_pass=True):
     for kind, name in row.needs:
         if kind == "tool" and not shutil.which(name):
             return Result(row, SKIP, "needs %s (not on PATH)" % name)
-    prefix, note = interpreter_for(row, version, cache)
+    rc = getattr(opts, "coverage_rc", None)
+    prefix, note = interpreter_for(row, version, cache, ("coverage",) if rc else ())
     if prefix is None:
         return Result(row, SKIP, note)
-    cmd = prefix + ["-B", str(KIT / row.path)] + (["-v"] if row.style == "unittest" else [])
+    run = ["-m", "coverage", "run", "--rcfile", str(rc)] if rc else []
+    cmd = prefix + ["-B"] + run + [str(KIT / row.path)] + (["-v"] if row.style == "unittest" else [])
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     unset = []
     for var in hidden_env:
@@ -532,6 +648,11 @@ def parse_args(argv):
                          "ASEPRITE_BIN and PIXELORAMA_BIN through to the exams that have a live part")
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="exams run at once (default 1)")
     ap.add_argument("--list", action="store_true", help="print the table (name, path, needs, note) and exit")
+    ap.add_argument("--coverage", action="store_true",
+                    help="run the exams under Python's coverage module (%s or newer; uv rows get it through --with) "
+                         "and print each file's line coverage under core/tools and scripts, then the files no exam "
+                         "executes. Without coverage it is a skip naming it. One Python only (no --python)"
+                         % ".".join(map(str, COVERAGE_MIN)))
     ap.add_argument("--debug", action="store_true", help="print every command and every exam's full output")
     return ap.parse_args(argv)
 
@@ -566,6 +687,8 @@ def main(argv=None):
                 versions = [None]
         if opts.jobs < 1:
             raise ValueError("--jobs wants a number of 1 or more")
+        if opts.coverage and opts.python is not None:
+            raise ValueError("--coverage runs on this interpreter: leave out --python")
     except ValueError as exc:
         print("[error] %s" % exc, file=sys.stderr)
         return 2
@@ -573,6 +696,18 @@ def main(argv=None):
         print("[info] nothing to run")
         return 0
     hidden_env = sorted({v for r in EXAMS for v in r.env})
+    cov_dir = None
+    if opts.coverage:
+        have = coverage_version()
+        if have is None or have < COVERAGE_MIN:
+            print("[SKIP] --coverage needs the coverage module %s or newer on this Python (%s): pip install coverage, "
+                  "or uv run --with coverage python scripts/run_exams.py --coverage"
+                  % (".".join(map(str, COVERAGE_MIN)), "found " + ".".join(map(str, have)) if have else "not installed"))
+            return 0
+        import tempfile
+        cov_dir = tempfile.mkdtemp(prefix="run_exams_cov_")
+        opts.coverage_rc = coverage_rc(cov_dir)
+        print("[info] coverage %s: data in %s" % (".".join(map(str, have)), cov_dir))
     all_ok = True
     for n, version in enumerate(versions):
         label = ("Python %s via uv" % version) if version else "Python %d.%d" % sys.version_info[:2]
@@ -587,6 +722,15 @@ def main(argv=None):
     extra = untracked_exams()
     for rel in extra:
         print("[warn] no row for %s: add it to EXAMS (or LOADED_BY_ANOTHER)" % rel)
+    if cov_dir:
+        try:
+            data = coverage_json(cov_dir, opts.coverage_rc)
+            if data is None:
+                print("[warn] coverage measured nothing (no data files)")
+            else:
+                print_coverage(*coverage_report(data))
+        finally:
+            shutil.rmtree(cov_dir, ignore_errors=True)
     return 0 if all_ok else 1
 
 
