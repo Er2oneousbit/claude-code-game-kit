@@ -24,6 +24,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply with a keep-or-revert confirm,
 #           its hint line, and the status line on a row of its own above the buttons (#308)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning stays up across tabs while Back's
+#           next press would discard (a tab switch hid it, and the second Back then discarded without one)
 # ---------------------------------------------------------------------------
 class_name SettingsScreen
 extends ShellScreen
@@ -52,7 +54,6 @@ var _keep: Button
 var _revert: Button
 var _status: Label
 var _staging: DisplayStaging # the Display tab's pending changes: outlives rebuild() and tab switches
-var _notice: String = "" # the "Display changes are not applied" warning, until the next change or tab
 ## Smoke drives (show:confirm): stop the countdown so screenshots repeat.
 var hold_countdown: bool = false
 var _grid: Array = [] # focusable controls of the current tab, one Array per row, top to bottom
@@ -157,7 +158,6 @@ func _close() -> void:
 			_after_revert(r[1])
 			return
 		"warn":
-			_notice = Shell.t("settings.unapplied")
 			Log.info("display", "unapplied changes: Back again discards them")
 			_refresh_bottom()
 			return
@@ -170,7 +170,6 @@ func _close() -> void:
 func _stage(field: String, v: Variant) -> void:
 	if _staging.stage(field, v) == "busy":
 		return
-	_notice = ""
 	_refresh_bottom()
 
 
@@ -180,7 +179,6 @@ func _apply_display() -> void:
 	var calls: Array = _staging.apply()
 	_send(calls)
 	Log.info("display", "applied " + JSON.stringify(calls))
-	_notice = ""
 	if _staging.confirming():
 		_fill_tab() # the Display rows lock while the confirm runs
 		_keep.grab_focus()
@@ -228,8 +226,8 @@ func _refresh_bottom() -> void:
 	_revert.visible = confirming
 	if confirming:
 		_status.text = Shell.t("settings.confirm", {"secs": _staging.seconds()})
-	elif _notice != "":
-		_status.text = _notice
+	elif _staging.warned: # Back warned: it stays up on every tab until a change, Apply or the second Back
+		_status.text = Shell.t("settings.unapplied")
 	else:
 		_status.text = _status_text if _tab == "controls" else ""
 	var row: Array = [_back]
@@ -252,7 +250,6 @@ func _select_tab(tab: String) -> void:
 		return
 	_tab = tab
 	_status_text = ""
-	_notice = ""
 	_fill_tab()
 
 

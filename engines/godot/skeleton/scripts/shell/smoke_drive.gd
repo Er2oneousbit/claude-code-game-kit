@@ -30,6 +30,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 #           and the pseudo drive checks the Display tab's warning and confirm (#308)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning stays up on another tab, and
+#           settings.json keeps the old mode while the confirm waits
 # ---------------------------------------------------------------------------
 class_name SmokeDrive
 extends Node
@@ -205,6 +207,15 @@ func _display() -> void:
 		_fail("Back with an unapplied Display change did not warn (screen %s)" % front.current_name())
 		return
 	Log.raw("DRIVE_DISPLAY warned")
+	# the warning stays up on another tab: the next Back there discards, so the player must still see it
+	var status: Label = screen.find_child("Status", true, false)
+	(screen.find_child("Tab_audio", true, false) as Control).grab_focus()
+	await _frames(2)
+	if screen.current_tab() != "audio" or status.text != Shell.t("settings.unapplied"):
+		_fail("the unapplied warning went with the tab (tab %s, status \"%s\")" % [screen.current_tab(), status.text])
+		return
+	(screen.find_child("Tab_display", true, false) as Control).grab_focus()
+	await _frames(2)
 	if not await _nav_to("Back", "ui_down") or not await _nav_to("Apply", "ui_right"):
 		return
 	var start: int = Time.get_ticks_msec()
@@ -212,6 +223,10 @@ func _display() -> void:
 	var focus: Control = get_viewport().gui_get_focus_owner()
 	if not staging.confirming() or focus == null or focus.name != "Keep":
 		_fail("Apply did not open the confirm with focus on Keep (focus %s)" % (focus.name if focus else "none"))
+		return
+	var held: Dictionary = GameSettings.load_text(AtomicFile.read_text(file))["settings"]
+	if str(held["display"]["mode"]) != before: # an Apply that waits for Keep is never saved
+		_fail("settings.json holds the mode %s before Keep" % held["display"]["mode"])
 		return
 	Log.raw("DRIVE_DISPLAY applied")
 	while staging.confirming() and Time.get_ticks_msec() - start < CONFIRM_WAIT_MS:
