@@ -11,7 +11,8 @@
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display (stage, warn, apply, the confirm reverts on
 //           the wall clock, discard; DRIVE_DISPLAY lines), show:apply and show:confirm, the pseudo drive checks the
 //           Display tab with a change waiting and the confirm (#308)
-// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bug drive looks for screenshot.png (#314)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bug drive looks for screenshot.png (#314); the
+//           display drive checks settings.json keeps the old size while the confirm waits
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
@@ -571,9 +572,12 @@ void Drive::build_display() {
     press("ui_accept");
     then("applied, the confirm open", [this, setting, saved, shown] {
         const auto secs = shell_.settings_menu_ ? shell_.settings_menu_->staging().seconds() : std::nullopt;
-        if (!secs || setting() == before_ || saved() != setting() || shell_.focus_id() != "confirm.keep") {
-            fail("Apply did not set, save and confirm the window size (settings " + setting().dump() + ", file " +
-                 saved().dump() + ", focus " + shell_.focus_id() + ")");
+        // set and confirmed, and not saved: settings.json keeps the old size (or is not there yet) until Keep
+        const json file = saved();
+        if (!secs || setting() == before_ || (!file.is_null() && file != before_) ||
+            shell_.focus_id() != "confirm.keep") {
+            fail("Apply did not set and confirm the window size, or saved it before Keep (settings " +
+                 setting().dump() + ", file " + file.dump() + ", focus " + shell_.focus_id() + ")");
             return;
         }
         applied_at_ = std::chrono::steady_clock::now();

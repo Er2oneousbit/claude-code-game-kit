@@ -22,10 +22,13 @@
 //   apply_preset(settings, presets, name): the defaults, then every action of the preset as [keyboard, pad]
 //   display tab (#308): its rows read and stage through core::DisplayStaging; Apply writes the changed fields,
 //     applies and saves; a mode or resolution change opens the keep-or-revert confirm, tick(real_dt) counts it
-//     down; Back (row or ui_cancel, any tab) goes through DisplayStaging::back (revert, warn once, or leave)
+//     down; Back (row or ui_cancel, any tab) goes through DisplayStaging::back (revert, warn once, or leave).
+//     While the confirm is open nothing is saved: Keep saves, a revert saves the old values, so a mode the screen
+//     cannot show never reaches settings.json (a game killed during the confirm starts as before)
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply button and its keep-or-revert
 //           confirm (core::DisplayStaging, #308)
+// Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the confirm is open; Keep saves
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -118,7 +121,7 @@ struct SettingsHooks {
     std::function<std::string(const std::string& locale)> locale_name;           // "English" for "en"
     std::function<std::string(const std::string& binding, std::size_t slot)> binding_label;  // "Space", "A"
     std::function<void()> close;                                                 // Back: save and leave
-    std::function<void()> save;                  // Apply and its revert write settings.json (#308)
+    std::function<void()> save;                  // Apply, Keep and a revert write settings.json (#308)
     nlohmann::json presets;                      // data/input/presets.json (null: no preset rows)
     bool debug_build = false;                    // adds the pseudo locale to the language choices
 };
@@ -172,7 +175,7 @@ private:
     DisplayStaging staging_;
     MenuList confirm_;
 
-    void set_display(const DisplayStaging::Calls& calls);   // writes calls into settings.display, applies, saves
+    void set_display(const DisplayStaging::Calls& calls);   // sets calls in settings.display; saves if no confirm
 
     std::string t(const std::string& key, const TrArgs& args = {}) const;
     Row field(const std::string& section, const std::string& name, RowKind kind,
