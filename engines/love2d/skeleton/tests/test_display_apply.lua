@@ -7,7 +7,8 @@
 -- Notes   : The settings screen runs on a stand-in app (no window): rows, actions and update() need no graphics.
 --           The golden steps of src/core/display_staging.lua are in test_shell_golden.lua.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
--- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): App.window_size under Windows display scaling (#308)
+-- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): App.window_size under Windows display scaling (#308);
+--           the first run takes the window's size as the setting
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Settings = require("src.core.settings")
@@ -173,6 +174,32 @@ function T.test_window_size_follows_display_scaling()
   w, h = App.window_size({ 1920, 1200 }, { 1920, 1200 }, { 1280, 800 })
   A.eq(w, 1280, "150 %: the whole screen still fits")
   A.eq(h, 800)
+end
+
+-- a first run takes the window's size as the setting, in real pixels (#308: the setting said 1920x1080 while a
+-- 1280x720 window was on screen, so a revert grew the window instead of restoring it)
+function T.test_first_run_takes_the_window_size()
+  local w, h = App.real_size({ 1280, 720 }, { 1920, 1200 }, { 1536, 960 })
+  A.eq(w, 1600, "125 %: 1280 window units are 1600 real pixels")
+  A.eq(h, 900)
+  w, h = App.real_size({ 1280, 720 }, { 1920, 1200 }, nil)
+  A.eq(w, 1280)
+  A.eq(h, 720)
+  local back_w, back_h = App.window_size({ App.real_size({ 1280, 720 }, { 1920, 1200 }, { 1536, 960 }) }, { 1920, 1200 },
+                                         { 1536, 960 })
+  A.eq(back_w, 1280, "window_size undoes real_size")
+  A.eq(back_h, 720)
+  local app = setmetatable({ kit = { automated = false }, settings = Settings.defaults() }, App)
+  local saved_window, saved_graphics, saved_system = love.window, love.graphics, love.system
+  love.system = { getOS = function() return "Linux" end }             -- no display scaling to look up
+  love.window = { isOpen = function() return true end, getFullscreen = function() return false end,
+                  getDesktopDimensions = function() return 1280, 800 end }
+  love.graphics = setmetatable({ getDimensions = function() return 1024, 600 end }, { __index = saved_graphics })
+  local ok, err = pcall(App.adopt_window_size, app)
+  love.window, love.graphics, love.system = saved_window, saved_graphics, saved_system
+  A.truthy(ok, tostring(err))
+  A.eq(app.settings.display.resolution[1], 1024, "the setting is the window's size, not the 1920x1080 default")
+  A.eq(app.settings.display.resolution[2], 600)
 end
 
 return T
