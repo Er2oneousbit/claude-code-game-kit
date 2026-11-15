@@ -498,6 +498,29 @@ func test_tile_flags_to_alternatives() -> void:
 			| TileSetAtlasSource.TRANSFORM_FLIP_V | TileSetAtlasSource.TRANSFORM_TRANSPOSE)
 
 
+# The golden maps have no flagged cell: a map of all eight flag values must hold each cell with its transform and
+# find its tile data (a window run on 4.7.2, 2026-11-14, drew all eight as the spec's transpose-then-flip, pixel
+# for pixel; headless GUT cannot draw, so this checks what the drawing reads).
+func test_flagged_cells_hold_their_tile() -> void:
+	var doc: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(MANIFEST))
+	var t: Dictionary = _model["tileset"]["ground_yard"]["tile_list"][0]
+	var cells: Array = []
+	for f: int in 8:
+		cells.append([f, 0, t["atlas"], t["col"], t["row"], f])
+	doc["assets"].append({"kind": "map", "name": "flags", "tileset": "ground_yard", "size": [8, 1],
+			"tile_size": _model["tileset"]["ground_yard"]["tile_size"],
+			"layers": [{"name": "Flags", "kind": "tiles", "cells": cells}]})
+	var m: Dictionary = DotworkManifest.parse(doc, MANIFEST)
+	assert_eq((m["problems"] as Array).size(), 0, "\n".join(m["problems"]))
+	var root: Node2D = DotworkAssets.map_node(m["map"]["flags"])
+	var layer: TileMapLayer = root.get_node("Flags")
+	for f: int in 8:
+		var at: Vector2i = Vector2i(f, 0)
+		assert_eq(layer.get_cell_alternative_tile(at), DotworkAssets.flags_to_alternative(f), "flags %d" % f)
+		assert_not_null(layer.get_cell_tile_data(at), "flags %d finds its tile" % f)
+	root.free()
+
+
 # ---- Fonts, UI, the extra kinds as Godot objects ---------------------------------------------
 func test_font_loads_as_a_fontfile() -> void:
 	var f: FontFile = DotworkAssets.font(_model["font"]["tiny"])
@@ -518,6 +541,9 @@ func test_imported_font_draws_one_to_one() -> void:
 	var fixed: FontFile = DotworkAssets.one_to_one(f)
 	assert_eq(int(fixed.get_height()), line, "drawn 1:1 at the default size")
 	assert_eq(int(fixed.get_height(32)), line, "and at any other size")
+	assert_true(fixed.has_char(65), "the copy keeps its glyphs")
+	var a: Dictionary = _model["font"]["tiny"]["chars"][65]
+	assert_eq(fixed.get_char_size(65, 16), Vector2(a["xadvance"], line), "A at its own advance and line height")
 	assert_eq(f.fixed_size_scale_mode, TextServer.FIXED_SIZE_SCALE_ENABLED, "the shared resource is not changed")
 
 
