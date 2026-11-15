@@ -530,9 +530,10 @@ python tools/bozzetto/bone_map.py pelvis thigh_l upperarm_l ...       # how a pa
 already has is refused unless `--replace`. `--map my_map.json` (`{"their_name": "Hips", ...}`) covers a pack the
 built-in maps do not fit; `--no-replace` writes `assets_src/bozzetto/<name>/rig/retarget/retargeted.glb` only, to look
 first. The rig before the first retarget is kept there as `before_retarget.glb` (written again after a `rig make`
-re-run, never after a `rig chain`), with the report, a record of every run (retarget.json) and `clips.png` (4 frames of each new clip). The character's asset log row gets a
-"retarget: ..." note naming the clips and the pack's own row. The pack needs that row of its own, with its licence,
-before the game ships: the command warns when it has none.
+re-run, never after a `rig chain`), with the report, a record of every run (retarget.json) and `clips.png` (4 frames
+of each new clip). The character's asset log row gets a "retarget: ..." note naming the clips and the pack's own row
+(one note, the clips the rig has from packs now: a re-run replaces it). The pack needs that row of its own, with its
+licence, before the game ships: the command warns when it has none.
 
 How it works (`rig_retarget.py`, in Blender): the pack's bones are renamed to Mixamo's (`bone_map.py`), then for
 every frame each bone both rigs share is turned so it points where the pack's bone points. It is a retarget, not a
