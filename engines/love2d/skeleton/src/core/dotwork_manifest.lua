@@ -31,6 +31,8 @@
 -- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the
 --           probability pick (hash32 / cell_roll), stamps layers, cell centres and placed positions, the extra
 --           kinds loaded as data instead of skipped.
+-- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id;
+--           a normal map's size is optional, as in the schema
 -- ---------------------------------------------------------------------------
 --
 -- Pseudocode
@@ -569,22 +571,17 @@ function convert.tileset(ctx, a, where)
       s.tile_list[#s.tile_list + 1] = tile
     end
   end
-  -- terrain tiles filed by "set/terrain" and key as { weight, tile } candidates in atlas order: atlases by id,
-  -- tiles in list order (the spec's pick walks them in exactly this order)
-  local ids = {}
-  for id in pairs(s.atlas_by_id) do ids[#ids + 1] = id end
-  table.sort(ids)
-  for _, id in ipairs(ids) do
-    for _, tile in ipairs(s.tile_list) do
-      if tile.atlas == id and tile.terrain ~= nil then
-        local set = s.terrain_sets[tile.terrain_set]
-        local key = Manifest.terrain_key(tile, set and set.mode or "blob47", s.shape)
-        if key ~= nil then
-          local tk = tile.terrain_set .. "/" .. tile.terrain
-          s.by_key[tk] = s.by_key[tk] or {}
-          s.by_key[tk][key] = s.by_key[tk][key] or {}
-          table.insert(s.by_key[tk][key], { tile.probability, tile })
-        end
+  -- terrain tiles filed by "set/terrain" and key as { weight, tile } candidates in atlas order: atlases as listed
+  -- (never sorted by id: the spec's pick walks the list), tiles in list order; tile_list is in exactly that order
+  for _, tile in ipairs(s.tile_list) do
+    if tile.terrain ~= nil then
+      local set = s.terrain_sets[tile.terrain_set]
+      local key = Manifest.terrain_key(tile, set and set.mode or "blob47", s.shape)
+      if key ~= nil then
+        local tk = tile.terrain_set .. "/" .. tile.terrain
+        s.by_key[tk] = s.by_key[tk] or {}
+        s.by_key[tk][key] = s.by_key[tk][key] or {}
+        table.insert(s.by_key[tk][key], { tile.probability, tile })
       end
     end
   end
@@ -789,8 +786,9 @@ function convert.transition(ctx, a, where)
 end
 
 -- normal_map: the map and the image it lights (both files must ship); green up (opengl) unless said otherwise.
+-- size is optional (the schema requires image, target and convention only).
 function convert.normal_map(ctx, a, where)
-  local size = copy_pair(ctx:need(a, "size", "pair", where))
+  local size = opt(a.size) ~= nil and copy_pair(ctx:need(a, "size", "pair", where)) or nil
   local s = { kind = "normal_map", name = a.name, size = size, convention = opt(a.convention) or "opengl" }
   s.image = ctx:file(ctx:need(a, "image", "string", where), where, size)
   s.target = ctx:file(ctx:need(a, "target", "string", where), where .. " target")

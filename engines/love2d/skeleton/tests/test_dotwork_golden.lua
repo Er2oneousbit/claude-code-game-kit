@@ -3,7 +3,7 @@
 -- Purpose : The Dotwork asset importer (src/core/dotwork_manifest.lua, src/game/dotwork_loader.lua) against the
 --           spec's golden fixture: loads data/golden/dotwork/assets/dotwork/golden.assets.json and compares what it
 --           built with data/golden/dotwork/expected.json (the reference loader's result) to 1e-6, one test per
---           asset (the three maps' terrain, placed cells and centres included). Plus the pieces expected.json
+--           asset (the maps' terrain, placed cells and centres included). Plus the pieces expected.json
 --           cannot show: frame timing, tile flags, the spec's hash and roll vectors, the corners4 rule, isometric
 --           centres, stamps, BMFont text layout, version refusal, unknown kinds, layer kinds and fields, broken
 --           references.
@@ -15,6 +15,7 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the loaded result's new map
 --           fields, the extra kinds compared instead of skipped, the vectors and rule cases.
+-- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map without a size loads
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Golden = require("tests.helpers.golden")
@@ -470,6 +471,18 @@ function T.test_unknown_kind_and_field_warn_once()
   A.eq(#m.skipped, 2)
   A.truthy(m.icon.i and m.icon.j, "known kinds still load")
   A.eq(m.icon.i.sizes[1].image, "assets/art/i.png", "paths resolve through base")
+end
+
+-- The schema makes a normal map's size optional (image, target and convention are required): a manifest without
+-- it is valid, so it must load (it raised "field 'size' is missing" for the whole manifest).
+function T.test_normal_map_without_a_size_loads()
+  local ok, m = pcall(Manifest.parse, doc({ assets = { { kind = "normal_map", name = "n", image = "art/n.png",
+    target = "art/t.png", convention = "opengl" } } }), "assets/dotwork/t.assets.json")
+  A.truthy(ok, tostring(m))
+  if ok then
+    A.eq(m.normal_map.n.size, nil)
+    A.eq(m.normal_map.n.image, "assets/art/n.png")
+  end
 end
 
 function T.test_broken_references_are_problems()
