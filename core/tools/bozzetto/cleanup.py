@@ -38,6 +38,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5); --rebake with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-under, the rebake only under the floor (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake-png (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto's under-the-floor line uses
+#           validate_asset's under_text (it printed "55.0% is under the floor 55%" at 54.97%)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -361,7 +363,8 @@ def rebake_auto(bpy, va, obj, args, report):
         print(f"[info] --rebake auto: UV coverage {cov:.1%} ({islands} islands) meets the floor {floor:.0%}: the "
               "model's own atlas is kept")
         return None
-    print(f"[info] --rebake auto: UV coverage {cov:.1%} ({islands} islands) is under the floor {floor:.0%}: rebaking")
+    print(f"[info] --rebake auto: UV coverage {va.under_text(cov, floor)} ({islands} islands) is under the floor "
+          f"{floor:.0%}: rebaking")   # under_text: 54.97% never reads "55.0% is under 55%"
     report["rebake"] = {}
     ok = rebake_uvs.rebake(bpy, va, obj, args.texture, report["rebake"], png=args.rebake_png)
     after = report["rebake"].get("uv_coverage_after")

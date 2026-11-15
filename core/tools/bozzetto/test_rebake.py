@@ -23,6 +23,7 @@
 # Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --rebake auto and --rebake-under (#203)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): a JPEG colour map stays JPEG, --png (#303)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a coverage a hair under the floor never reads as it
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -242,6 +243,10 @@ class Waiver(LocalBase):
         percent would read as the floor, and the waiver reads that number back."""
         self.assertEqual(bz.va.under_text(0.546, 0.55), "54.6%")
         self.assertEqual(bz.va.under_text(0.29, 0.5), "29%")
+        # rounded to one decimal, 54.97% read "55.0% is under 55%": cut, never round up to the floor
+        self.assertEqual(bz.va.under_text(0.5497, 0.55), "54.9%")
+        self.assertEqual(bz.va.under_text(0.54999, 0.55), "54.9%")
+        self.assertEqual(bz.va.under_text(0.549, 0.55), "54.9%")
         fail = f"npc_a: UV coverage {bz.va.under_text(0.546, 0.55)} is under 55% (tiny islands waste texture space)"
         v = {"failures": [fail]}
         self.assertTrue(rebake.waive_uv(v))
