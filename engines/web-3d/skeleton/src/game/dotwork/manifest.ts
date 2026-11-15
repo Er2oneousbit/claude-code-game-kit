@@ -440,8 +440,8 @@ export function pickVariant<T>(candidates: [number, T][], roll: number): T {
 }
 
 /** Each painted cell of a terrain layer (by y, then x) with its key and pick: among the layer's terrain's tiles
- *  with that key, in atlas order (atlases as listed, never sorted by id; tiles in list order), by probability with cellRoll(x, y,
- *  layerIndex) (assetspec.resolve_terrain). */
+ *  with that key, in atlas order (atlases as listed, never sorted by id; tiles in list order), by probability with
+ *  cellRoll(x, y, layerIndex) (assetspec.resolve_terrain). */
 export function resolveTerrain(ts: TilesetDef, terrainSet: number, terrain: number, cells: Point[], layerIndex = 0): TerrainCell[] {
   const set = ts.terrainSets.find((s) => s.id === terrainSet);
   if (!set) throw new DotworkError(`tileset ${ts.name}: no terrain set ${terrainSet}`);
