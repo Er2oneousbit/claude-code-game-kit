@@ -368,13 +368,14 @@ def shipped_files(kit=None):
 
 
 def blender_only(path):
-    """True for a script that imports bpy at its top level: it runs inside a Blender executable, where the exams'
-    coverage does not reach (only the bpy module rows measure it)."""
+    """True for a script that imports bpy (at the top or inside a function): it runs inside a Blender executable,
+    where the exams' coverage does not reach, or through the bpy module, whose process bpy_common.end_process ends
+    with TerminateProcess on Windows (#312), before coverage writes its data: neither run is measured."""
     try:
         text = Path(path).read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False
-    return bool(re.search(r"^import bpy\b|^from bpy\b", text, re.M))
+    return bool(re.search(r"^[ \t]*(?:import bpy\b|from bpy\b)", text, re.M))
 
 
 def coverage_report(data, kit=None):
@@ -411,7 +412,7 @@ def print_coverage(rows, never):
           % (len(rows), done, total, 100.0 * done / total if total else 100.0))
     print("== files no exam executes (%d) ==" % len(never))
     for rel, why in never:
-        print("  %s%s" % (rel, "  [Blender script: runs inside Blender, measured only through the bpy rows]"
+        print("  %s%s" % (rel, "  [Blender script: not measured (inside Blender, or the bpy module's process ends before coverage saves)]"
                           if why == "blender" else ""))
     print("[info] live exams (--live), the parts of an exam a missing tool skips, and scripts run inside a Blender "
           "executable are not measured: a file listed here may still run there")

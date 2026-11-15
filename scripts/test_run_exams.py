@@ -372,7 +372,8 @@ elif args[0] == "json":
         write(pkg / "__main__.py", self.FAKE_COVERAGE % str(log))
         for rel, text in (("scripts/tool_a.py", "x = 1\n"), ("scripts/tool_b.py", "y = 2\n"),
                           ("scripts/tool_empty.py", "\n"), ("scripts/test_tool.py", "pass\n"),
-                          ("core/tools/blender/bl.py", "import bpy\n"), ("core/tools/art/tests/helper.py", "\n")):
+                          ("core/tools/blender/bl.py", "import bpy\n"),
+                          ("scripts/lazy.py", "def main():\n    import bpy\n"), ("core/tools/art/tests/helper.py", "\n")):
             write(self.kit / rel, text)
         return log
 
@@ -405,6 +406,7 @@ elif args[0] == "json":
         never = out.split("== files no exam executes", 1)[1]
         self.assertIn("scripts/tool_b.py", never)
         self.assertRegex(never, r"core/tools/blender/bl\.py +\[Blender script")
+        self.assertRegex(never, r"scripts/lazy\.py +\[Blender script", "bpy imported inside a function")
         for gone in ("tool_a.py", "tool_empty.py", "test_tool.py", "helper.py"):
             self.assertNotIn(gone, never, "measured, empty or an exam's own file")
 
