@@ -71,8 +71,8 @@ build/              .love and the fused Windows exe (git-ignored)
     when all four cells meeting there are painted; corner names map to bits by shape, square `top_left` NW ...
     isometric `top` NW, `right` NE, `bottom` SE, `left` SW) and the tile of its terrain with that key; several tiles
     with the key are variants, picked by `probability` with `Manifest.cell_roll(x, y, layer_index)` (the spec's
-    Jenkins hash, 0-based layer index), so LÖVE, Bevy, C++ and the web overlays show the same variant in the same
-    cell. A key with no tile leaves the cell empty and warns once per layer (Dotwork's validator refuses such a
+    Jenkins hash, 0-based layer index), so every engine's importer (and Dotwork's own Godot map scenes) shows the same
+    variant in the same cell. A key with no tile leaves the cell empty and warns once per layer (Dotwork's validator refuses such a
     map). A `stamps` layer (`[x, y, stamp]`) is expanded into the stamp's tiles, tile `j` at
     `(x + j % w, y + j // w)`; an unknown layer kind warns once and draws nothing. Each cell carries `cx, cy`
     (its centre) and `left, top` (where its image lands), so the game can hit-test or y-sort without the view.

@@ -453,7 +453,8 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   solver; flags as the `TRANSFORM_FLIP_H` / `FLIP_V` / `TRANSPOSE` alternative bits; an isometric layer is
   `y_sort_enabled`). The TileSet has no terrain sets (cells come resolved). Textures: Godot's imported resource when
   there is one, else the PNG decoded at run time (the golden folder has a `.gdignore`). Fonts: `FontFile` from the
-  imported `.fnt`, else `load_bitmap_font`. The extra kinds: the table above. Tests: GUT (`dev.py test`) on the golden
+  imported `.fnt` (a copy with `fixed_size_scale_mode` off: Godot's BMFont import scales a bitmap font to the
+  requested size), else `load_bitmap_font`; both draw 1:1. The extra kinds: the table above. Tests: GUT (`dev.py test`) on the golden
   pack, every number read back from the Godot object where Godot holds it (frame seconds, collision boxes, tile counts,
   `map_to_local`, the tile each `TileMapLayer` cell holds), the rendered character, and every game manifest.
 - **web, Phaser 4.2.1 (#55, src/game/dotworkPlan.ts + src/game/dotwork.ts).** The manifests and PNGs load

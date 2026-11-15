@@ -94,7 +94,7 @@ tools/                   dev.py and helpers
   position), `DotworkAssets.sprite(m["sprite"]["crate"])` (Sprite2D, pivot on the position, a `Shadow` child, a
   `Body` StaticBody2D per collision rect), `add_child(DotworkAssets.map_node(m["map"]["yard"]))` (a Node2D with a
   TileMapLayer per layer and the props under a y-sorted `Props` node), `DotworkAssets.font(...)` (FontFile from the
-  `.fnt`), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
+  `.fnt`, drawn 1:1 at any font size), `DotworkAssets.nine_patch(kit, part)`, `background(...)`, `lit_texture(normal_map)` (a CanvasTexture).
   Textures: Godot's imported PNG when there is one, else the PNG decoded at run time.
   - **Maps.** Cells arrive resolved (`scripts/core/dotwork_manifest.gd`, no nodes): a terrain layer's cells get the
     spec's key (`blob47`, `sides4`, `corners4`) and, among a key's variants, the tile `DotworkManifest.cell_roll(x,

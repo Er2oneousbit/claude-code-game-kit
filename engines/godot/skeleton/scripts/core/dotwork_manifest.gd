@@ -24,6 +24,7 @@
 #           tools/art/dotwork/assetspec.py (the reference) line for line.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created, the Godot importer (#307)
+# Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map's size is optional, as in the schema
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -891,8 +892,9 @@ func _convert_transition(a: Dictionary, where: String) -> Dictionary:
 
 
 ## normal_map: the map and the image it lights (both ship); green up (opengl, what Godot expects) unless said.
+## size is optional here (the schema requires image, target and convention only).
 func _convert_normal_map(a: Dictionary, where: String) -> Dictionary:
-	var size: Array = _pair(_need(a, "size", "pair", where))
+	var size: Variant = _pair(_need(a, "size", "pair", where)) if a.get("size") != null else null
 	var s: Dictionary = {"kind": "normal_map", "name": a["name"], "size": size,
 			"convention": a["convention"] if a.get("convention") != null else "opengl"}
 	s["image"] = _file(_need(a, "image", "string", where), where, size)
