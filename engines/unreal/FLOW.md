@@ -188,7 +188,7 @@ focused)**. Wire the game to it:
   and 15.1 s later the countdown put a titled window back. With the engine's default
   `bAllowHighDPIInGameMode=False` Windows scales the game window, so the sizes are off: 1600x900 became a 1920x1125
   window, and the revert to 1920x1080 a 1920x1200 one with its title bar above the screen (`UGameUserSettings` clamps
-  to the scaled desktop, 1536x960). With `bAllowHighDPIInGameMode=True` under `[/Script/Engine.UserInterfaceSettings]`
+  to the scaled desktop, 1536x960). With `bAllowHighDPIInGameMode=True` in the Engine.UserInterfaceSettings section
   in `Config/DefaultEngine.ini` the window was exactly 1600x900 and then 1920x1080, as the setting says: set it if
   your players use display scaling. Exclusive fullscreen is **(verify)**: that machine refused display mode changes, so
   fullscreen at 1600x900 gave a 1600x900 window without a title bar in the screen's corner.
