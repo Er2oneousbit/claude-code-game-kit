@@ -45,6 +45,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png (#314)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(); t() honours clean language with the
 //           word lists of data/i18n/mature/ (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in a core::WordCache, folded once
+//           per locale, not on every t() (#207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -205,7 +207,7 @@ private:
     nlohmann::json settings_;
     bool settings_existed_ = false;
     core::StringTables tables_;
-    std::map<std::string, core::WordList> mature_;   // data/i18n/mature/<locale>.json: clean-language words (#207)
+    mutable core::WordCache words_;   // data/i18n/mature/<locale>.json, folded once per locale (#207)
     std::string locale_ = core::kFallbackLocale;
     nlohmann::json presets_;
     nlohmann::json colours_;

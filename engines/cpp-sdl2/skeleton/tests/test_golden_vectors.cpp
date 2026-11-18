@@ -18,6 +18,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
 //           mask_words and mature_words; plural cases read their key from the case (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): WordCache folds once and follows new lists, and its
+//           cost against folding per call (#207)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's
 //           Apply and its keep-or-revert confirm (core::DisplayStaging, #308)
 //           2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (core::impact,
@@ -25,6 +27,7 @@
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -589,6 +592,41 @@ TEST_CASE("the pseudo locale picks @clean lines too, and the shipped word list i
     const json shipped = json::parse(core::read_file(list).value_or(""), nullptr, false);
     CHECK(shipped.is_object());
     CHECK(core::mature_words(shipped).empty());
+}
+
+TEST_CASE("the word cache folds once per locale and list, and follows new lists (#207)") {
+    core::WordCache cache;
+    cache.set_lists({{"en", {"damn"}}});
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "#@$%, bob");
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "#@$%, bob");
+    CHECK(cache.folds() == 1);                                  // the second get() reused the fold
+    cache.set_lists({{"en", {"bob"}}, {"fr", {"merde"}}});      // a new list: the old fold must go
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "Damn, #@$");
+    CHECK(core::mask_word_set("Merde, bob", cache.get("fr")) == "#@$%#, #@$");   // a new chain: fr's words join
+    CHECK(cache.folds() == 3);
+}
+
+TEST_CASE("t() with clean language and 3000 words costs a tenth of folding per call or less (#207)") {
+    core::WordList words;
+    for (int k = 0; k < 3000; ++k) {
+        words.push_back("word" + std::to_string(k));
+    }
+    const core::StringTables tables = {{"en", {{"label", "A settings label with {name} in it"}}}};
+    core::WordCache cache;
+    cache.set_lists({{"en", words}});
+    const auto now = [] { return std::chrono::steady_clock::now(); };
+    auto t0 = now();
+    for (int k = 0; k < 100; ++k) {
+        (void)core::tr(tables, "en", "label", {{"name", "x"}}, true, words);
+    }
+    const double uncached = std::chrono::duration<double, std::milli>(now() - t0).count();
+    t0 = now();
+    for (int k = 0; k < 100; ++k) {
+        (void)core::tr(tables, "en", "label", {{"name", "x"}}, true, cache.get("en"));
+    }
+    const double cached = std::chrono::duration<double, std::milli>(now() - t0).count();
+    MESSAGE("T_COST 100 labels, 3000 words: uncached " << uncached << " ms, cached " << cached << " ms");
+    CHECK(cached < uncached / 10);
 }
 
 TEST_CASE("an unknown easing name is an error, not a silent linear") {
