@@ -23,6 +23,8 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 #           pick (hash32, cell_roll, pick_variant), stamps layers, cell centres and draw corners; particles are an
 #           extra kind the importer loads
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): font_layout (glyph cells with the x offset drawn in,
+#           #286), tile_user_data (a tile's surface and animation in Paper2D's one user-data name)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -43,6 +45,9 @@ CORE_ORDER = ("sprite", "animated_sprite", "icon", "portrait", "font", "ui_kit",
 # extra kinds imported as textures (particles: the texture plus its emitter JSON as metadata, Niagara is #286)
 TEXTURE_KINDS = ("background", "particles", "transition", "normal_map", "image")
 LAYER_KINDS = ("tiles", "terrain", "stamps")   # map layer kinds this importer draws (stamps since spec 1.1.0)
+FONT_ROW_WIDTH = 256                        # a re-laid-out font page wraps its glyph cells at this width (#286)
+CELL_GAP = 1                                # pixels between glyph cells on a re-laid-out page
+TILE_ANIM_PREFIX = "anim="                  # an animated tile's user data: "anim=<frames>@<fps>" (after "surface;")
 
 # N NE E SE S SW W NW, y down (bit 0 is N)
 NB8 = ((0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1))
@@ -308,6 +313,66 @@ def flipbook_rate(fps, durations):
         if all(abs(r - round(r)) <= RATE_TOLERANCE and round(r) >= 1 for r in runs):
             return rate, [int(round(r)) for r in runs], True
     return FALLBACK_RATE, [max(1, int(round(d * FALLBACK_RATE))) for d in durations], False
+
+
+# ---- fonts (#286) ------------------------------------------------------------------------------------
+def font_layout(chars, row_width=FONT_ROW_WIDTH):
+    """Where each glyph of a BMFont goes on the re-laid-out pages an offline Font draws from. An offline Font draws
+    a glyph's USize pixels at the pen and moves the pen by USize plus one font-wide Kerning; it has no x offset. So
+    every glyph gets a cell of its own, xadvance - kerning wide, with its pixels drawn xoffset into it: the pen then
+    lands exactly where the BMFont puts it. kerning = the smallest xadvance - xoffset - width over the inked glyphs
+    (every glyph then fits its cell). Cells are packed in rows per original page, CELL_GAP apart.
+    Returns (kerning, cells, page_sizes, clipped): cells[id] = (page, u, v, cell_w, h, xoffset, x, y, w);
+    clipped = ids whose negative xoffset was drawn as 0 (a glyph cannot start left of the pen)."""
+    inked = [c for c in chars if c[3] > 0 and c[4] > 0]
+    kerning = min((c[7] - max(0, c[5]) - c[3] for c in inked), default=0)
+    pages = sorted({c[8] for c in chars}) or [0]
+    cells, sizes, clipped = {}, {}, []
+    for page in pages:
+        u = v = row_h = width = 0
+        for code, x, y, w, h, xoff, yoff, xadv, pg in chars:
+            if pg != page:
+                continue
+            if xoff < 0:
+                clipped.append(code)
+            cw = max(1, xadv - kerning) if h > 0 else max(0, xadv - kerning)
+            if h <= 0:                              # a space: an advance, nothing to draw
+                cells[code] = (page, 0, 0, cw, 0, 0, x, y, w)
+                continue
+            if u and u + cw > row_width:
+                u, v, row_h = 0, v + row_h + CELL_GAP, 0
+            cells[code] = (page, u, v, cw, h, max(0, xoff), x, y, w)
+            width = max(width, u + cw)
+            u, row_h = u + cw + CELL_GAP, max(row_h, h)
+        sizes[page] = (max(1, width), max(1, v + row_h))
+    return kerning, cells, [sizes.get(p, (1, 1)) for p in range(max(pages) + 1)], sorted(clipped)
+
+
+# ---- tile user data (#286) ---------------------------------------------------------------------------
+def tile_user_data(tile):
+    """The one user-data name a Paper2D tile holds: its surface, then "anim=<frames>@<fps>" when it animates
+    (the frames sit in the next cells to the right), joined by ";". GameKit's UDotworkTileAnimator reads it."""
+    parts = [str(tile["surface"])] if tile.get("surface") else []
+    anim = tile.get("anim")
+    if anim and anim.get("frames", 1) > 1 and anim.get("fps", 0) > 0:
+        fps = anim["fps"]
+        parts.append(f"{TILE_ANIM_PREFIX}{int(anim['frames'])}@{float(fps):g}")
+    return ";".join(parts)
+
+
+def parse_tile_user_data(text):
+    """(surface or "", frames, fps) from a tile's user-data name; frames 1 and fps 0 when it does not animate."""
+    surface, frames, fps = "", 1, 0.0
+    for part in str(text or "").split(";"):
+        if part.startswith(TILE_ANIM_PREFIX):
+            n, _, rate = part[len(TILE_ANIM_PREFIX):].partition("@")
+            try:
+                frames, fps = max(1, int(n)), max(0.0, float(rate))
+            except ValueError:
+                frames, fps = 1, 0.0
+        elif part and not surface:
+            surface = part
+    return surface, frames, fps
 
 
 # ---- comparing ---------------------------------------------------------------------------------

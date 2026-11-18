@@ -120,10 +120,17 @@ and a clear spec for the Blueprint child.
   sprites, the maps' terrain, placed cells and centres, then every manifest of the game) through the
   pythonscript commandlet; enable the PythonAutomationTest plugin as well to have them as
   `Editor.Python.<Game>.kit_dotwork.*` automation tests. Both need `PythonScriptPlugin` (and Paper2D, on by
-  default) in the `.uproject`. Paper2D cannot do: animated tiles (first frame shown; the frames are in
-  `dotwork.animated_tiles`), additive blend (no Paper2D material; set one), a font's per-glyph x offset and kerning
-  pairs (offline Fonts keep one advance per glyph). An offline Font draws in TextRender and Canvas; UMG text wants a
-  runtime font from a TTF/OTF **(verify)**. The font's page textures can only be set by the commandlet (the editor
+  default) in the `.uproject`. What Paper2D lacks, the importer adds: a `blend: add` clip's flipbooks and frames
+  draw with `Materials/MI_DotworkAdditive` (Paper2D's translucent unlit sprite material, blend mode overridden to
+  Additive); an animated tile carries `anim=<frames>@<fps>` in its tile user data (after the surface:
+  `water;anim=2@4`) and plays in game and PIE worlds through the plugin's `GameKitDotwork` module (its world
+  subsystem `UDotworkTileAnimatorSubsystem` plays every tile map at BeginPlay; `Register` one spawned later; without
+  the plugin a tile shows its first frame); a font's pages are laid out again so every glyph sits in a cell of its
+  own with its x offset drawn in (an offline Font has no per-glyph offset), which lands each glyph and advance where
+  the BMFont does; a re-import deletes the assets an earlier run made that the pack no longer has (tagged
+  `dotwork.import`; untagged assets are never touched). Still lost: kerning pairs (an offline Font has one
+  font-wide Kerning) and a negative x offset (drawn from the pen). An offline Font draws in TextRender and Canvas;
+  UMG text wants a runtime font from a TTF/OTF **(verify)**. The font's page textures can only be set by the commandlet (the editor
   refuses the `set` command), so import through `dev.py exec`, not from the editor's Python console. To try the
   importer on the golden pack, copy `data/golden/dotwork/assets/` over the project's `assets/` and run the `exec`
   line above (the pack is `golden`).

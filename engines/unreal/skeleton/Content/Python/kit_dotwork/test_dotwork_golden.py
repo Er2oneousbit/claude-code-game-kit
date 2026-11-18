@@ -21,6 +21,10 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): placed cells and centres,
 #           the stamps layer, particles loaded, the isometric map's centres straight from Paper2D;
 #           the rendered character sheet imports to its expected.json (0.15.0 review, #290)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): #286: the additive effect's flipbooks and frames draw
+#           with an additive material, the water tiles carry their animation in Paper2D's tile user data, the
+#           two-page font's glyph lands at its xoffset with its xadvance, and a re-import removes what the pack
+#           dropped (and nothing of yours)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -34,6 +38,10 @@ GOLDEN = "data/golden/dotwork"
 ISO_MAP = "map/isle"                        # the golden isometric map (16x8 diamonds, 4x3 cells)
 STAMPS_LAYER = ("map/yard", "Fixtures")     # the golden stamps layer: one 1x2 door at (7, 0)
 PARTICLES = "particles/vfx_embers_particles"
+ADDITIVE = "animated_sprite/fx_spark"        # the golden pack's blend "add" effect
+WATER = ("tileset/ground_yard", 2)          # the golden animated terrain: atlas 2, 2 frames at 4 fps
+OFFSET_FONT = ("font/duo", 65)              # glyph 65 of duo: page 1, xoffset 1, xadvance 5
+PRUNE_DEST = "/Game/DotworkPruneTest"       # the re-import check saves here, then deletes the folder
 
 
 def extra_checks(imp, actual, expected):
@@ -61,10 +69,86 @@ def extra_checks(imp, actual, expected):
             if spec.compare(want, got):
                 diffs.append(f"{ISO_MAP}: Paper2D centres cell {(x, y)} at {got}, the spec at {want}")
         blocks = next((info for aid, info in isle["tileset"]["atlases"].items() if aid == 1), None)
+        if blocks is None:
+            diffs.append(f"{ISO_MAP}: no blocks atlas")
         if blocks and blocks["offset"] != [0, 0]:
             diffs.append(f"{ISO_MAP}: the blocks tile set got Drawing Offset {blocks['offset']}, expected [0, 0] "
                          "(a 16x12 block with origin [8, 8] is where Paper2D's bottom alignment puts it)")
+    diffs += checks_286(imp)
     return diffs
+
+
+def checks_286(imp):
+    """#286, read from the engine objects: additive blend, tile animation data, a glyph's offset and advance."""
+    diffs = []
+    rec = imp.records.get(ADDITIVE)
+    for name, c in (rec or {}).get("clips", {}).items():
+        fb = c["flipbook"]
+        mats = [fb.get_editor_property("default_material")] + [
+            k.get_editor_property("sprite").get_editor_property("default_material")
+            for k in fb.get_editor_property("key_frames")]
+        modes = {m.get_blend_mode() if m else None for m in mats}
+        if modes != {unreal.BlendMode.BLEND_ADDITIVE}:
+            diffs.append(f"{ADDITIVE}/{name}: the flipbook and its frames draw with {modes}, not additively")
+    if not rec:
+        diffs.append(f"{ADDITIVE}: not built")
+    key, atlas = WATER
+    ts = imp.records.get(key, {}).get("atlases", {}).get(atlas, {}).get("tileset")
+    anims = [spec.parse_tile_user_data(md.get_editor_property("user_data_name"))
+             for md in (ts.get_editor_property("per_tile_data") if ts else [])]
+    if sum(1 for _, frames, fps in anims if frames == 2 and fps == 4) != 47:
+        diffs.append(f"{key} atlas {atlas}: the 47 water tiles do not all say anim=2@4 in their user data")
+    key, code = OFFSET_FONT
+    f = imp.records.get(key)
+    sample = paper._font_back(f)["sample"] if f else None
+    if not sample or sample[5] != 1 or sample[7] != 5 or sample[8] != 1:
+        diffs.append(f"{key}: glyph {code} should land 1 px right of the pen and advance 5 on page 1, got {sample}")
+    return diffs
+
+
+def check_prune(root):
+    """A re-import deletes what the pack no longer has (tagged by an earlier run) and keeps an untagged asset."""
+    src = os.path.join(root, GOLDEN, "assets", "dotwork", "golden.assets.json")
+    with open(src, encoding="utf-8") as f:
+        doc = json.load(f)
+    tmp = os.path.join(os.path.dirname(src), "prune_test.assets.json")
+    keep = [a for a in doc["assets"] if (a["kind"], a["name"]) in (("sprite", "crate"), ("image", "logo_golden"))]
+    lib = unreal.EditorAssetLibrary
+    try:
+        for assets in (keep, keep[:1] if keep[0]["kind"] == "sprite" else keep[1:]):
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(dict(doc, assets=assets), f)
+            if not lib.does_asset_exist(f"{PRUNE_DEST}/Mine/MI_Mine"):
+                unreal.AssetToolsHelpers.get_asset_tools().create_asset(
+                    "MI_Mine", f"{PRUNE_DEST}/Mine", unreal.MaterialInstanceConstant,
+                    unreal.MaterialInstanceConstantFactoryNew())
+            imp = paper.Importer(tmp, dest=PRUNE_DEST).run()
+            imp.save()
+        logo = [p for p in imp.pruned if "logo_golden" in p]
+        problems = []
+        if not logo or lib.does_asset_exist(logo[0]):
+            problems.append(f"the logo texture the pack dropped is still there (pruned: {imp.pruned})")
+        if not lib.does_asset_exist(f"{PRUNE_DEST}/Sprites/S_crate"):
+            problems.append("the crate the pack still has was deleted")
+        if not lib.does_asset_exist(f"{PRUNE_DEST}/Mine/MI_Mine"):
+            problems.append("an asset the importer did not make was deleted")
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        # users before what they use (a sprite before its texture): deleting a whole folder at once trips an
+        # ensure ("failed to unload all packages") while the sprite still holds its texture
+        paths = [str(p).split(".")[0] for p in lib.list_assets(PRUNE_DEST, recursive=True, include_folder=False)]
+        for path in sorted(paths, key=lambda p: "/Textures/" in p):
+            lib.delete_asset(path)
+            unreal.SystemLibrary.collect_garbage()
+        lib.delete_directory(PRUNE_DEST)
+    for line in problems:
+        unreal.log_error(f"DOTWORK_DIFF prune: {line}")
+    if problems:
+        raise AssertionError("re-import pruning: see DOTWORK_DIFF")
+    unreal.log(f"DOTWORK_PRUNE_OK a re-import removed {len(imp.pruned)} dropped asset(s) and kept the rest")
+
+
 RENDERED = "data/golden/character/sprites"   # a sheet render_sprites.py --manifest made from the golden rigged character
 
 
@@ -127,6 +211,7 @@ def main():
     unreal.log(f"DOTWORK_GOLDEN_OK {len(actual)} asset(s) match expected.json ({len(imp.textures)} textures, "
                f"{len(maps)} maps, {cells} placed cells, {len(imp.warnings)} warning(s))")
     check_rendered_character(root)
+    check_prune(root)
 
 
 main()
