@@ -123,7 +123,7 @@
 ```
 CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
-                 CoyoteTimer, Spring, FlashLimiter); motor access (MotorAccess: timing_scale, hold_to_toggle);
+                 CoyoteTimer, Spring, FlashLimiter, Feel: the SOP-18 recipe helpers); motor access (MotorAccess: timing_scale, hold_to_toggle);
                  shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic); Analog (stick and
                  trigger shaping); Report (crash files, bug-report texts); DotworkAssets (Dotwork manifests)
 src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
