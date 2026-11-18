@@ -162,16 +162,16 @@ written and every call answers `unknown`. `python tools/doctor.py` says, once th
 adapter expects the SDK. Bindings and licences were read on 2026-11-18 (E163); recheck them before you ship
 **(verify)**.
 
-| Engine | Where the layer lives | Steam adapter | Binding (licence) | Turned on by |
+| Engine | Where the layer lives (the port's files) | Steam adapter | Binding (licence) | Turned on by |
 |---|---|---|---|---|
-| Godot | `scripts/core/platform_layer.gd`, `Shell.platform` | `scripts/core/platform_steam.gd` | GodotSteam (MIT) | installing GodotSteam: `Engine.has_singleton("Steam")` at run time |
-| Unity | `Core/Platform.cs`, `Shell.I.Platform` | `Core/PlatformSteam.cs` + `Scripts/Steam/` | Steamworks.NET (MIT) | the scripting define `GAMEKIT_STEAM` (Game.Steam.asmdef's define constraint) |
-| Unreal | `GameKitPlatform.h`, the shell model's `Platform()` | `GameKitPlatformSteam.h` + `GameKitPlatformBackends.cpp` | the Steamworks SDK Unreal bundles (its Steamworks module) | `WithSteam` in GameKitShellUI.Build.cs, or `GAMEKIT_STEAM=1` when building |
+| Godot | scripts/core/platform_layer.gd, `Shell.platform` | scripts/core/platform_steam.gd | GodotSteam (MIT) | installing GodotSteam: `Engine.has_singleton("Steam")` at run time |
+| Unity | Core/Platform.cs, `Shell.I.Platform` | Core/PlatformSteam.cs + Scripts/Steam/ | Steamworks.NET (MIT) | the scripting define `GAMEKIT_STEAM` (Game.Steam.asmdef's define constraint) |
+| Unreal | GameKitPlatform.h, the shell model's `Platform()` | GameKitPlatformSteam.h + GameKitPlatformBackends.cpp | the Steamworks SDK Unreal bundles (its Steamworks module) | `WithSteam` in GameKitShellUI.Build.cs, or `GAMEKIT_STEAM=1` when building |
 | Bevy | `logic::platform`, `shell.platform` | `logic::platform_steam` | the steamworks crate (MIT / Apache-2.0); bevy_steamworks 0.17 targets Bevy 0.19 | `cargo build --features steam` |
-| C++/SDL2 | `core::Platform`, `shell.platform()` | `src/core/PlatformSteam.*` | the Steamworks SDK directly | `cmake -DGAMEKIT_STEAM=ON` with `STEAMWORKS_SDK` |
-| LÖVE | `src/core/platform.lua`, `app.platform` | `src/core/platform_steam.lua` | luasteam v6 (MIT) | the luasteam native module next to the executable |
-| RPG Maker MZ | `GamePlatform.js` (plugin), `GamePlatform.service` | `GreenworksBackend` in the same plugin | Greenworks (MIT), NW.js desktop builds | Greenworks next to `game/index.html` |
-| web, web-3d | `src/core/platform.ts`, `shell.platform` | none: a browser has no Steam | | |
+| C++/SDL2 | `core::Platform`, `shell.platform()` | src/core/PlatformSteam.* | the Steamworks SDK directly | `cmake -DGAMEKIT_STEAM=ON` with `STEAMWORKS_SDK` |
+| LÖVE | src/core/platform.lua, `app.platform` | src/core/platform_steam.lua | luasteam v6 (MIT) | the luasteam native module next to the executable |
+| RPG Maker MZ | GamePlatform.js (plugin), `GamePlatform.service` | `GreenworksBackend` in the same plugin | Greenworks (MIT), NW.js desktop builds | Greenworks next to game/index.html |
+| web, web-3d | src/core/platform.ts, `shell.platform` | none: a browser has no Steam | | |
 
 What each adapter does not see **(verify)**: a store that fails after `StoreStats` returned true (the
 UserStatsStored callback); stats are read at start without RequestCurrentStats (Steamworks 1.61 and later load them
