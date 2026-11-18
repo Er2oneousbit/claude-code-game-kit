@@ -1,6 +1,6 @@
 {
  "format": "dotwork-assets-expected",
- "version": "1.1.0",
+ "version": "1.2.0",
  "pack": "golden",
  "assets": {
   "animated_sprite/fx_spark": {
@@ -430,6 +430,143 @@
      "pivot": [
       12,
       12
+     ],
+     "texture": null
+    }
+   },
+   "directions": {}
+  },
+  "animated_sprite/vfx_muzzle": {
+   "blend": "add",
+   "clips": {
+    "play": {
+     "frames": 3,
+     "rects": [
+      [
+       0,
+       0,
+       16,
+       8
+      ],
+      [
+       16,
+       0,
+       16,
+       8
+      ],
+      [
+       32,
+       0,
+       16,
+       8
+      ]
+     ],
+     "seconds": [
+      0.033333,
+      0.033333,
+      0.033333
+     ],
+     "length": 0.1,
+     "loop": false,
+     "pivot": [
+      0,
+      4
+     ],
+     "texture": "art/fx/vfx/muzzle/vfx_muzzle_sheet.png"
+    }
+   },
+   "directions": {}
+  },
+  "animated_sprite/vfx_muzzle_light": {
+   "blend": "add",
+   "clips": {
+    "play": {
+     "frames": 3,
+     "rects": [
+      [
+       0,
+       0,
+       8,
+       8
+      ],
+      [
+       0,
+       0,
+       8,
+       8
+      ],
+      [
+       0,
+       0,
+       8,
+       8
+      ]
+     ],
+     "seconds": [
+      0.033333,
+      0.033333,
+      0.033333
+     ],
+     "length": 0.1,
+     "loop": false,
+     "pivot": [
+      4,
+      4
+     ],
+     "texture": null
+    }
+   },
+   "directions": {}
+  },
+  "animated_sprite/vfx_tracer": {
+   "blend": "add",
+   "clips": {
+    "fly": {
+     "frames": 2,
+     "rects": [
+      [
+       0,
+       0,
+       8,
+       8
+      ],
+      [
+       0,
+       0,
+       8,
+       8
+      ]
+     ],
+     "seconds": [
+      0.083333,
+      0.083333
+     ],
+     "length": 0.166667,
+     "loop": true,
+     "pivot": [
+      4,
+      4
+     ],
+     "texture": null
+    },
+    "trail": {
+     "frames": 1,
+     "rects": [
+      [
+       0,
+       0,
+       16,
+       8
+      ]
+     ],
+     "seconds": [
+      0.083333
+     ],
+     "length": 0.083333,
+     "loop": true,
+     "pivot": [
+      16,
+      4
      ],
      "texture": null
     }
@@ -2929,6 +3066,9 @@
    "kind": "normal_map"
   },
   "particles/vfx_embers_particles": {
+   "kind": "particles"
+  },
+  "particles/vfx_stone_debris_particles": {
    "kind": "particles"
   },
   "portrait/sage": {

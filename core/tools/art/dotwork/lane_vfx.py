@@ -13,6 +13,9 @@
 #           #RRGGBB, dark to light, used as given), seed. Projectiles: trail (sprite / line / particles; default
 #           sprite for the arrow and the bolt, particles for the orb). Particle kinds: amount (1 .. 256), one_shot
 #           (true / false; a one-shot bursts out at once, a loop streams).
+#           Shooting (#164): muzzle_flash (sparks: true / false), muzzle_light, tracer, debris (sample: a PNG of the
+#           game to take the chips' colours from, sample_rect: [x, y, w, h] in it); trail tracer (any projectile;
+#           the tracer's default): length (px, the longest trail) and spacing (px between kept points).
 # Notes   : Godot: vfx_<name>.tscn. Projectiles are a Node2D (a Trail child behind a Body AnimatedSprite2D) pointing
 #           right: set the root's rotation to the flight direction and move it. Puffs and bursts are an autoplaying
 #           AnimatedSprite2D that stops on its last (empty) frame (connect animation_finished to free it); ground kinds
@@ -21,7 +24,15 @@
 #           restart() replays it. Glowing kinds use mat_additive.tres; dust and the arrow's body blend normally.
 #           Other engines: frames, sheets + JSON, and vfx_<name>_particles.json with the emitter settings and the
 #           colour steps over a particle's life.
+#           Shooting: a muzzle flash puts the barrel tip (its left edge) on the node origin and points right; the
+#           muzzle light is the glow plus a PointLight2D whose energy steps with the frames (other engines: the
+#           manifest's light field); a tracer's Trail is a top_level Line2D the game feeds the real path
+#           (golden_vectors.trail_push; other engines: the manifest's tracer field); debris is a one-shot
+#           GPUParticles2D throwing chips along the node's +x (turn it to the surface normal), gravity world-down.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects (#164): muzzle_flash,
+#           muzzle_light (glow + PointLight2D pulse), tracer and trail tracer (the real path), debris with colours
+#           sampled from the hit surface; the light and tracer fields of manifest spec 1.2.0
 # ---------------------------------------------------------------------------
 import json
 import math
@@ -38,14 +49,17 @@ from lane_spells import paint as glow_paint
 
 DUST = ("4e4236", "7c6a54", "a89272", "d2c2a0")
 SPARKLE = ("5a4410", "c0962c", "f8dc78", "ffffff")
+MUZZLE = ("7a2a08", "d86a18", "ffb438", "ffe890", "ffffff")
 RAMPS = {   # dark -> light, as in lane_spells; the bolt, orb, level-up and ember ramps are the spells' own
     "arrow": ("2e2620", "5c4430", "8c6a48", "b4b4b0", "f2f2ec"),   # dark, dark wood, wood, iron, glint
     "bolt": SPELL_RAMPS["bolt"], "orb": SPELL_RAMPS["orb"],
     "dust": DUST, "footstep": DUST, "landing": DUST, "dust_particles": DUST,
     "pickup_sparkle": SPARKLE, "sparkle_particles": SPARKLE,
     "level_up": SPELL_RAMPS["aura"], "ember_particles": SPELL_RAMPS["fire"],
+    "muzzle_flash": MUZZLE, "muzzle_light": MUZZLE, "tracer": ("6a3a10", "c87a20", "ffc850", "fff0b0", "ffffff"),
+    "debris": ("3a3430", "6a625a", "9a9288", "c8c0b4"),
 }
-TRAILS = ("sprite", "line", "particles")
+TRAILS = ("sprite", "line", "particles", "tracer")
 HEX = re.compile(r"^#?[0-9a-fA-F]{6}$")
 
 
@@ -310,6 +324,70 @@ def level_up(t, s, seed):
     return out
 
 
+# -------------------------------------------------- shooting (#164): a muzzle flash, a firing light pulse, a tracer
+def muzzle_flash(t, s, seed, sparks=False):
+    """A muzzle flash pointing right from the barrel tip (the canvas's left edge, centre row): a white-hot core at the
+    tip, a long spike along the shot and two short prongs at 30 degrees, all shrinking and breaking up over the shot
+    (one-shot: t = 1 is empty). sparks: a few sideways sparks thrown off the core. The scene script turns and scales
+    each shot a little (SOP-18 recipe), so one strip serves every shot."""
+    xx, yy = _grid(s)
+    cy = (s - 1) / 2
+    a = 1.0 - t                                                   # strength: full on frame 0, gone at t = 1
+    if a <= 0.0:
+        return np.zeros_like(xx)
+    out = _disk(xx, yy, s * 0.16, cy, s * 0.24 * (0.5 + 0.5 * a), sx=1.4, sy=1.0)
+    length = s * (0.6 + 0.4 * a)
+    for ang, ln, wd in ((0.0, length, s * 0.16), (0.6, length * 0.55, s * 0.1), (-0.6, length * 0.55, s * 0.1)):
+        ux, uy = math.cos(ang), math.sin(ang)
+        along = xx * ux + (yy - cy) * uy                         # distance along the prong from the tip
+        across = np.abs(-xx * uy + (yy - cy) * ux)
+        u = np.clip(along / max(1.0, ln), 0, 1)
+        inside = (along >= 0) & (along <= ln)
+        width = np.maximum(0.7, wd * (1 - u))                    # tapers to a point
+        out = np.maximum(out, np.clip(1 - across / width, 0, 1) ** 0.5 * (1 - 0.45 * u) * inside * (0.55 + 0.45 * a))
+    if sparks:
+        rng = np.random.default_rng(seed)
+        for _ in range(4):
+            ang = rng.uniform(0.6, 1.3) * rng.choice((-1, 1))
+            r = s * (0.15 + 0.5 * t) * rng.uniform(0.7, 1.0)
+            x, y = s * 0.14 + math.cos(ang) * r, cy + math.sin(ang) * r
+            out = np.maximum(out, _disk(xx, yy, x, y, max(0.8, s * 0.06)) * (0.5 + 0.5 * a))
+    grain = np.random.default_rng(seed + 1).random((s, s))
+    return out * (grain >= _ease(t - 0.25))                       # the last lit frame breaks up into grains
+
+
+def muzzle_light(t, s, seed):
+    """The firing light pulse drawn as an additive glow (every engine shows it; the Godot scene adds a PointLight2D
+    that lights nearby lit tiles): a soft disc that flares on frame 0 and dies away by the energy curve below."""
+    xx, yy = _grid(s)
+    c = (s - 1) / 2
+    e = light_energy(t)
+    return _disk(xx, yy, c, c, s * 0.48) ** 1.3 * (0.3 + 0.7 * e) if e > 0 else np.zeros_like(xx)   # dim, not gone
+
+
+def light_energy(t):
+    """The light's energy over the pulse: 1 at the flash, falling straight to 0 at the end (t = 1)."""
+    return max(0.0, 1.0 - t)
+
+
+def tracer(t, s, seed):
+    """A tracer round flying right: a short white-hot slug with a hot rim; its glow flickers a little (loop). The
+    path behind it is the tracer trail (a Line2D fed the real path, `trail: tracer`)."""
+    xx, yy = _grid(s)
+    cx, cy = s * 0.62, (s - 1) / 2
+    out = _disk(xx, yy, cx, cy, s * 0.16, sx=2.4, sy=0.6)
+    return np.maximum(out, _disk(xx, yy, cx, cy, s * 0.24, sx=2.2, sy=0.9) * (0.45 + 0.2 * math.cos(2 * math.pi * t)))
+
+
+def tracer_trail(t, w, h, seed):
+    """The tracer's ribbon as a strip (the texture a ribbon of the real path can use): a thin band brightening from
+    the tail (left) to the head (right)."""
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    v = xx / max(1, w - 1)
+    band = np.clip(1 - np.abs(yy - (h - 1) / 2) / np.maximum(0.6, h * 0.1 * (0.4 + 0.6 * v)), 0, 1)
+    return band * (0.25 + 0.7 * v)
+
+
 # -------------------------------------------------- kinds
 # sprite kinds: drawing, default size, frames, loops, blend, anchor, trail drawing, where the trail joins (canvas px)
 KINDS = {
@@ -321,13 +399,25 @@ KINDS = {
     "landing": (landing, 40, 7, False, "mix", "bottom", None, None),
     "pickup_sparkle": (pickup_sparkle, 16, 6, False, "add", "center", None, None),
     "level_up": (level_up, 48, 10, False, "add", "bottom", None, None),
+    "muzzle_flash": (muzzle_flash, 16, 4, False, "add", "left", None, None),
+    "muzzle_light": (muzzle_light, 32, 4, False, "add", "center", None, None),
+    "tracer": (tracer, 12, 2, True, "add", "center", tracer_trail, lambda s: int(s * 0.3)),
 }
-PROJECTILES = ("arrow", "bolt", "orb")
-DEFAULT_TRAIL = {"arrow": "sprite", "bolt": "sprite", "orb": "particles"}
+PROJECTILES = ("arrow", "bolt", "orb", "tracer")
+DEFAULT_TRAIL = {"arrow": "sprite", "bolt": "sprite", "orb": "particles", "tracer": "tracer"}
+DEFAULT_FPS = {"muzzle_flash": 30, "muzzle_light": 30}             # a shot reads in 2 or 3 frames (60 fps: 4 to 6)
+LINE_WIDTH = {"arrow": lambda s: max(1.0, s / 16), "bolt": lambda s: s * 0.2, "orb": lambda s: s * 0.4,
+              "tracer": lambda s: max(1.0, s * 0.17)}            # a Line2D trail's width at its head (px)
+TRACER_TAPER = 0.25               # a tracer ribbon's width at its tail, as a fraction of the head's
+TRACER_SPACING = 4.0               # px between kept points of a tracer's path (golden_vectors.trail_push)
+TRACER_LENGTH = 4                  # the tracer's longest trail, in canvas sizes (spec key length: px)
+SAMPLE_COLOURS = 4                 # debris colours taken from a sampled surface
+LIGHT_PEAK = 1.2                   # the PointLight2D energy on the flash frame
+LIGHT_TEXTURE = 64                 # px: the white radial falloff a PointLight2D (or an engine's 2D light) draws
 
 # particle textures: white masks (rows of "#"), tinted by the colour steps of the process material's ramp
 MASKS = {"blob": (".##.", "####", "####", ".##."), "plus": ("..#..", "..#..", "#####", "..#..", "..#.."),
-         "plus3": (".#.", "###", ".#."), "dot": ("##", "##"), "dash": ("##",)}
+         "plus3": (".#.", "###", ".#."), "dot": ("##", "##"), "dash": ("##",), "chip": ("##", "#.")}
 # particle kinds: mask, blend, default area (size), amount, lifetime, one_shot, burst explosiveness, randomness,
 # emission (shape, extents as fractions of the area), direction, spread (deg), speed (px/s at the default area),
 # gravity (px/s^2), damping
@@ -341,10 +431,16 @@ PARTICLES = {
     "ember_particles": dict(mask="dot", blend="add", size=24, amount=16, lifetime=1.4, one_shot=False, burst=0.6,
                             randomness=0.4, shape="box", extents=(0.5, 0.08), direction=(0, -1), spread=20.0,
                             speed=(12.0, 28.0), gravity=(0, -12), damping=(2.0, 6.0)),
+    # wall-impact debris (#164): chips thrown out of the wall along the node's +x (turn the node to the surface
+    # normal), falling under gravity; colours from the hit surface (spec key sample). Godot's gravity stays world-down
+    # when the node turns (local_coords false); no bounce (GPUParticles2D needs collision nodes for that).
+    "debris": dict(mask="chip", blend="mix", size=16, amount=8, lifetime=0.7, one_shot=True, burst=1.0,
+                   randomness=0.4, shape="sphere", extents=(0.06, 0.06), direction=(1, 0), spread=60.0,
+                   speed=(40.0, 110.0), gravity=(0, 260), damping=(8.0, 16.0)),
 }
 # a projectile's particle trail: mask, amount, lifetime, speed backward (px/s); it starts at the join point
 TRAIL_PARTICLES = {"arrow": ("dash", 10, 0.25, (4.0, 8.0)), "bolt": ("dot", 16, 0.3, (6.0, 14.0)),
-                   "orb": ("plus3", 14, 0.35, (4.0, 10.0))}
+                   "orb": ("plus3", 14, 0.35, (4.0, 10.0)), "tracer": ("dash", 16, 0.15, (2.0, 4.0))}
 
 
 def ramp_of(e, kind):
@@ -366,14 +462,56 @@ def ramp_of(e, kind):
     return np.array([[int(h[i:i + 2], 16) for i in (0, 2, 4)] for h in cols], np.float32)
 
 
+def sample_ramp(name, sample, rect, conf_root="."):
+    """Debris colours from the hit surface (#164): the most common opaque colours of a PNG in the game (a tile, a
+    terrain atlas cell with sample_rect [x, y, w, h]), up to SAMPLE_COLOURS of them, dark to light. So stone chips
+    look like stone and wood like wood: one debris entry per surface."""
+    if not isinstance(sample, str) or not sample.lower().endswith(".png"):
+        raise core.ToolError(f"vfx {name}: sample is the path of a PNG in the game (got {sample!r})")
+    root = os.path.realpath(conf_root)
+    path = os.path.realpath(os.path.join(root, sample))
+    if os.path.commonpath([root, path]) != root:
+        raise core.ToolError(f"vfx {name}: sample {sample} is outside the game folder")
+    if not os.path.isfile(path):
+        raise core.ToolError(f"vfx {name}: sample {sample} not found")
+    a = np.array(Image.open(path).convert("RGBA"))
+    if rect is not None:
+        if (not isinstance(rect, list) or len(rect) != 4
+                or not all(isinstance(v, int) and not isinstance(v, bool) for v in rect)
+                or rect[2] < 1 or rect[3] < 1 or rect[0] < 0 or rect[1] < 0
+                or rect[0] + rect[2] > a.shape[1] or rect[1] + rect[3] > a.shape[0]):
+            raise core.ToolError(f"vfx {name}: sample_rect is [x, y, w, h] inside the {a.shape[1]}x{a.shape[0]} "
+                                 f"image (got {rect!r})")
+        a = a[rect[1]:rect[1] + rect[3], rect[0]:rect[0] + rect[2]]
+    return palette_of(name, a)
+
+
+def palette_of(name, rgba):
+    """The SAMPLE_COLOURS most common colours with alpha >= 128 (ties: the darker first), sorted dark to light by
+    luma; one colour gets a darker step under it, so the ramp always has two."""
+    px = rgba.reshape(-1, 4)
+    px = px[px[:, 3] >= 128][:, :3].astype(int)
+    if not len(px):
+        raise core.ToolError(f"vfx {name}: sample has no opaque pixels to take colours from")
+    cols, counts = np.unique(px, axis=0, return_counts=True)
+    luma = cols @ np.array([299, 587, 114])
+    order = sorted(range(len(cols)), key=lambda i: (-counts[i], luma[i], tuple(cols[i])))[:SAMPLE_COLOURS]
+    pick = sorted((cols[i] for i in order), key=lambda c: (int(c @ np.array([299, 587, 114])), tuple(c)))
+    if len(pick) == 1:
+        pick = [np.floor(pick[0] * 0.6), pick[0]]
+    return np.array(pick, np.float32)
+
+
 def paint(kind, level, ramp):
     return solid_paint(level, ramp) if kind == "arrow" else glow_paint(level, ramp)
 
 
-def frames(kind, size, n, seed, ramp):
+def frames(kind, size, n, seed, ramp, sparks=False):
     """The animation: loops sample t = i / n (the frame after the last is the first), one-shots t = i / (n - 1) (the
     last frame is t = 1: empty)."""
     draw, _, _, loop = KINDS[kind][:4]
+    if kind == "muzzle_flash":
+        draw = (lambda t, s, sd, _d=draw: _d(t, s, sd, sparks))
     return [paint(kind, draw(i / n if loop else i / max(1, n - 1), size, seed), ramp) for i in range(n)]
 
 
@@ -500,12 +638,68 @@ def sprite_scene(path, node, frames_res, mat_res, anim, offset=(0, 0)):
     return godot._write(path, _scene_text(ext, [], nodes))
 
 
+def light_meta(name, clip, n, size, ramp):
+    """The firing light pulse for engines with 2D lights: its texture (beside the frames), colour, reach and the
+    energy of each frame of the clip (frame i shows energy[i]; the last is 0)."""
+    c = ramp[-2]
+    return {"clip": clip, "texture": f"vfx_{name}_light.png", "color": "#%02x%02x%02x" % tuple(int(v) for v in c),
+            "radius": size, "energy": [round(light_energy(i / max(1, n - 1)) * LIGHT_PEAK, 4) for i in range(n)]}
+
+
+def light_texture():
+    """A white radial falloff, LIGHT_TEXTURE px square: 1 at the centre, 0 at the edge (smooth)."""
+    xx, yy = _grid(LIGHT_TEXTURE)
+    c = (LIGHT_TEXTURE - 1) / 2
+    v = _ease(1 - np.hypot(xx - c, yy - c) / c)
+    a = np.zeros((LIGHT_TEXTURE, LIGHT_TEXTURE, 4), np.uint8)
+    a[..., :3] = 255
+    a[..., 3] = np.round(v * 255).astype(np.uint8)
+    return a
+
+
+def tracer_meta(kind, size, ramp, spacing, length):
+    """The tracer ribbon for every engine: the head's width, the tail's fraction of it, the point spacing and the
+    longest length (golden_vectors.trail_push), and the colour steps tail (0) to head (1)."""
+    offs, cols = trail_gradient(ramp)
+    return {"width": round(LINE_WIDTH[kind](size), 4), "taper": TRACER_TAPER, "spacing": spacing, "length": length,
+            "steps": [{"at": round(o, 4), "rgba": [int(c[0]), int(c[1]), int(c[2]), c[3]]}
+                      for o, c in zip(offs, cols)]}
+
+
+def light_scene(path, node, frames_res, mat_res, tex_res, light, fps):
+    """The muzzle light: the additive glow (an autoplaying AnimatedSprite2D, as every engine draws it) with a
+    PointLight2D child whose energy a Pulse AnimationPlayer steps in time with the frames, so lit tiles and props
+    around the barrel flare too. The game skips the pulse when the flash limiter refuses it (SOP-18 recipe)."""
+    ext = [f'[ext_resource type="SpriteFrames" path="{frames_res}" id="1_frames"]',
+           f'[ext_resource type="Material" path="{mat_res}" id="2_mat"]',
+           f'[ext_resource type="Texture2D" path="{tex_res}" id="3_light"]']
+    n = len(light["energy"])
+    subs = ['[sub_resource type="Animation" id="Animation_pulse"]', f"length = {_f(n / fps)}",
+            'tracks/0/type = "value"', "tracks/0/imported = false", "tracks/0/enabled = true",
+            'tracks/0/path = NodePath("Light:energy")', "tracks/0/interp = 0", "tracks/0/loop_wrap = true",
+            "tracks/0/keys = {", f'"times": PackedFloat32Array({", ".join(_f(i / fps) for i in range(n))}),',
+            f'"transitions": PackedFloat32Array({", ".join("1" for _ in range(n))}),', '"update": 1,',
+            f'"values": [{", ".join(_f(e) for e in light["energy"])}]', "}", "",
+            '[sub_resource type="AnimationLibrary" id="AnimationLibrary_pulse"]', "_data = {",
+            '&"pulse": SubResource("Animation_pulse")', "}", ""]
+    c = light["color"].lstrip("#")
+    rgb = [int(c[i:i + 2], 16) / 255 for i in (0, 2, 4)]
+    nodes = [f'[node name="{node}" type="AnimatedSprite2D"]', "texture_filter = 1", 'material = ExtResource("2_mat")',
+             'sprite_frames = ExtResource("1_frames")', 'animation = &"play"', 'autoplay = "play"', "",
+             '[node name="Light" type="PointLight2D" parent="."]',
+             f"color = Color({_f(rgb[0])}, {_f(rgb[1])}, {_f(rgb[2])}, 1)", "energy = 0.0",
+             'texture = ExtResource("3_light")', f"texture_scale = {_f(2 * light['radius'] / LIGHT_TEXTURE)}", "",
+             '[node name="Pulse" type="AnimationPlayer" parent="."]', "libraries = {",
+             '&"": SubResource("AnimationLibrary_pulse")', "}", 'autoplay = &"pulse"', ""]
+    return godot._write(path, _scene_text(ext, subs, nodes))
+
+
 def projectile_scene(path, node, kind, size, mode, frames_res, mat_res, body_add, ramp, trail_tex_res=None):
     """Node2D root pointing right: a Trail child (strip / Line2D / world-space GPUParticles2D) drawn behind a Body that
     plays the flight loop. Rotate the root to the flight direction and move it."""
     ext = [f'[ext_resource type="SpriteFrames" path="{frames_res}" id="1_frames"]',
            f'[ext_resource type="Material" path="{mat_res}" id="2_mat"]']
-    node_type = {"sprite": "AnimatedSprite2D", "line": "Line2D", "particles": "GPUParticles2D"}[mode]
+    node_type = {"sprite": "AnimatedSprite2D", "line": "Line2D", "particles": "GPUParticles2D", "tracer": "Line2D"}[mode]
     subs, trail = [], [f'[node name="Trail" type="{node_type}" parent="."]', "texture_filter = 1",
                        'material = ExtResource("2_mat")']
     join = trail_join(kind, size)
@@ -514,12 +708,21 @@ def projectile_scene(path, node, kind, size, mode, frames_res, mat_res, body_add
                   'animation = &"trail"', 'autoplay = "trail"']
     elif mode == "line":
         offs, cols = trail_gradient(ramp)
-        width = {"arrow": max(1.0, size / 16), "bolt": size * 0.2, "orb": size * 0.4}[kind]
+        width = LINE_WIDTH[kind](size)
         subs += _gradient("Gradient_trail", offs, cols) + [
             '[sub_resource type="Curve" id="Curve_taper"]',
             "_data = [Vector2(0, 0.25), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]", "point_count = 2", ""]
         trail += [f"points = PackedVector2Array({join + 1 - 2 * size}, 0, {join + 1}, 0)", f"width = {_f(width)}",
                   'width_curve = SubResource("Curve_taper")', 'gradient = SubResource("Gradient_trail")']
+    elif mode == "tracer":                                        # the real path: world space, fed by the game
+        offs, cols = trail_gradient(ramp)
+        subs += _gradient("Gradient_trail", offs, cols) + [
+            '[sub_resource type="Curve" id="Curve_taper"]',
+            f"_data = [Vector2(0, {_f(TRACER_TAPER)}), 0.0, 0.0, 0, 0, Vector2(1, 1), 0.0, 0.0, 0, 0]",
+            "point_count = 2", ""]
+        trail += ["top_level = true", f"width = {_f(LINE_WIDTH[kind](size))}",
+                  'width_curve = SubResource("Curve_taper")', 'gradient = SubResource("Gradient_trail")',
+                  "joint_mode = 2", "begin_cap_mode = 2", "end_cap_mode = 2"]
     else:
         ext.append(f'[ext_resource type="Texture2D" path="{trail_tex_res}" id="3_tex"]')
         m, amount, life, speed = TRAIL_PARTICLES[kind]
@@ -597,7 +800,7 @@ def _line_strip(kind, size, ramp):
     """The Line2D trail rasterised for review: a band that tapers toward the tail, coloured in the gradient's steps."""
     w, h = 2 * size, size
     offs, cols = trail_gradient(ramp)
-    width = {"arrow": max(1.0, size / 16), "bolt": size * 0.2, "orb": size * 0.4}[kind]
+    width = LINE_WIDTH[kind](size)
     a = np.zeros((h, w, 4), np.uint8)
     for x in range(w):
         v = x / max(1, w - 1)
@@ -610,6 +813,61 @@ def _line_strip(kind, size, ramp):
             if abs(y + 0.5 - h / 2) <= max(0.5, half):
                 a[y, x] = (int(r), int(g), int(b), 255)
     return a
+
+
+def _trail_helpers():
+    """golden_vectors' trail_push / trail_length (tools/golden_vectors.py: the juice reference every engine ports), so
+    the review draws exactly the point history the game's tracer keeps."""
+    import sys
+    tools = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+    if tools not in sys.path:
+        sys.path.insert(0, tools)
+    import golden_vectors
+    return golden_vectors.trail_push, golden_vectors.trail_length
+
+
+def tracer_review(kind, size, body, ramp, n, spacing, length):
+    """A tracer on a curving shot, as the game draws it: the body at the head (turned to its heading) and the ribbon
+    through the points trail_push kept, tapering and fading to the tail. The last n steps of the flight, one image
+    each (review only)."""
+    push, total = _trail_helpers()
+    w, h = 6 * size, 3 * size
+    offs, cols = trail_gradient(ramp)
+    width = LINE_WIDTH[kind](size)
+    steps = 40
+    path = [(size + (w - 2 * size) * i / steps, h * 0.8 - math.sin(math.pi * i / steps * 0.8) * h * 0.6)
+            for i in range(steps + 1)]
+    pts, out = [], []
+    for i, (x, y) in enumerate(path):
+        pts = push(pts, x, y, spacing, length)
+        if i < steps + 1 - n:
+            continue
+        img = np.zeros((h, w, 4), np.uint8)
+        L = total(pts)
+        run = 0.0
+        for j in range(len(pts) - 1):
+            (x0, y0), (x1, y1) = pts[j], pts[j + 1]
+            seg = math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2)
+            for k in range(max(1, int(seg * 2))):
+                f = k / max(1, int(seg * 2))
+                u = (run + seg * f) / L if L > 0 else 1.0
+                half = max(0.5, width * (TRACER_TAPER + (1 - TRACER_TAPER) * u) / 2)
+                r, g, b, al = cols[max(m for m, o in enumerate(offs) if o <= u)]
+                if al <= 0:
+                    continue
+                cx, cy = x0 + (x1 - x0) * f, y0 + (y1 - y0) * f
+                for yy in range(int(cy - half), int(cy + half) + 1):
+                    for xx in range(int(cx - half), int(cx + half) + 1):
+                        if 0 <= xx < w and 0 <= yy < h and (xx + 0.5 - cx) ** 2 + (yy + 0.5 - cy) ** 2 <= half * half:
+                            img[yy, xx] = (int(r), int(g), int(b), 255)
+            run += seg
+        im = Image.fromarray(img)
+        px, py = path[max(0, i - 1)]
+        ang = math.degrees(math.atan2(-(y - py), x - px))
+        b = Image.fromarray(body[i % len(body)]).rotate(ang, resample=Image.NEAREST, expand=True)
+        im.alpha_composite(b, (int(round(x - b.width / 2)), int(round(y - b.height / 2))))
+        out.append(im)
+    return out
 
 
 def composite(kind, size, mode, body, strip, ramp, seed, n):
@@ -653,10 +911,18 @@ def _plan(e):
     kind = e.get("kind", name)
     if kind not in KINDS and kind not in PARTICLES:
         raise core.ToolError(f"vfx {name}: kind {kind!r} is not one of {', '.join(list(KINDS) + list(PARTICLES))}")
-    ramp = ramp_of(dict(e, name=name), kind)
+    for key, only in (("sparks", ("muzzle_flash",)), ("sample", ("debris",)), ("sample_rect", ("debris",))):
+        if e.get(key) is not None and kind not in only:
+            raise core.ToolError(f"vfx {name}: {key} is for the kind {', '.join(only)}")
+    if e.get("sample") is not None:
+        if e.get("colors") is not None or e.get("color") is not None:
+            raise core.ToolError(f"vfx {name}: sample picks the colours; drop color / colors")
+        ramp = sample_ramp(name, e["sample"], e.get("sample_rect"), conf_root=e.get("_root", "."))
+    else:
+        ramp = ramp_of(dict(e, name=name), kind)
     seed = core.seed_of(e, 7600)
     if kind in PARTICLES:
-        for key in ("frames", "fps", "trail"):
+        for key in ("frames", "fps", "trail", "length", "spacing"):
             if e.get(key) is not None:
                 raise core.ToolError(f"vfx {name}: {key} is not used by the particle kind {kind}")
         p = dict(PARTICLES[kind])
@@ -666,13 +932,14 @@ def _plan(e):
         if not isinstance(one_shot, bool):
             raise core.ToolError(f"vfx {name}: one_shot is true or false")
         p.update(amount=amount, one_shot=one_shot, explosiveness=p["burst"] if one_shot else 0.0)
-        return dict(name=name, kind=kind, ramp=ramp, seed=seed, particles=p, area=area)
+        return dict(name=name, kind=kind, ramp=ramp, seed=seed, particles=p, area=area,
+                    sample=e.get("sample"), sample_rect=e.get("sample_rect"))
     for key in ("amount", "one_shot"):
         if e.get(key) is not None:
             raise core.ToolError(f"vfx {name}: {key} is for the particle kinds ({', '.join(PARTICLES)})")
     draw, size0, n0, loop, blend, anchor = KINDS[kind][:6]
     size, n = e.get("size", size0), e.get("frames", n0)
-    fps = e.get("fps", 12)
+    fps = e.get("fps", DEFAULT_FPS.get(kind, 12))
     size, n, fps = (_whole(name, key, v, lo, hi) for key, v, lo, hi in
                     (("size", size, 8, 128), ("frames", n, 2, 32), ("fps", fps, 1, 60)))
     trail = e.get("trail")
@@ -682,8 +949,19 @@ def _plan(e):
         trail = DEFAULT_TRAIL[kind] if trail is None else trail
         if trail not in TRAILS:
             raise core.ToolError(f"vfx {name}: trail {trail!r} is not one of {', '.join(TRAILS)}")
+    if trail != "tracer":
+        for key in ("length", "spacing"):
+            if e.get(key) is not None:
+                raise core.ToolError(f"vfx {name}: {key} is for trail tracer")
+    length = _whole(name, "length", e.get("length", TRACER_LENGTH * size), 8, 2048)
+    spacing = e.get("spacing", TRACER_SPACING)
+    if isinstance(spacing, bool) or not isinstance(spacing, (int, float)) or not 1 <= spacing <= 64:
+        raise core.ToolError(f"vfx {name}: spacing is a number of px, 1 .. 64 (got {spacing!r})")
+    sparks = e.get("sparks", False)
+    if not isinstance(sparks, bool):
+        raise core.ToolError(f"vfx {name}: sparks is true or false")
     return dict(name=name, kind=kind, ramp=ramp, seed=seed, size=size, n=n, fps=fps, loop=loop, blend=blend,
-                anchor=anchor, trail=trail)
+                anchor=anchor, trail=trail, length=length, spacing=float(spacing), sparks=sparks)
 
 
 def _sheet(out, stem, imgs, w, h, meta, man, kind):
@@ -701,17 +979,25 @@ def _sprite_entry(pl, base, res, man, mat_res):
     name, kind, size, n, fps, loop, ramp = (pl[k] for k in ("name", "kind", "size", "n", "fps", "loop", "ramp"))
     out = os.path.join(base, name)
     man.drop_dir(out)
-    body = frames(kind, size, n, pl["seed"], ramp)
+    body = frames(kind, size, n, pl["seed"], ramp, sparks=pl.get("sparks", False))
     anim = "fly" if kind in PROJECTILES else "play"
     files = {anim: [], "trail": []}
+    extra = {}                          # what the manifest carries beside the clips (ASSET_MANIFEST.md 1.2.0)
+    if kind == "muzzle_light":
+        extra["light"] = light_meta(name, anim, n, size, ramp)
+        lt = core.save_clean(Image.fromarray(light_texture()), os.path.join(out, extra["light"]["texture"]))
+        man.add(lt, "light_texture", usage="white radial falloff for a 2D light (PointLight2D texture)",
+                workflow="Dotwork vfx muzzle_light (drawn in code)")
+    if pl.get("trail") == "tracer":
+        extra["tracer"] = tracer_meta(kind, size, ramp, pl["spacing"], pl["length"])
     for i, a in enumerate(body):
         fn = f"spr_vfx_{name}_{i:02d}.png"
         man.add(core.save_clean(Image.fromarray(a), os.path.join(out, fn)), "fx_frame", animation=name,
                 canvas=[size, size], anchor=pl["anchor"], blend=pl["blend"],
-                workflow=f"Dotwork vfx {kind} (drawn in code)")
+                workflow=f"Dotwork vfx {kind} (drawn in code)", **extra)
         files[anim].append(fn)
     meta = {"frame_w": size, "frame_h": size, "frames": n, "fps": fps, "loop": loop, "anchor": pl["anchor"],
-            "blend": pl["blend"]}
+            "blend": pl["blend"], **extra}
     strip = None
     if kind in PROJECTILES:
         strip = trail_frames(kind, size, n, pl["seed"], ramp)
@@ -746,13 +1032,22 @@ def _sprite_entry(pl, base, res, man, mat_res):
         scn = projectile_scene(scn_path, node, kind, size, pl["trail"], frames_res, mat_res, pl["blend"] == "add", ramp,
                                tex_res)
         man.add(scn, "scene", node="Node2D > Trail + Body", trail=pl["trail"], autoplay="fly")
+    elif kind == "muzzle_light":
+        scn = light_scene(scn_path, node, frames_res, mat_res, f"{res}/{name}/{extra['light']['texture']}",
+                          extra["light"], fps)
+        man.add(scn, "scene", node="AnimatedSprite2D > Light (PointLight2D) + Pulse (AnimationPlayer)",
+                autoplay="play", blend="add", anchor="center")
     else:
         off = (0, -(size // 2)) if pl["anchor"] == "bottom" else (0, 0)
+        if pl["anchor"] == "left":                                # the barrel tip on the node origin
+            off = (size // 2, 0)
         scn = sprite_scene(scn_path, node, frames_res, mat_res if pl["blend"] == "add" else None, "play", off)
         man.add(scn, "scene", node="AnimatedSprite2D", autoplay="play", blend=pl["blend"], anchor=pl["anchor"])
     core.log(f"vfx {name}: {kind}, {n} frames at {fps} fps, {size} px" + (" (loop)" if loop else "")
              + (f", trail {pl['trail']}" if kind in PROJECTILES else ""))
-    if kind in PROJECTILES:
+    if pl.get("trail") == "tracer":
+        shots = tracer_review(kind, size, body, ramp, max(n, 4), pl["spacing"], pl["length"])
+    elif kind in PROJECTILES:
         shots = composite(kind, size, pl["trail"], body, strip, ramp, pl["seed"], n)
     else:
         shots = [Image.fromarray(a) for a in body]
@@ -783,6 +1078,8 @@ def _particle_entry(pl, base, res, man, mat_res):
             "damping": [round(v * k, 2) for v in p["damping"]],
             "colour_steps": [{"from_life": round(o, 4), "rgba": [int(c[0]), int(c[1]), int(c[2]), c[3]]}
                              for o, c in zip(offs, cols)]}
+    if pl.get("sample"):                                          # debris: where its colours came from
+        meta["palette_from"] = {"source": str(pl["sample"]).replace("\\", "/"), "rect": pl.get("sample_rect")}
     mp = core.write_text(os.path.join(out, f"vfx_{name}_particles.json"), json.dumps(meta, indent=1) + "\n")
     man.add(mp, "particles_json", usage="emitter settings for engines without GPUParticles2D")
     scn = particle_scene(os.path.join(out, f"vfx_{name}.tscn"), "Vfx" + name.title().replace("_", ""),
@@ -796,6 +1093,9 @@ def _particle_entry(pl, base, res, man, mat_res):
     times = ([life * i / 5 for i in range(6)] if p["one_shot"] else [life * (2 + i / 6) for i in range(6)])
     canvas = (max(32, area * 3), max(32, area * 3))
     org = (canvas[0] / 2, canvas[1] * (0.75 if p["direction"][1] < 0 and p["shape"] == "box" else 0.5))
+    if kind == "debris":                                          # a wall on the left, chips flying out of it
+        canvas = (area * 6, area * 6)
+        org = (area * 0.5, area * 2.0)
     paths = []
     for i, a in enumerate(simulate(p, area, ramp, tex, times, canvas, org, pl["seed"])):
         paths.append(core.work("vfx", f"{name}_review_{i:02d}.png"))
@@ -806,7 +1106,7 @@ def _particle_entry(pl, base, res, man, mat_res):
 def run(entries, pack, man, conf):
     base = core.art(conf, "fx", "vfx")
     res = f'{conf["fixed"]["res_root"]}/{conf["fixed"]["art_dir"]}/fx/vfx'
-    plan = [_plan(e) for e in entries]   # every entry is checked before anything is written
+    plan = [_plan(dict(e, _root=pack)) for e in entries]   # every entry is checked before anything is written
     if not plan:
         return
     mat = godot.additive_material(os.path.join(base, "mat_additive.tres"))

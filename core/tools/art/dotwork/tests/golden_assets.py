@@ -26,6 +26,9 @@
 #           id order, so a port that sorts them by id picks other variants
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the duo font (#286): two pages, the sampled glyph on
 #           page 1 with an xoffset and a yoffset, and a kerning pair
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects (#164, spec 1.2.0): a muzzle flash
+#           (16x8 frames in a sheet, pivot on the barrel tip at the left edge), a muzzle light with its light field and
+#           texture, a tracer with its tracer field, and wall-impact debris particles in lane_vfx's emitter shape
 # ---------------------------------------------------------------------------
 import argparse
 import hashlib
@@ -199,6 +202,7 @@ def build_game(root, with_godot=False):
         _iso_map(g)
         _font_ui(g)
         _extras(g)
+        _shooting(g)
     finally:
         godot.ENABLED, godot.RECORD = True, None
     return g
@@ -493,6 +497,60 @@ def _extras(g):
     g.png("assets/art/brand/golden/logo_golden.png", Canvas(12, 4, (240, 200, 60, 255)), "logo", scale=4)
 
 
+def _shooting(g):
+    """The shooting effects (#164) as lane_vfx writes them: additive clips, the left (barrel tip) pivot, the 1.2.0
+    light and tracer fields, and a debris emitter whose colours were sampled from a surface."""
+    import lane_vfx
+    import numpy as np
+    hot = (255, 230, 140, 255)
+    out = "assets/art/fx/vfx/muzzle"
+    files, sheet = [], Canvas(48, 8)
+    for i in range(3):                                   # 16x8: a non-square frame, so a port that swaps w and h fails
+        c = Canvas(16, 8).rect(0, 3, 12 - 4 * i, 2, hot).rect(0, 2, 4 - i, 4, (255, 255, 255, 255))
+        fn = f"spr_vfx_muzzle_{i:02d}.png"
+        g.png(f"{out}/{fn}", c, "fx_frame", canvas=[16, 8], anchor="left", blend="add")
+        sheet.paste(c, 16 * i, 0)
+        files.append(fn)
+    g.png(f"{out}/vfx_muzzle_sheet.png", sheet, "sheet", frames=3, fps=30, loop=False, blend="add")
+    godot.sprite_frames(g.path(f"{out}/vfx_muzzle_frames.tres"), f"{RES}/fx/vfx/muzzle", {"play": (files, 30, False)})
+    out = "assets/art/fx/vfx/muzzle_light"
+    ramp = np.array([[122, 42, 8], [216, 106, 24], [255, 180, 56], [255, 232, 144], [255, 255, 255]], np.float32)
+    light = lane_vfx.light_meta("muzzle_light", "play", 3, 8, ramp)
+    tex = Canvas(8, 8).rect(2, 2, 4, 4, (255, 255, 255, 128)).rect(3, 3, 2, 2, (255, 255, 255, 255))
+    g.png(f"{out}/{light['texture']}", tex, "light_texture")
+    files = []
+    for i in range(3):
+        c = Canvas(8, 8).rect(3 - (2 - i), 3 - (2 - i), 2 + 2 * (2 - i), 2 + 2 * (2 - i), hot) if i < 2 else Canvas(8, 8)
+        fn = f"spr_vfx_muzzle_light_{i:02d}.png"
+        g.png(f"{out}/{fn}", c, "fx_frame", canvas=[8, 8], anchor="center", blend="add", light=light)
+        files.append(fn)
+    godot.sprite_frames(g.path(f"{out}/vfx_muzzle_light_frames.tres"), f"{RES}/fx/vfx/muzzle_light",
+                        {"play": (files, 30, False)})
+    out = "assets/art/fx/vfx/tracer"
+    tracer = lane_vfx.tracer_meta("tracer", 8, ramp, 4.0, 32)
+    fly = []
+    for i in range(2):
+        fn = f"spr_vfx_tracer_{i:02d}.png"
+        g.png(f"{out}/{fn}", Canvas(8, 8).rect(2, 3, 5, 2, hot).rect(5 + i, 3, 1, 2, (255, 255, 255, 255)), "fx_frame",
+              canvas=[8, 8], anchor="center", blend="add", tracer=tracer)
+        fly.append(fn)
+    g.png(f"{out}/spr_vfx_tracer_trail_00.png", Canvas(16, 8).rect(4, 4, 12, 1, hot), "fx_frame",
+          canvas=[16, 8], anchor="right", blend="add")
+    godot.sprite_frames(g.path(f"{out}/vfx_tracer_frames.tres"), f"{RES}/fx/vfx/tracer",
+                        {"fly": (fly, 12, True), "trail": (["spr_vfx_tracer_trail_00.png"], 12, True)})
+    out = "assets/art/fx/vfx/stone_debris"
+    g.png(f"{out}/vfx_stone_debris_particle.png", Canvas(2, 2, (255, 255, 255, 255)).rect(1, 1, 1, 1, (0, 0, 0, 0)),
+          "particle_texture", mask="chip")
+    em = {"texture": "vfx_stone_debris_particle.png", "amount": 6, "lifetime": 0.7, "one_shot": True,
+          "explosiveness": 1.0, "randomness": 0.4, "blend": "mix",
+          "emission": {"shape": "sphere", "extents_px": [1.0, 1.0]}, "direction": [1, 0], "spread_deg": 60.0,
+          "speed_px_s": [40.0, 110.0], "gravity_px_s2": [0.0, 260.0], "damping": [8.0, 16.0],
+          "colour_steps": [{"from_life": 0.0, "rgba": [160, 152, 140, 1.0]}, {"from_life": 0.5, "rgba": [90, 84, 78, 1.0]},
+                           {"from_life": 0.8, "rgba": [90, 84, 78, 0.0]}],
+          "palette_from": {"source": "assets/art/props/spr_crate.png", "rect": [3, 4, 10, 11]}}
+    g.text(f"{out}/vfx_stone_debris_particles.json", json.dumps(em, indent=1) + "\n", "particles_json")
+
+
 ORDER_CELLS = [[0, 0], [2, 0], [4, 0], [0, 2], [2, 2], [4, 2]]   # lone cells: every one has the key 0
 
 
@@ -567,7 +625,8 @@ def _files_of(doc):
     def walk(v, key=None):
         if isinstance(v, dict):
             for k, x in v.items():
-                walk(x, k)
+                if k != "emitter":       # the emitter JSON is Dotwork's own: its texture is the asset's, not a path
+                    walk(x, k)
         elif isinstance(v, list):
             for x in v:
                 walk(x, key)
