@@ -10,6 +10,7 @@
 // Authored: Written with Claude (Sonnet 5.5, claude-sonnet-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): SyncData copies the shell's data files into
 //           StreamingAssets before a build (#168)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): data/i18n/mature, the clean-language word lists (#207)
 // ---------------------------------------------------------------------------
 using System;
 using System.IO;
@@ -21,7 +22,7 @@ using UnityEngine;
 public static class GameKitBuild
 {
     // Data the shell reads at run time, relative to the project root; copied under Assets/StreamingAssets
-    public static readonly string[] DATA_DIRS = { "data/i18n", "data/input", "data/access", "data/dialogue" };
+    public static readonly string[] DATA_DIRS = { "data/i18n", "data/i18n/mature", "data/input", "data/access", "data/dialogue" };
     public static readonly string[] DATA_FILES = { "CREDITS.md" };
 
     public static void Build()

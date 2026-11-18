@@ -28,6 +28,9 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the platform services layer (#84 phase 1):
 #           achievements_load, Platform (unlock once, stat rules, offline queue and replay, presence, cloud hooks),
 #           NullBackend, cloud_partition, overlay_action, platform_state_load, and platform.json's cases
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (#171 blood, #207 clean language),
+#           CLDR 46 plural() for whole numbers with an .other fallback per locale, @clean lookups in tr and
+#           tr_plural, mask_words and mature_words, and shell.json's plural_rules, tr_clean, mask_words cases
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the feel recipe helpers SOP-18's table builds on
 #           (#170, #164): impact (hit confirm scaled by damage), float_text (a damage number's ease), trail_push,
 #           trail_shrink and trail_length (a tracer's point history by distance), and their juice.json cases
@@ -397,6 +400,9 @@ DEFAULT_SETTINGS = {
                "narration": False},
     "input": {"bindings": DEFAULT_BINDINGS, "deadzone": 0.2, "invert_y": False, "glyphs": "auto"},
     "telemetry": {"consent": "unset"},
+    # #171 and #207: what the game shows, not how. blood: the game's blood effects (off: a neutral hit effect in
+    # their place, SOP-18); clean_language: the string tables' @clean variants and the word mask (SOP-19)
+    "content": {"blood": True, "clean_language": False},
 }
 
 # per field: ("num", lo, hi) | ("bool",) | ("enum", values) | ("res",) | ("lang",); the default comes from above
@@ -413,6 +419,7 @@ SCHEMA = {
                "timing_scale": ("num", 1.0, 3.0), "auto_repeat": ("bool",), "narration": ("bool",)},
     "input": {"deadzone": ("num", 0.0, 0.9), "invert_y": ("bool",), "glyphs": ("enum", GLYPH_SETS)},
     "telemetry": {"consent": ("enum", CONSENT)},
+    "content": {"blood": ("bool",), "clean_language": ("bool",)},
 }
 SCHEMA["audio"]["mono"] = ("bool",)
 
@@ -525,6 +532,16 @@ def effective_shake(settings):
 
 def telemetry_allowed(settings):
     return settings["telemetry"]["consent"] == "yes"
+
+
+def blood_enabled(settings):
+    """#171: may the game show blood? The effect is the game's own; off swaps it for a neutral one (SOP-18)."""
+    return settings["content"]["blood"]
+
+
+def clean_language(settings):
+    """#207: the translator picks @clean variants and masks the game's word list (tr's clean flag, SOP-19)."""
+    return settings["content"]["clean_language"]
 
 
 def group_of(action):
@@ -675,30 +692,291 @@ def _fill(text, args):
     return "".join(out)
 
 
-def tr(tables, locale, key, args=None):
+CLEAN_SUFFIX = "@clean"                             # "guard.insult@clean": the line with the clean-language setting
+                                                     # on (#207); '@' is reserved in key names for this
+
+
+def _pick(table, key, clean):
+    """One locale's text for key: its @clean variant first when clean is on, else (or when there is none) the key."""
+    if clean and key + CLEAN_SUFFIX in table:
+        return table[key + CLEAN_SUFFIX]
+    return table.get(key)
+
+
+def _finish(text, args, clean, words):
+    out = _fill(text, args or {})
+    return mask_words(out, words) if clean and words else out
+
+
+def tr(tables, locale, key, args=None, clean=False, words=None):
     """A string through the fallback chain (fr-CA -> fr -> en); a missing key returns the key itself, so it shows.
     Argument values are whole numbers or strings: format a float yourself before passing it (languages print 2.0
-    differently), and count text in code points, not UTF-16 units."""
+    differently), and count text in code points, not UTF-16 units.
+    clean (#207, the content.clean_language setting): each locale of the chain is asked for key@clean, then key,
+    before the next locale, so a French line without a clean variant stays French (the player's language wins; the
+    audit, check_i18n.py, lists the gap) and an English @clean never replaces a French line. Then the filled text
+    (placeholder values included: a player's name is text too) goes through mask_words with words, the game's
+    word list for the chain (mature_words). clean off: words are ignored, the text is as written."""
     for loc in locale_chain(locale):
-        table = tables.get(loc, {})
-        if key in table:
-            return _fill(table[key], args or {})
+        text = _pick(tables.get(loc, {}), key, clean)
+        if text is not None:
+            return _finish(text, args, clean, words)
     return key
 
 
+# ---- CLDR plural rules ------------------------------------------------------------------------------------------
+# Cardinal rules for whole numbers (CLDR operands i = n, v = 0), from CLDR 46 common/supplemental/plurals.xml
+# (release-46, checked 2026-11-17 by sweeping n = 0..2000 and every multiple of a million up to 10^8 through an
+# evaluator of that file's rules). A language is a family; the family is the rule. Unknown languages get "one"
+# (n == 1). n is a whole number; a negative one uses its absolute value (CLDR's n). "other" is in every family's
+# list because it is the fallback key every plural set needs, even where a whole number never reaches it (ru, pl).
+PLURAL_FAMILIES = {                                  # family -> the categories it can return, CLDR order
+    "other": ("other",),
+    "one": ("one", "other"),                         # n = 1
+    "zero_one": ("one", "other"),                    # n = 0, 1
+    "one_many": ("one", "many", "other"),            # n = 1; many: a non-zero multiple of 1000000
+    "zero_one_many": ("one", "many", "other"),       # n = 0, 1; many: a non-zero multiple of 1000000
+    "one_21": ("one", "other"),                      # n % 10 = 1 and n % 100 != 11 (21, 31, 101 ...)
+    "fil": ("one", "other"),                         # n % 10 not 4, 6, 9 (0 and 1-3 too)
+    "east_slavic": ("one", "few", "many", "other"),  # 1, 21; few 2-4, 22-24; many 0, 5-20, 25-30
+    "pl": ("one", "few", "many", "other"),           # 1; few 2-4, 22-24 (not 12-14); many the rest
+    "cs": ("one", "few", "other"),                   # 1; few 2-4 (CLDR's many is for fractions only)
+    "lt": ("one", "few", "other"),                   # 1, 21; few 2-9, 22-29 (not 11-19); many is for fractions
+    "balkan": ("one", "few", "other"),               # 1, 21; few 2-4, 22-24 (not 12-14)
+    "ro": ("one", "few", "other"),                   # 1; few 0 and n % 100 = 1-19
+    "lv": ("zero", "one", "other"),                  # zero n % 10 = 0 or n % 100 = 11-19; one 1, 21 (not 11)
+    "he": ("one", "two", "other"),
+    "sl": ("one", "two", "few", "other"),            # n % 100 = 1; 2; 3-4
+    "ga": ("one", "two", "few", "many", "other"),    # 1; 2; 3-6; 7-10
+    "ar": ("zero", "one", "two", "few", "many", "other"),   # 0; 1; 2; n % 100 = 3-10; n % 100 = 11-99
+    "cy": ("zero", "one", "two", "few", "many", "other"),   # 0; 1; 2; 3; 6
+}
+PLURAL_LANGUAGES = {                                 # family -> languages (base language codes, lower case)
+    "other": "ja zh ko vi th id ms lo my km yo ig jv su",
+    "one": "en de nl sv da nb nn no fi et gl el hu tr bg eu af sq ka kk ky mn az uz ur sw ta te ml mr",
+    "zero_one": "hi bn fa gu kn hy",
+    "one_many": "es it ca",
+    "zero_one_many": "fr pt",
+    "one_21": "is mk",
+    "fil": "fil tl",
+    "east_slavic": "ru uk be",
+    "pl": "pl",
+    "cs": "cs sk",
+    "lt": "lt",
+    "balkan": "hr sr bs",
+    "ro": "ro mo",
+    "lv": "lv",
+    "he": "he",
+    "sl": "sl",
+    "ga": "ga",
+    "ar": "ar",
+    "cy": "cy",
+}
+PLURAL_LOCALE_FAMILIES = {"pt-pt": "one_many"}       # a region with its own rule: European Portuguese 0 is "other"
+PLURAL_FAMILY_OF = {lang: fam for fam, langs in PLURAL_LANGUAGES.items() for lang in langs.split()}
+MILLION = 1000000
+
+
+def plural_family(locale):
+    """The rule family for a locale: its full name first (pt-PT, case and '_' or '-' do not matter), then its
+    language, then "one"."""
+    norm = locale.replace("_", "-").lower()
+    for name, fam in PLURAL_LOCALE_FAMILIES.items():
+        if norm == name or norm.startswith(name + "-"):
+            return fam
+    return PLURAL_FAMILY_OF.get(norm.split("-")[0], "one")
+
+
+def plural_categories(locale):
+    """Every category plural() can return for this locale, plus "other": what a translation must provide."""
+    return PLURAL_FAMILIES[plural_family(locale)]
+
+
 def plural(locale, n):
-    base = locale.split("-")[0].split("_")[0]
-    if base in ("ja", "zh", "ko"):
+    """The CLDR plural category of whole number n in locale: zero, one, two, few, many or other."""
+    fam = plural_family(locale)
+    n = abs(int(n))
+    m10, m100 = n % 10, n % 100
+    if fam == "other":
         return "other"
-    if base == "fr":
-        return "one" if n in (0, 1) else "other"
-    return "one" if n == 1 else "other"
+    if fam == "one":
+        return "one" if n == 1 else "other"
+    if fam == "zero_one":
+        return "one" if n <= 1 else "other"
+    if fam in ("one_many", "zero_one_many"):
+        if n == 1 or (n == 0 and fam == "zero_one_many"):
+            return "one"
+        return "many" if n != 0 and n % MILLION == 0 else "other"
+    if fam == "one_21":
+        return "one" if m10 == 1 and m100 != 11 else "other"
+    if fam == "fil":
+        return "other" if m10 in (4, 6, 9) else "one"
+    if fam in ("east_slavic", "balkan"):
+        if m10 == 1 and m100 != 11:
+            return "one"
+        if 2 <= m10 <= 4 and not 12 <= m100 <= 14:
+            return "few"
+        return "many" if fam == "east_slavic" else "other"
+    if fam == "pl":
+        if n == 1:
+            return "one"
+        return "few" if 2 <= m10 <= 4 and not 12 <= m100 <= 14 else "many"
+    if fam == "cs":
+        return "one" if n == 1 else "few" if 2 <= n <= 4 else "other"
+    if fam == "lt":
+        if 11 <= m100 <= 19:
+            return "other"
+        return "one" if m10 == 1 else "few" if m10 >= 2 else "other"
+    if fam == "ro":
+        if n == 1:
+            return "one"
+        return "few" if n == 0 or 1 <= m100 <= 19 else "other"
+    if fam == "lv":
+        if m10 == 0 or 11 <= m100 <= 19:
+            return "zero"
+        return "one" if m10 == 1 else "other"
+    if fam == "he":
+        return "one" if n == 1 else "two" if n == 2 else "other"
+    if fam == "sl":
+        return "one" if m100 == 1 else "two" if m100 == 2 else "few" if m100 in (3, 4) else "other"
+    if fam == "ga":
+        return ("one" if n == 1 else "two" if n == 2 else "few" if 3 <= n <= 6 else "many" if 7 <= n <= 10
+                else "other")
+    if fam == "ar":
+        if n <= 2:
+            return ("zero", "one", "two")[n]
+        return "few" if 3 <= m100 <= 10 else "many" if m100 >= 11 else "other"
+    if fam == "cy":
+        return {0: "zero", 1: "one", 2: "two", 3: "few", 6: "many"}.get(n, "other")
+    raise ValueError(fam)
 
 
-def tr_plural(tables, locale, key, n, args=None):
+def tr_plural(tables, locale, key, n, args=None, clean=False, words=None):
+    """key.<category> through the chain, each locale with its own category: in each locale, key.<its category>, then
+    key.other (a table without the few or many form still shows its other form, never a raw key), then the next
+    locale. @clean variants as in tr: key.few@clean before key.few. Nothing anywhere: the key with the requested
+    locale's category, so it shows."""
     a = dict(args or {})
     a["n"] = n
-    return tr(tables, locale, key + "." + plural(locale, n), a)
+    for loc in locale_chain(locale):
+        table = tables.get(loc, {})
+        for cat in dict.fromkeys((plural(loc, n), "other")):
+            text = _pick(table, key + "." + cat, clean)
+            if text is not None:
+                return _finish(text, a, clean, words)
+    return key + "." + plural(locale, n)
+
+
+# ---- the word mask (#207) -------------------------------------------------------------------------------------
+# A pinned, code-point-exact algorithm, so Lua, C++ and Rust (bytes), C# and Unreal (UTF-16) and Python agree: no
+# str.lower(), isalpha() or unicodedata (Python's Unicode tables change between versions; no port has the same).
+# Word characters: ASCII letters and digits, and every code point from U+0080 up except the ranges below
+# (punctuation, symbols, spaces, emoji, variation selectors; combining marks are word characters). A word is a
+# maximal run of word characters. Matching folds case with the table in fold_char (ASCII, Latin-1, Latin
+# Extended-A, Greek, Cyrillic; everything else matches exactly) and compares the whole word with each listed word,
+# so "class" never matches "ass". No normalization: a precomposed and a decomposed "é" are different words. The
+# limits (SOP-19): Chinese and Japanese have no spaces, so a run of ideographs is one word, and a German compound
+# is one word, so list the compounds themselves. A listed entry that is empty or holds a non-word character (two
+# words, a hyphen) never matches. The mask is a same-length grawlix: GRAWLIX repeated, one per code point,
+# starting again with each word.
+GRAWLIX = "#@$%"
+MASK_BOUNDARY_RANGES = [                             # inclusive code point ranges that are never word characters
+    (0x0080, 0x00BF),                                # Latin-1 controls, no-break space, punctuation and signs
+    (0x00D7, 0x00D7), (0x00F7, 0x00F7),              # multiplication and division signs
+    (0x2000, 0x2BFF),                                # spaces, punctuation (curly quotes), symbols, arrows, dingbats
+    (0x2E00, 0x2E7F),                                # supplemental punctuation
+    (0x3000, 0x303F),                                # CJK symbols and punctuation (the ideographic space and stops)
+    (0xFE00, 0xFE0F),                                # variation selectors
+    (0xFE10, 0xFE1F), (0xFE30, 0xFE6F),              # vertical and small forms
+    (0xFEFF, 0xFEFF),                                # zero-width no-break space
+    (0xFF00, 0xFF0F), (0xFF1A, 0xFF20), (0xFF3B, 0xFF40), (0xFF5B, 0xFF65),   # fullwidth punctuation
+    (0x1F000, 0x1FAFF),                              # emoji and pictographs
+]
+
+
+def is_word_char(cp):
+    if cp < 0x80:
+        return 0x30 <= cp <= 0x39 or 0x41 <= cp <= 0x5A or 0x61 <= cp <= 0x7A
+    return not any(lo <= cp <= hi for lo, hi in MASK_BOUNDARY_RANGES)
+
+
+def fold_char(cp):
+    """The pinned case fold: one code point to one code point (lower case; final sigma to sigma)."""
+    if 0x41 <= cp <= 0x5A or (0xC0 <= cp <= 0xDE and cp != 0xD7):
+        return cp + 0x20
+    if cp == 0x130:                                  # capital I with dot -> i
+        return 0x69
+    if cp == 0x178:                                  # Y with diaeresis -> its Latin-1 small letter
+        return 0xFF
+    if ((0x100 <= cp <= 0x12F or 0x132 <= cp <= 0x137 or 0x14A <= cp <= 0x177) and cp % 2 == 0) or \
+            ((0x139 <= cp <= 0x148 or 0x179 <= cp <= 0x17E) and cp % 2 == 1):
+        return cp + 1                                # Latin Extended-A pairs: capital, then small
+    if 0x391 <= cp <= 0x3AB and cp != 0x3A2:         # Greek capitals (with dialytika) -> small
+        return cp + 0x20
+    if cp == 0x386:
+        return 0x3AC
+    if 0x388 <= cp <= 0x38A:
+        return cp + 0x25
+    if cp == 0x38C:
+        return 0x3CC
+    if cp in (0x38E, 0x38F):
+        return cp + 0x3F
+    if cp == 0x3C2:                                  # final sigma matches sigma
+        return 0x3C3
+    if 0x400 <= cp <= 0x40F:                         # Cyrillic capitals with marks -> small
+        return cp + 0x50
+    if 0x410 <= cp <= 0x42F:                         # Cyrillic capitals -> small
+        return cp + 0x20
+    return cp
+
+
+def _fold(cps):
+    return tuple(fold_char(c) for c in cps)
+
+
+def mask_words(text, words):
+    """text with every whole word that is in words (case folded) replaced by a same-length grawlix."""
+    wanted = set()
+    for w in words or ():
+        cps = [ord(c) for c in w]
+        if cps and all(is_word_char(c) for c in cps):
+            wanted.add(_fold(cps))
+    if not wanted:
+        return text
+    cps = [ord(c) for c in text]
+    out, i = [], 0
+    while i < len(cps):
+        if not is_word_char(cps[i]):
+            out.append(chr(cps[i]))
+            i += 1
+            continue
+        j = i
+        while j < len(cps) and is_word_char(cps[j]):
+            j += 1
+        word = cps[i:j]
+        if _fold(word) in wanted:
+            out.extend(GRAWLIX[k % len(GRAWLIX)] for k in range(len(word)))
+        else:
+            out.extend(chr(c) for c in word)
+        i = j
+    return "".join(out)
+
+
+MATURE_DIR = "data/i18n/mature"                      # <locale>.json per language: the game's own word list
+
+
+def mature_words(text):
+    """A word list file's words: {"words": ["...", ...]} (other keys, such as a "_note", are ignored). Strings
+    only; anything unreadable or of another shape is no words. A game loads the file of every locale in the
+    chain and passes all of them (a fallback line can come from any of them)."""
+    try:
+        raw = json.loads(text) if text is not None else {}
+    except ValueError:
+        return []
+    words = raw.get("words") if isinstance(raw, dict) else None
+    if not isinstance(words, list):
+        return []
+    return [w for w in words if isinstance(w, str)]
 
 
 PSEUDO_GROWTH = 0.40                                 # translated English runs about 40 % longer (SOP-19)
@@ -1103,6 +1381,82 @@ TABLES = {
     "ja": {"menu.play": "プレイ", "apples.other": "りんご{n}個"},
 }
 
+# CLDR plurals: ru has every form, uk lacks many (its other shows), pl has no table (English with English's rule)
+PLURAL_TABLES = {
+    "en": {"hits.one": "{n} hit", "hits.other": "{n} hits"},
+    "ru": {"hits.one": "{n} удар", "hits.few": "{n} удара", "hits.many": "{n} ударов", "hits.other": "{n} удара"},
+    "uk": {"hits.one": "{n} удар", "hits.few": "{n} удари", "hits.other": "{n} ударів"},
+    "ar": {"hits.zero": "لا ضربات", "hits.one": "ضربة واحدة", "hits.two": "ضربتان", "hits.few": "{n} ضربات",
+           "hits.many": "{n} ضربة", "hits.other": "{n} ضربة"},
+    "fr": {"hits.one": "{n} coup", "hits.many": "{n} de coups", "hits.other": "{n} coups"},
+    "cs": {"hits.one": "{n} zásah", "hits.few": "{n} zásahy", "hits.other": "{n} zásahů"},
+    "de": {"hits.one": "{n} Treffer", "hits.other": "{n} Treffer"},
+    "ja": {"hits.other": "{n}ヒット"},
+}
+PLURAL_SWEEP_LOCALES = ["en", "de", "fr", "fr-CA", "pt", "pt-BR", "pt-PT", "pt_PT", "es", "it", "ca", "ru", "RU",
+                        "uk", "be", "pl", "cs", "sk", "lt", "hr", "sr", "ro", "lv", "he", "sl", "ga", "ar", "cy",
+                        "is", "fil", "hi", "ja", "zh", "ko", "xx"]
+PLURAL_SWEEP_N = 131                                 # 0..130: every last-two-digits rule, and 101..130 again
+PLURAL_BIG_N = (-1, -3, 211, 1011, 1000000, 2000000, 1000001, 3000005)
+
+# #207: en has clean variants, fr has its own for one line only, so "fr has the line, only en has @clean" shows
+# the per-locale rule (the French line stays, the mask does the rest)
+CLEAN_TABLES = {
+    "en": {"guard.insult": "Get lost, you {name}!", "guard.insult@clean": "Get lost, you pest!",
+           "guard.bye": "Damn, bye.", "shout": "Hell yes", "coins.one": "{n} damn coin", "coins.one@clean": "{n} coin",
+           "coins.other": "{n} damn coins"},
+    "fr": {"guard.insult": "Dégage, espèce de {name} !", "guard.bye": "Merde, salut.", "guard.bye@clean": "Bon, salut.",
+           "coins.one": "{n} pièce", "coins.other": "{n} pièces"},
+    # the category beats @clean inside a locale: few (plain) before other@clean
+    "ru": {"coins.few": "{n} монеты", "coins.other@clean": "{n} монет"},
+}
+CLEAN_POINTS = [                                     # locale, key, n (None: tr), args, clean, words
+    ("en", "guard.insult", None, {"name": "Ana"}, False, []),
+    ("en", "guard.insult", None, {"name": "Ana"}, True, []),
+    ("fr", "guard.insult", None, {"name": "crétin"}, True, ["CRÉTIN"]),
+    ("fr", "guard.insult", None, {"name": "crétin"}, False, ["crétin"]),
+    ("fr", "guard.bye", None, {}, True, ["merde"]),
+    ("fr", "guard.bye", None, {}, False, ["merde"]),
+    ("fr-CA", "guard.bye", None, {}, True, []),
+    ("de", "guard.bye", None, {}, True, ["damn"]),
+    ("de", "shout", None, {}, True, ["hell", "yes"]),
+    ("en", "missing.key", None, {}, True, ["missing", "key"]),
+    ("en", "coins", 1, {}, True, ["damn"]),
+    ("en", "coins", 2, {}, True, ["damn"]),
+    ("en", "coins", 2, {}, False, ["damn"]),
+    ("fr", "coins", 0, {}, True, ["pièce"]),
+    ("ru", "coins", 3, {}, True, ["damn"]),
+    ("ru", "coins", 5, {}, True, []),
+    ("ru", "nothing", 5, {}, True, []),              # nowhere: the key with the requested locale's category
+]
+MASK_POINTS = [                                      # text, words
+    ("What the hell?", ["hell"]),
+    ("HELL, Hell, hElL!", ["hell"]),
+    ("hello shell hell", ["hell"]),
+    ("ass class bass", ["ass", "", "two words", "x-y"]),
+    ("Scheiße! scheiße", ["scheiße"]),
+    ("ÉCRASÉ écrasé", ["écrasé"]),
+    ("Łajdak łajdak", ["ŁAJDAK"]),
+    ("СУКА сука Сука", ["сука"]),
+    ("ΒΛΑΚΑΣ ΣΚΑΤΆ", ["βλακας", "σκατά"]),
+    ("İSTANBUL", ["istanbul"]),
+    ("ÿ Ÿ", ["ÿ"]),
+    ("Ä×Ä÷ä", ["ä"]),
+    ("damn’s damn's", ["damn"]),
+    ("x-damn-x damn_it", ["damn"]),
+    ("crap crap", ["crap"]),
+    ("café café", ["café"]),
+    ("\U0001D521\U0001D51E\U0001D52A\U0001D52B damn", ["\U0001D521\U0001D51E\U0001D52A\U0001D52B"]),
+    ("damn\U0001F600 \U0001F600damn", ["damn"]),
+    ("他妈的 他妈", ["他妈"]),
+    ("Scheißkerl", ["scheiß"]),
+    ("h4x0r h4x", ["h4x"]),
+    ("¿Àx?", ["àx"]),
+    ("a⯿b aⰀb", ["a", "b"]),
+    ("", ["x"]),
+    ("nothing listed", []),
+]
+
 
 def build_shell():
     cases = [{"type": "defaults", "name": "built-in defaults", "expect": DEFAULT_SETTINGS}]
@@ -1136,15 +1490,26 @@ def build_shell():
         ("no file", None),
         ("foreign version and spelled-out values", json.dumps({"version": 7, "future": True, "display": {
             "vsync": "true", "frame_cap": "60"}})),
+        # #171 and #207: the content switches, a file from before them (the defaults), bad values and a bad section
+        ("content switches flipped", json.dumps({"content": {"blood": False, "clean_language": True}})),
+        ("content bad values", json.dumps({"content": {"blood": "no", "clean_language": 1, "gore": "max"}})),
+        ("content not an object", json.dumps({"content": "off", "access": {"subtitles": False}})),
     ]
     for name, text in inputs:
         s, problems = settings_load(text)
         cases.append({"type": "settings_load", "name": name, "input": text, "expect": s,
                       "problems": len(problems), "effective_shake": effective_shake(s),
-                      "telemetry_allowed": telemetry_allowed(s)})
+                      "telemetry_allowed": telemetry_allowed(s), "blood_enabled": blood_enabled(s),
+                      "clean_language": clean_language(s)})
     s, _ = settings_load(json.dumps({"telemetry": {"consent": "yes"}}))
     cases.append({"type": "settings_load", "name": "consent given", "input": json.dumps({"telemetry": {"consent": "yes"}}),
-                  "expect": s, "problems": 0, "effective_shake": effective_shake(s), "telemetry_allowed": True})
+                  "expect": s, "problems": 0, "effective_shake": effective_shake(s), "telemetry_allowed": True,
+                  "blood_enabled": True, "clean_language": False})
+    flipped, _ = settings_load(json.dumps({"content": {"blood": False, "clean_language": True}}))
+    cases.append({"type": "settings_load", "name": "content switches survive a save and a load",
+                  "input": json.dumps(flipped), "expect": flipped, "problems": 0,
+                  "effective_shake": effective_shake(flipped), "telemetry_allowed": False, "blood_enabled": False,
+                  "clean_language": True})
     for name, action, slot, binding in [("free key", "jump", 0, "key:k"), ("swap in group", "jump", 0, "key:j"),
                                         ("other group is fine", "ui_accept", 0, "key:space"),
                                         ("pad swap", "attack", 1, "pad:south"),
@@ -1199,6 +1564,35 @@ def build_shell():
         for n in (0, 1, 2, 5):
             pts.append([loc, n, plural(loc, n), tr_plural(TABLES, loc, "apples", n)])
     cases.append({"type": "plural", "name": "one and other", "key": "apples", "tables": TABLES, "points": pts})
+    pts = []
+    for loc, ns in [("ru", (1, 3, 5, 11, 21, 22, 25, 101, 111)), ("uk", (2, 14)), ("pl", (1, 3, 5, 22)),
+                    ("ar", (0, 1, 2, 3, 11, 100)), ("fr", (0, 1000000)), ("cs", (4, 5)), ("de", (1, 3)),
+                    ("ru-RU", (2,)), ("ja", (1,))]:
+        for n in ns:
+            pts.append([loc, n, plural(loc, n), tr_plural(PLURAL_TABLES, loc, "hits", n)])
+    cases.append({"type": "plural", "name": "CLDR forms, each locale with its own rule, other when a form is missing",
+                  "key": "hits", "tables": PLURAL_TABLES, "points": pts})
+    sweep = []
+    for loc in PLURAL_SWEEP_LOCALES:
+        sweep.append([loc, 0, " ".join(plural(loc, n) for n in range(PLURAL_SWEEP_N))])
+    cases.append({"type": "plural_rules", "name": "CLDR 46 categories for 0..%d" % (PLURAL_SWEEP_N - 1),
+                  "sweep": sweep, "points": [[loc, n, plural(loc, n)] for loc in PLURAL_SWEEP_LOCALES
+                                             for n in PLURAL_BIG_N],
+                  "categories": [[loc, list(plural_categories(loc))] for loc in PLURAL_SWEEP_LOCALES]})
+    pts = []
+    for loc, key, n, args, clean, words in CLEAN_POINTS:
+        if n is None:
+            out = tr(CLEAN_TABLES, loc, key, args, clean, words)
+        else:
+            out = tr_plural(CLEAN_TABLES, loc, key, n, args, clean, words)
+        pts.append([loc, key, n, args, clean, words, out])
+    cases.append({"type": "tr_clean", "name": "@clean variants per locale, then the word mask (#207)",
+                  "tables": CLEAN_TABLES, "points": pts})
+    cases.append({"type": "mask_words", "name": "whole words, folded case, same-length grawlix", "grawlix": GRAWLIX,
+                  "points": [[text, words, mask_words(text, words)] for text, words in MASK_POINTS]})
+    cases.append({"type": "mature_words", "name": "the word list file", "points": [
+        [text, mature_words(text)] for text in ('{"words": ["damn", 3, "hell"], "_note": "the game\'s own list"}',
+                                                '{"words": []}', "[]", "not json", '{"words": "damn"}', None)]})
     cases.append({"type": "narration", "name": "what a focused control says", "points": [
         [label, role, value, narration_line(label, role, value)] for label, role, value in [
             ("Music volume", "slider", "70 percent"), ("Play", "button", ""), ("Subtitles", "toggle", "on"),

@@ -62,6 +62,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display (headless), show:apply and
 #           show:confirm in the help (the Display tab's Apply, #308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -989,7 +991,7 @@ def build_parser():
                         "PSEUDO_FAIL), pseudo-plant (the same plus a label too small: must fail), bug (F8 bug "
                         "report: DRIVE_BUG), display (the Display tab's Apply: stage, warn, apply, the 15 s confirm "
                         "reverts in real time, discard; DRIVE_DISPLAY lines; headless), "
-                        "show:<title|main_menu|settings|pause|help|history|credits|"
+                        "show:<title|main_menu|settings|content|pause|help|history|credits|"
                         "subtitle|juice|apply|confirm> (opens that screen in a window; add --screenshot), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py; "
                         "a window); waits for DRIVE_DONE")

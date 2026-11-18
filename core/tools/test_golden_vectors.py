@@ -9,14 +9,20 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown every credits screen strips (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its confirm (#308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Platform, the platform services layer's rules (#84)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches (#171 blood, #207 clean language),
+#           CLDR plurals, @clean lookups and the word mask; with CLDR_PLURALS_XML set, the plural rules against CLDR's own
+#           plurals.xml
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): FeelRecipes, the recipe helpers worked by hand (#170)
 # ---------------------------------------------------------------------------
 import json
 import math
+import os
+import re
 import struct
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -270,6 +276,181 @@ class Shell(unittest.TestCase):
         self.assertEqual(gv.tr(gv.TABLES, "de", "nope"), "nope")
         self.assertEqual(gv.tr_plural(gv.TABLES, "fr", "apples", 0), "0 pomme")
         self.assertEqual(gv.tr_plural(gv.TABLES, "ja", "apples", 1), "りんご1個")
+
+
+class ContentSettings(unittest.TestCase):
+    """#171 blood and #207 clean language: two bools in a content section, like every other settings field."""
+
+    def test_defaults_show_blood_and_text_as_written(self):
+        s, problems = gv.settings_load(None)
+        self.assertEqual((gv.blood_enabled(s), gv.clean_language(s), problems), (True, False, []))
+
+    def test_a_file_from_before_the_switches_loads_the_defaults(self):
+        s, problems = gv.settings_load('{"audio": {"master": 0.5}}')
+        self.assertEqual((s["content"], problems), ({"blood": True, "clean_language": False}, []))
+
+    def test_bad_values_are_fixed_one_problem_each_and_unknown_keys_stay(self):
+        s, problems = gv.settings_load('{"content": {"blood": "no", "clean_language": 1, "gore": "max"}}')
+        self.assertEqual(s["content"], {"blood": True, "clean_language": False, "gore": "max"})
+        self.assertEqual(sorted(problems), ["content.blood", "content.clean_language"])
+        s, problems = gv.settings_load('{"content": "off"}')
+        self.assertEqual((s["content"]["blood"], problems), (True, ["content"]))
+
+    def test_flipped_switches_survive_a_save(self):
+        s, _ = gv.settings_load('{"content": {"blood": false, "clean_language": true}}')
+        again, problems = gv.settings_load(json.dumps(s))
+        self.assertEqual((gv.blood_enabled(again), gv.clean_language(again), problems), (False, True, []))
+
+
+class Plurals(unittest.TestCase):
+    """CLDR 46 cardinal rules for whole numbers, worked by hand from the rules chart."""
+
+    def cats(self, loc, ns):
+        return [gv.plural(loc, n) for n in ns]
+
+    def test_russian_and_ukrainian(self):
+        for loc in ("ru", "uk", "ru-RU", "RU"):
+            self.assertEqual(self.cats(loc, (0, 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 101, 111, 112)),
+                             ["many", "one", "few", "few", "many", "many", "many", "many", "one", "few", "many",
+                              "one", "many", "many"], loc)
+
+    def test_polish_has_no_one_for_21(self):
+        self.assertEqual(self.cats("pl", (0, 1, 2, 5, 12, 21, 22, 102, 112)),
+                         ["many", "one", "few", "many", "many", "many", "few", "few", "many"])
+
+    def test_czech_lithuanian_and_croatian(self):
+        self.assertEqual(self.cats("cs", (0, 1, 2, 4, 5, 22)), ["other", "one", "few", "few", "other", "other"])
+        self.assertEqual(self.cats("lt", (1, 2, 9, 10, 11, 19, 21, 29, 30)),
+                         ["one", "few", "few", "other", "other", "other", "one", "few", "other"])
+        self.assertEqual(self.cats("hr", (1, 2, 5, 11, 21, 22, 112)),
+                         ["one", "few", "other", "other", "one", "few", "other"])
+
+    def test_arabic_welsh_irish(self):
+        self.assertEqual(self.cats("ar", (0, 1, 2, 3, 10, 11, 99, 100, 102, 103, 111)),
+                         ["zero", "one", "two", "few", "few", "many", "many", "other", "other", "few", "many"])
+        self.assertEqual(self.cats("cy", (0, 1, 2, 3, 4, 6, 7)), ["zero", "one", "two", "few", "other", "many", "other"])
+        self.assertEqual(self.cats("ga", (2, 6, 7, 10, 11)), ["two", "few", "many", "many", "other"])
+
+    def test_french_portuguese_and_the_millions(self):
+        self.assertEqual(self.cats("fr", (0, 1, 2, 1000000, 1000001, 2000000)),
+                         ["one", "one", "other", "many", "other", "many"])
+        self.assertEqual(self.cats("pt-BR", (0, 1)), ["one", "one"])
+        self.assertEqual(self.cats("pt-PT", (0, 1)), ["other", "one"])     # European Portuguese has its own rule
+        self.assertEqual(self.cats("pt_pt", (0,)), ["other"])
+        self.assertEqual(self.cats("es", (0, 1, 1000000)), ["other", "one", "many"])
+
+    def test_no_plural_languages_unknown_ones_and_negatives(self):
+        self.assertEqual(self.cats("ja", (0, 1, 2)), ["other"] * 3)
+        self.assertEqual(self.cats("xx", (0, 1, 2)), ["other", "one", "other"])
+        self.assertEqual(self.cats("ru", (-1, -3, -5)), ["one", "few", "many"])
+
+    def test_every_family_returns_only_its_categories(self):
+        for fam, cats in gv.PLURAL_FAMILIES.items():
+            lang = next(lg for lg, f in gv.PLURAL_FAMILY_OF.items() if f == fam)
+            got = {gv.plural(lang, n) for n in list(range(0, 1200)) + [1000000, 5000000]} | {"other"}
+            self.assertEqual(got, set(cats), fam)
+
+    def test_a_missing_form_shows_other_and_each_locale_uses_its_own_rule(self):
+        t = gv.PLURAL_TABLES
+        self.assertEqual(gv.tr_plural(t, "uk", "hits", 5), "5 ударів")      # uk has no many: its other
+        self.assertEqual(gv.tr_plural(t, "pl", "hits", 5), "5 hits")       # no pl table: English, English's rule
+        self.assertEqual(gv.tr_plural(t, "ru", "hits", 22), "22 удара")
+        self.assertEqual(gv.tr_plural(t, "fr", "hits", 1000000), "1000000 de coups")
+        self.assertEqual(gv.tr_plural({}, "ru", "hits", 5), "hits.many")   # nothing anywhere: the key shows
+
+
+@unittest.skipUnless(os.environ.get("CLDR_PLURALS_XML"), "set CLDR_PLURALS_XML to CLDR's plurals.xml to sweep it")
+class PluralsAgainstCldr(unittest.TestCase):
+    """The sweep behind PLURAL_FAMILIES: every mapped language against the rules in CLDR's own
+    common/supplemental/plurals.xml (release-46 when written), whole numbers 0..2000 and the millions."""
+
+    @staticmethod
+    def _holds(cond, n):
+        ops = {"n": n, "i": n, "v": 0, "w": 0, "f": 0, "t": 0, "e": 0, "c": 0}
+        for alt in cond.split(" or "):
+            ok = True
+            for rel in alt.split(" and "):
+                m = re.match(r"\s*([niftvwec])\s*(?:%\s*(\d+))?\s*(!=|=)\s*(.+)$", rel)
+                x = ops[m.group(1)] % int(m.group(2)) if m.group(2) else ops[m.group(1)]
+                hit = any((int(p.split("..")[0]) <= x <= int(p.split("..")[1])) if ".." in p else x == int(p)
+                          for p in m.group(4).replace(" ", "").split(","))
+                ok = ok and (hit if m.group(3) == "=" else not hit)
+            if ok:
+                return True
+        return False
+
+    def test_every_language_matches_cldr(self):
+        root = ET.parse(os.environ["CLDR_PLURALS_XML"]).getroot()
+        rules = {}
+        for pr in root.find("plurals").findall("pluralRules"):
+            for loc in pr.get("locales").split():
+                rules[loc] = [(r.get("count"), r.text.split("@")[0].strip()) for r in pr.findall("pluralRule")]
+        ns = list(range(0, 2001)) + [k * 1000000 for k in range(1, 101)]
+        for lang in sorted(gv.PLURAL_FAMILY_OF) + ["pt_PT"]:
+            with self.subTest(lang=lang):
+                self.assertIn(lang, rules)
+                for n in ns:
+                    want = next((c for c, cond in rules[lang] if c != "other" and self._holds(cond, n)), "other")
+                    self.assertEqual(gv.plural(lang.replace("_", "-"), n), want, f"{lang} {n}")
+
+
+class CleanLanguage(unittest.TestCase):
+    T = gv.CLEAN_TABLES
+
+    def test_the_players_language_wins_over_an_english_clean_line(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.insult", {"name": "Ana"}, True), "Dégage, espèce de Ana !")
+        self.assertEqual(gv.tr(self.T, "en", "guard.insult", {"name": "Ana"}, True), "Get lost, you pest!")
+        self.assertEqual(gv.tr(self.T, "fr-CA", "guard.bye", None, True), "Bon, salut.")
+
+    def test_off_is_the_text_as_written_whatever_the_list(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.bye", None, False, ["merde"]), "Merde, salut.")
+
+    def test_the_mask_covers_placeholder_values(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.insult", {"name": "Crétin"}, True, ["crétin"]),
+                         "Dégage, espèce de #@$%#@ !")
+
+    def test_plural_clean_keys_carry_the_category(self):
+        self.assertEqual(gv.tr_plural(self.T, "en", "coins", 1, None, True), "1 coin")
+        self.assertEqual(gv.tr_plural(self.T, "en", "coins", 3, None, True, ["damn"]), "3 #@$% coins")
+
+    def test_a_missing_key_is_shown_unmasked(self):
+        self.assertEqual(gv.tr(self.T, "en", "missing.key", None, True, ["missing"]), "missing.key")
+
+
+class MaskWords(unittest.TestCase):
+    def test_whole_words_only(self):
+        self.assertEqual(gv.mask_words("class ass bass, ass!", ["ass"]), "class #@$ bass, #@$!")
+
+    def test_case_folds_in_the_pinned_scripts(self):
+        self.assertEqual(gv.mask_words("ÉCRASÉ Łajdak СУКА", ["écrasé", "łajdak", "сука"]),
+                         "#@$%#@ #@$%#@ #@$%")
+
+    def test_the_grawlix_counts_code_points_and_restarts_per_word(self):
+        wide = "\U0001D521\U0001D51E"                # two code points, four UTF-16 units
+        self.assertEqual(gv.mask_words(wide + " abcde", [wide, "abcde"]), "#@ #@$%#")
+
+    def test_bad_entries_never_match(self):
+        self.assertEqual(gv.mask_words("x-y two words", ["x-y", "two words", ""]), "x-y two words")
+
+    def test_the_fold_table_agrees_with_unicode_where_unicode_is_one_to_one(self):
+        """The pinned table is a subset of Unicode's simple lower case (plus final sigma), so it cannot drift."""
+        for cp in list(range(0x41, 0x5B)) + list(range(0xC0, 0x17F)) + list(range(0x386, 0x3AC)) + \
+                list(range(0x400, 0x430)):
+            low = chr(cp).lower()
+            if len(low) == 1 and gv.fold_char(cp) != cp:
+                self.assertEqual(gv.fold_char(cp), ord(low), hex(cp))
+
+    def test_range_edges(self):
+        self.assertFalse(gv.is_word_char(0xBF))
+        self.assertTrue(gv.is_word_char(0xC0))
+        self.assertFalse(gv.is_word_char(0x2BFF))
+        self.assertTrue(gv.is_word_char(0x2C00))
+        self.assertTrue(gv.is_word_char(0x301))      # a combining mark belongs to its word
+        self.assertFalse(gv.is_word_char(0x1F600))
+
+    def test_the_word_list_file(self):
+        self.assertEqual(gv.mature_words('{"words": ["a", 1, "b"]}'), ["a", "b"])
+        self.assertEqual(gv.mature_words("[]"), [])
 
 
 class Telemetry(unittest.TestCase):

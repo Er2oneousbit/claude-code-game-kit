@@ -8,6 +8,8 @@
 //           tools/golden_vectors.py cannot be skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (#308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words (#171, #207)
 // ---------------------------------------------------------------------------
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -23,6 +25,27 @@ const RUNNERS = {
         expectClose(problems.length, c.problems, tol, `problems [${problems.join(", ")}]`);
         expectClose(GameShell.effectiveShake(settings), c.effective_shake, tol, "effective_shake");
         expectClose(GameShell.telemetryAllowed(settings), c.telemetry_allowed, tol, "telemetry_allowed");
+        expectClose(GameShell.bloodEnabled(settings), c.blood_enabled, tol, "blood_enabled");
+        expectClose(GameShell.cleanLanguage(settings), c.clean_language, tol, "clean_language");
+    },
+    plural_rules: (c, tol) => {
+        c.sweep.forEach(([loc, start, cats], i) => cats.split(" ").forEach((want, k) =>
+            expectClose(GameShell.plural(loc, start + k), want, tol, `sweep ${i} plural(${loc}, ${start + k})`)));
+        c.points.forEach(([loc, n, want], i) => expectClose(GameShell.plural(loc, n), want, tol, `point ${i} plural(${loc}, ${n})`));
+    },
+    tr_clean: (c, tol) => {
+        c.points.forEach(([loc, key, n, args, clean, words, want], i) => {
+            const got = n === null ? GameShell.tr(c.tables, loc, key, args, clean, words)
+                : GameShell.trPlural(c.tables, loc, key, n, args, clean, words);
+            expectClose(got, want, tol, `point ${i} ${loc} ${key} clean=${clean}`);
+        });
+    },
+    mask_words: (c, tol) => {
+        expectClose(GameShell.GRAWLIX, c.grawlix, tol, "GRAWLIX");
+        c.points.forEach(([text, words, want], i) => expectClose(GameShell.maskWords(text, words), want, tol, `point ${i}`));
+    },
+    mature_words: (c, tol) => {
+        c.points.forEach(([text, want], i) => expectClose(GameShell.matureWords(text), want, tol, `point ${i}`));
     },
     rebind: (c, tol) => {
         const r = GameShell.rebind(c.bindings, c.action, c.slot, c.binding);

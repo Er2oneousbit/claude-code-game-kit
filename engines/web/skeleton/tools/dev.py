@@ -52,6 +52,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm
 #           (the Display tab's Apply and its keep-or-revert confirm, #308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -72,7 +74,7 @@ BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the 
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
               "pseudo-plant, display (Apply a Display change, let its confirm revert: about 20 s), "
-              "show:title|settings|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
+              "show:title|settings|content|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
               "waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
                  "(default build/smoke-data with --drive)")

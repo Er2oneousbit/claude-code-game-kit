@@ -51,6 +51,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display and show:apply|confirm,
 #           the Display tab's Apply and its keep-or-revert confirm; DRIVE_DISPLAY lines (#308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -894,7 +896,7 @@ def build_parser():
                         "pseudo: checks every label on every screen), pseudo-plant (the same plus a label too small: "
                         "must fail), bug (F8 bug report), display (the Display tab's Apply: stage, warn, apply, "
                         "let the 15 s confirm revert in real time; DRIVE_DISPLAY lines), "
-                        "show:<title|settings|pause|subtitle|juice|credits|apply|confirm> (opens that "
+                        "show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm> (opens that "
                         "screen; add --screenshot)")
     p.add_argument("--data-dir", default="", help="keep settings, saves, logs, crashes, telemetry and bug reports "
                    f"in this folder (relative to the project; kept between runs); default: a fresh {SMOKE_DATA}/ "

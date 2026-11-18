@@ -23,6 +23,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a windowed size fits the usable screen and is centred
 //           (core::fit_window); a first run takes the window's own size as display.resolution, so a revert puts
 //           back the window that was on screen (#308, seen on a real window)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
+//           tables, t() takes content.clean_language and the chain's words, blood_enabled() (#171, #207)
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -205,6 +207,12 @@ void Shell::load_tables() {
         names += (names.empty() ? "" : ", ") + table.first;
     }
     LOG_INFO("shell", "string tables " << names << " from " << core::path_to_utf8(fs::absolute(dir, ec)));
+    mature_.clear();
+    for (const auto& entry : fs::directory_iterator(dir / "mature", ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".json") {
+            mature_[core::path_to_utf8(entry.path().stem())] = core::mature_words(load_json(entry.path(), "i18n"));
+        }
+    }
 }
 
 void Shell::load_dialogue() {
@@ -329,10 +337,22 @@ core::Bindings Shell::bindings() const {
 
 // ---- Text ----------------------------------------------------------------------------------------------------
 std::string Shell::t(const std::string& key, const core::TrArgs& args) const {
+    const bool clean = core::clean_language(settings_);   // #207: @clean lines, then the word mask
     if (locale_ == core::kPseudoLocale) {
-        return core::tr_pseudo(tables_, key, args);   // the ASCII pseudo form: the 8x8 font has no accents
+        return core::tr_pseudo(tables_, key, args, clean);   // the ASCII pseudo form: the 8x8 font has no accents
     }
-    return core::tr(tables_, locale_, key, args);
+    core::WordList words;   // every locale of the chain: a fallback line can come from any of them
+    for (const std::string& loc : core::locale_chain(locale_)) {
+        const auto list = mature_.find(loc);
+        if (list != mature_.end()) {
+            words.insert(words.end(), list->second.begin(), list->second.end());
+        }
+    }
+    return core::tr(tables_, locale_, key, args, clean, words);
+}
+
+bool Shell::blood_enabled() const {
+    return core::blood_enabled(settings_);
 }
 
 // A dialogue line's text: dialogue.<id> from the string table when it has one, else the file's own text (pseudo-ised

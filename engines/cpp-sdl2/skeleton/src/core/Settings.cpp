@@ -7,6 +7,8 @@
 //           Add a setting in three places: default_settings(), schema() and docs/GDD.md's settings list
 //           (and the reference, tools/golden_vectors.py, when the kit itself changes).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) (#171,
+//           #207)
 // ---------------------------------------------------------------------------
 #include "core/Settings.hpp"
 
@@ -80,6 +82,7 @@ const std::vector<Section>& schema() {
                     num("timing_scale", 1.0, 3.0), flag("auto_repeat"), flag("narration")}},
         {"input", {num("deadzone", 0.0, 0.9), flag("invert_y"), one_of("glyphs", choices(kGlyphSets))}},
         {"telemetry", {one_of("consent", choices(kConsentValues))}},
+        {"content", {flag("blood"), flag("clean_language")}},
     };
     return sections;
 }
@@ -198,6 +201,8 @@ json default_settings() {
     input["invert_y"] = false;
     input["glyphs"] = "auto";
     s["telemetry"]["consent"] = "unset";
+    s["content"]["blood"] = true;
+    s["content"]["clean_language"] = false;
     return s;
 }
 
@@ -294,6 +299,28 @@ bool telemetry_allowed(const json& settings) {
     }
     const auto consent = telemetry->find("consent");
     return consent != telemetry->end() && consent->is_string() && consent->get<std::string>() == "yes";
+}
+
+namespace {
+
+// content.<name> as a bool, or fallback when the section or field is missing or not a bool
+bool content_flag(const json& settings, const char* name, bool fallback) {
+    const auto content = settings.find("content");
+    if (content == settings.end() || !content->is_object()) {
+        return fallback;
+    }
+    const auto v = content->find(name);
+    return v != content->end() && v->is_boolean() ? v->get<bool>() : fallback;
+}
+
+}  // namespace
+
+bool blood_enabled(const json& settings) {
+    return content_flag(settings, "blood", true);
+}
+
+bool clean_language(const json& settings) {
+    return content_flag(settings, "clean_language", false);
 }
 
 }  // namespace core

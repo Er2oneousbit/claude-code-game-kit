@@ -18,6 +18,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's rows stage through the shell's
 //           DisplayStaging, an Apply row (disabled while nothing waits; focus skips disabled rows), the Keep / Revert
 //           confirm takes every press, Back from any tab goes through Shell::back_settings (#308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+//           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
 // ---------------------------------------------------------------------------
 use serde_json::json;
 
@@ -311,8 +313,13 @@ fn controls_rows(shell: &Shell) -> Vec<Row> {
     rows
 }
 
+/// false: a game with no blood hides the Blood row (SOP-18).
+const SHOW_BLOOD_SETTING: bool = true;
+/// false: a game with no strong language hides Clean language (SOP-19).
+const SHOW_LANGUAGE_SETTING: bool = true;
+
 fn access_rows(shell: &Shell) -> Vec<Row> {
-    vec![
+    let mut rows = vec![
         slider(shell, "access", "text_scale", 0.75, 2.0, 0.25),
         toggle(shell, "access", "subtitles"),
         choice(shell, "access", "subtitle_size", settings::SUB_SIZES),
@@ -333,8 +340,16 @@ fn access_rows(shell: &Shell) -> Vec<Row> {
         slider(shell, "access", "timing_scale", 1.0, 3.0, 0.5), // #166: motor access
         toggle(shell, "access", "auto_repeat"),
         toggle(shell, "access", "narration"), // #165: menu narration
-        back_row(shell),
-    ]
+    ];
+    // #171 and #207: what the game shows (content.*), at the end of the Accessibility tab
+    if SHOW_BLOOD_SETTING {
+        rows.push(toggle(shell, "content", "blood"));
+    }
+    if SHOW_LANGUAGE_SETTING {
+        rows.push(toggle(shell, "content", "clean_language"));
+    }
+    rows.push(back_row(shell));
+    rows
 }
 
 fn language_rows(shell: &Shell) -> Vec<Row> {

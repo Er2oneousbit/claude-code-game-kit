@@ -7,6 +7,8 @@
 # Usage   : python tools/dev.py test --filter test_shell_data.gd
 # Notes   : Engine-free where possible; the telemetry test writes to a temporary user:// folder.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Shell.t() and tn() with the clean-language switch,
+#           and the shipped word list loads apart from the string tables (#207)
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -108,6 +110,32 @@ func test_string_tables_cover_english_and_fall_back() -> void:
 	var partial: Dictionary = {"en": tables["en"], "fr": {"menu.play": tables["fr"]["menu.play"]}}
 	assert_eq(I18n.translate(partial, "fr", "menu.play"), "Jouer")
 	assert_eq(I18n.translate(partial, "fr", "menu.juice"), tables["en"]["menu.juice"], "missing French falls back")
+
+
+func test_shell_t_and_tn_honour_clean_language() -> void:
+	# The one resolver the screens use (#207 review: a translate()-only change would leave Shell.t() uncensored)
+	var lists: Dictionary = I18n.load_mature("res://data/i18n")
+	assert_true(lists.has("en"), "data/i18n/mature/en.json ships from the kit")
+	assert_eq((lists["en"] as PackedStringArray).size(), 0, "the kit's list is empty")
+	assert_false(I18n.load_tables("res://data/i18n").has("mature"), "the word lists are not a language")
+	var saved: Array = [Shell.tables, Shell.mature, Shell.locale, (Shell.settings["content"] as Dictionary).duplicate()]
+	Shell.tables = {"en": {"bye": "Damn, bye {name}.", "bye@clean": "Bye {name}.", "hits.one": "{n} damn hit",
+			"hits.one@clean": "{n} hit", "hits.other": "{n} hits"}, "fr": {"bye": "Merde, salut {name}."}}
+	Shell.mature = {"fr": PackedStringArray(["merde"]), "en": PackedStringArray(["damn"])}
+	Shell.locale = "fr"
+	Shell.settings["content"]["clean_language"] = false
+	assert_eq(Shell.t("bye", {"name": "Ana"}), "Merde, salut Ana.")
+	Shell.settings["content"]["clean_language"] = true
+	assert_eq(Shell.t("bye", {"name": "Damn"}), "#@$%#, salut #@$%.", "fr stays fr, masked with fr and en lists")
+	Shell.locale = "en"
+	assert_eq(Shell.t("bye", {"name": "Ana"}), "Bye Ana.")
+	assert_eq(Shell.tn("hits", 1), "1 hit")
+	Shell.locale = I18n.PSEUDO_LOCALE
+	assert_eq(Shell.t("bye", {"name": "Ana"}), "[Býé Ana.~~]")
+	Shell.tables = saved[0]
+	Shell.mature = saved[1]
+	Shell.locale = saved[2]
+	Shell.settings["content"] = saved[3]
 
 
 func test_bindings_round_trip_through_input_events() -> void:

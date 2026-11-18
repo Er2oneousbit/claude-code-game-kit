@@ -12,7 +12,7 @@
 #                      also draws every kit shader recipe (GameKitShaders.Render) and compares it with its golden;
 #                      --drive SCENARIO runs a scripted visit of the shell's screens (menus, crash, pseudo,
 #                      pseudo-plant, bug, display, access[:res=WxH][,scale=N][,pad][,read],
-#                      show:<title|settings|pause|subtitle|juice|credits|apply|confirm>) through the Smoke_ShellDrive PlayMode
+#                      show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>) through the Smoke_ShellDrive PlayMode
 #                      test, with --data-dir and --locale for that run (Assets/Scripts/Shell/SmokeDrive.cs)
 #             exec     run a static editor method headless (scene builders: exec GameKitScenes.CreateStarterScene)
 #             build    headless player build via Assets/Editor/GameKitBuild.cs
@@ -71,6 +71,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply and show:confirm
 #           (the Display tab's Apply, #308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -106,7 +108,7 @@ SHADER_OUT = "Logs/shader_check"         # smoke --shaders pictures, compared by
 SHADER_TIMEOUT_S = 300
 # smoke --drive (#168): the shell's scripted runs (Assets/Scripts/Shell/SmokeDrive.cs), through one PlayMode test
 DRIVES = ("menus", "crash", "pseudo", "pseudo-plant", "bug", "display")
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits", "apply", "confirm")   # --drive show:<target>
+SHOW_TARGETS = ("title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply", "confirm")   # --drive show:<target>
 # Drives that fail on purpose (#275), with the line that proves the failure was the planted one
 EXPECTED_FAIL = {"crash": "CRASH_WRITTEN", "pseudo-plant": "PSEUDO_FAIL"}
 ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read)"

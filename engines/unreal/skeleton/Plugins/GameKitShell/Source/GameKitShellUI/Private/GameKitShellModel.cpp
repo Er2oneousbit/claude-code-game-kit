@@ -20,6 +20,9 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): SetDisplay saves only once no confirm is open, Keep saves: an
 //           Apply that waits for Keep never reaches settings.json; Back's unapplied warning stays up while the next
 //           Back discards (it timed out after MessageS)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists load with the tables, T() takes
+//           content.clean_language and the chain's words; Blood and Clean language close the Accessibility tab
+//           (#171, #207)
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
 
@@ -169,6 +172,7 @@ FGameKitShellModel::FGameKitShellModel(const FOptions& InOptions)
 		UE_LOG(LogGameKitShell, Warning, TEXT("settings: fixed %s"), *P);
 	}
 	LoadTables();
+	LoadMature();
 	const TOptional<FString> ColourText = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, ColoursFile));
 	if (ColourText.IsSet())
 	{
@@ -228,6 +232,37 @@ void FGameKitShellModel::LoadTables()
 	Tables.GetKeys(Names);
 	Names.Sort();
 	UE_LOG(LogGameKitShell, Log, TEXT("i18n: string tables %s from %s"), *FString::Join(Names, TEXT(", ")), *FullDir);
+}
+
+void FGameKitShellModel::LoadMature()
+{
+	TArray<FString> Files;
+	const FString Dir = FPaths::Combine(Opt.ProjectDir, I18nDir, TEXT("mature"));
+	IFileManager::Get().FindFiles(Files, *FPaths::Combine(Dir, TEXT("*.json")), /*Files*/ true, /*Directories*/ false);
+	for (const FString& File : Files)
+	{
+		const TOptional<FString> Text = GameKit::ReadTextFile(FPaths::Combine(Dir, File));
+		const TSharedPtr<FJsonValue> Root = Text.IsSet() ? Parse(Text.GetValue()) : nullptr;
+		Mature.Add(FPaths::GetBaseFilename(File), GameKit::MatureWords(Is(Root, EJson::Object) ? Root->AsObject() : nullptr));
+	}
+}
+
+TArray<FString> FGameKitShellModel::MatureWords() const
+{
+	TArray<FString> Words;
+	for (const FString& Loc : GameKit::LocaleChain(IsPseudo() ? FString(GameKit::FallbackLocale) : Locale()))
+	{
+		if (const TArray<FString>* List = Mature.Find(Loc))
+		{
+			Words.Append(*List);
+		}
+	}
+	return Words;
+}
+
+bool FGameKitShellModel::BloodEnabled() const
+{
+	return GameKit::BloodEnabled(*Settings);
 }
 
 // ---- Settings ----------------------------------------------------------------------------------------------------
@@ -328,11 +363,16 @@ FString FGameKitShellModel::Locale() const
 
 FString FGameKitShellModel::T(const FString& Key, const FGameKitTrArgs& Args) const
 {
+	const bool bClean = GameKit::CleanLanguage(*Settings);   // #207: @clean lines, then the word mask
 	if (IsPseudo())
 	{
 		// the English text through Pseudo(), placeholders kept, then filled: "{name}" stays a name, not accented
 		const FGameKitStringTable* English = Tables.Find(GameKit::FallbackLocale);
-		const FString* Text = English ? English->Find(Key) : nullptr;
+		const FString* Text = English && bClean ? English->Find(Key + GameKit::CleanSuffix) : nullptr;
+		if (!Text && English)
+		{
+			Text = English->Find(Key);
+		}
 		if (!Text)
 		{
 			return Key;   // unbracketed on purpose: the pseudo check flags a missing string
@@ -341,7 +381,7 @@ FString FGameKitShellModel::T(const FString& Key, const FGameKitTrArgs& Args) co
 		One.Add(PseudoLocale).Add(Key, GameKit::Pseudo(*Text));
 		return GameKit::Tr(One, PseudoLocale, Key, Args);
 	}
-	return GameKit::Tr(Tables, Locale(), Key, Args);
+	return GameKit::Tr(Tables, Locale(), Key, Args, bClean, MatureWords());
 }
 
 FString FGameKitShellModel::Content(const FString& Text) const
@@ -878,6 +918,14 @@ void FGameKitShellModel::BuildTab(FGameKitScreen& Screen)
 		Rows.Add(Field(TEXT("access"), TEXT("timing_scale"), EGameKitRowKind::Slider, 1.0, 3.0, 0.5, {}, true));   // #166: motor access
 		Rows.Add(Field(TEXT("access"), TEXT("auto_repeat"), EGameKitRowKind::Toggle));
 		Rows.Add(Field(TEXT("access"), TEXT("narration"), EGameKitRowKind::Toggle));              // #165: menu narration
+		if (bShowBloodSetting)                                                                     // #171, #207: content.*
+		{
+			Rows.Add(Field(TEXT("content"), TEXT("blood"), EGameKitRowKind::Toggle));
+		}
+		if (bShowLanguageSetting)
+		{
+			Rows.Add(Field(TEXT("content"), TEXT("clean_language"), EGameKitRowKind::Toggle));
+		}
 	}
 	else if (Tab == TEXT("language"))
 	{

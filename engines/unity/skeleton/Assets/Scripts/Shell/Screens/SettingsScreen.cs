@@ -30,6 +30,8 @@
 //           keep-or-revert confirm on a real-time clock; Back warns once about unapplied Display changes (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the confirm is open, Keep saves (a mode
 //           the screen cannot show never reaches settings.json)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+//           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -67,6 +69,8 @@ namespace {{GAME_SLUG}}.Shell.Screens
             new List<object> { 2560.0, 1440.0 }, new List<object> { 3840.0, 2160.0 },
         };
         public const float REBIND_TIMEOUT_S = 6f;
+        public const bool SHOW_BLOOD_SETTING = true;       // false: a game with no blood hides the Blood row (SOP-18)
+        public const bool SHOW_LANGUAGE_SETTING = true;    // false: no strong language hides Clean language (SOP-19)
         private const float LABEL_MIN_WIDTH = 160f;
         private const float BIND_MIN_WIDTH = 150f;
 
@@ -432,6 +436,17 @@ namespace {{GAME_SLUG}}.Shell.Screens
                     foreach (GameSettings.FieldInfo field in GameSettings.Fields(TAB_SECTIONS[_tab]))
                     {
                         AddField(field);
+                    }
+                    if (_tab == "access")                  // what the game shows (content.*) sits with access
+                    {
+                        foreach (GameSettings.FieldInfo field in GameSettings.Fields("content"))
+                        {
+                            if ((field.Field == "blood" && SHOW_BLOOD_SETTING)
+                                || (field.Field == "clean_language" && SHOW_LANGUAGE_SETTING))
+                            {
+                                AddField(field);
+                            }
+                        }
                     }
                     break;
                 case "controls":

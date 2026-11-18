@@ -23,6 +23,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): Fields(section) hands the schema to the settings
 //           screen (#168), so a new field shows up there without a second list
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+//           BloodEnabled() and CleanLanguage() (#171, #207)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -52,7 +54,7 @@ namespace {{GAME_SLUG}}.Core
         public static readonly double[] FRAME_CAPS = { 0, 30, 60, 120, 144, 240 };   // 0 = uncapped
         public static readonly string[] CONSENT = { "unset", "yes", "no" };
 
-        private static readonly string[] SECTIONS = { "display", "audio", "access", "input", "telemetry" };
+        private static readonly string[] SECTIONS = { "display", "audio", "access", "input", "telemetry", "content" };
 
         // The defaults; DefaultValue and Defaults() hand out copies, never this tree
         private static readonly Dictionary<string, object> DEFAULTS = new Dictionary<string, object>
@@ -89,6 +91,7 @@ namespace {{GAME_SLUG}}.Core
                 }
             },
             { "telemetry", new Dictionary<string, object> { { "consent", "unset" } } },
+            { "content", new Dictionary<string, object> { { "blood", true }, { "clean_language", false } } },
         };
 
         // ---- Schema: one rule per field (the default comes from DEFAULTS) -----------
@@ -139,6 +142,7 @@ namespace {{GAME_SLUG}}.Core
             Num("access", "timing_scale", 1.0, 3.0), Flag("access", "auto_repeat"), Flag("access", "narration"),
             Num("input", "deadzone", 0.0, 0.9), Flag("input", "invert_y"), OneOf("input", "glyphs", Bindings.GLYPH_SETS),
             OneOf("telemetry", "consent", CONSENT),
+            Flag("content", "blood"), Flag("content", "clean_language"),
         };
 
         // ---- The schema, read-only, for a settings screen (#168) ------------------------
@@ -333,6 +337,18 @@ namespace {{GAME_SLUG}}.Core
         public static bool TelemetryAllowed(Dictionary<string, object> settings)
         {
             return Text(settings, "telemetry", "consent") == "yes";
+        }
+
+        /// <summary>#171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18).</summary>
+        public static bool BloodEnabled(Dictionary<string, object> settings)
+        {
+            return Bool(settings, "content", "blood");
+        }
+
+        /// <summary>#207: Shell.T picks @clean lines and masks the game's word list (SOP-19).</summary>
+        public static bool CleanLanguage(Dictionary<string, object> settings)
+        {
+            return Bool(settings, "content", "clean_language");
         }
 
         // ---- Internals -------------------------------------------------------------------

@@ -8,13 +8,15 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging, the Display tab's Apply and its
 //           keep-or-revert confirm, step by step (#308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, CLDR plural_rules, tr_clean,
+//           mask_words and mature_words (#171, #207)
 // ---------------------------------------------------------------------------
 import { describe, expect, it } from "vitest";
 import { DISPLAY_APPLY_ORDER, DISPLAY_CONFIRM_S, DisplayStaging, type DisplayCall } from "../src/core/displayStaging";
 import { glyphName, glyphSet, promptBinding, rebind, narrationLine } from "../src/core/bindings";
-import { plural, pseudo, tr, trPlural } from "../src/core/i18n";
+import { GRAWLIX, maskWords, matureWords, plural, pseudo, tr, trPlural } from "../src/core/i18n";
 import { SAVE_VERSION, saveLoad } from "../src/core/saveStore";
-import { defaultSettings, effectiveShake, settingsLoad, telemetryAllowed } from "../src/core/settings";
+import { bloodEnabled, cleanLanguage, defaultSettings, effectiveShake, settingsLoad, telemetryAllowed } from "../src/core/settings";
 import { expectClose, loadGolden, type GoldenCase } from "./helpers/golden";
 
 const golden = loadGolden("shell.json");
@@ -30,6 +32,8 @@ const RUNNERS: Record<string, Runner> = {
     expectClose(problems.length, c.problems, TOL, `problems [${problems.join(", ")}]`);
     expectClose(effectiveShake(settings), c.effective_shake, TOL, "effective_shake");
     expectClose(telemetryAllowed(settings), c.telemetry_allowed, TOL, "telemetry_allowed");
+    expectClose(bloodEnabled(settings), c.blood_enabled, TOL, "blood_enabled");
+    expectClose(cleanLanguage(settings), c.clean_language, TOL, "clean_language");
   },
   rebind: (c) => {
     const r = rebind(c.bindings, c.action, c.slot, c.binding);
@@ -62,6 +66,25 @@ const RUNNERS: Record<string, Runner> = {
       expectClose(plural(loc, n), form, TOL, `point ${i} plural(${loc}, ${n})`);
       expectClose(trPlural(c.tables, loc, c.key, n), text, TOL, `point ${i} trPlural(${loc}, ${c.key}, ${n})`);
     });
+  },
+  plural_rules: (c) => {
+    c.sweep.forEach(([loc, start, cats]: [string, number, string], i: number) => {
+      cats.split(" ").forEach((want, k) => expectClose(plural(loc, start + k), want, TOL, `sweep ${i} plural(${loc}, ${start + k})`));
+    });
+    c.points.forEach(([loc, n, want]: [string, number, string], i: number) => expectClose(plural(loc, n), want, TOL, `point ${i} plural(${loc}, ${n})`));
+  },
+  tr_clean: (c) => {
+    c.points.forEach(([loc, key, n, args, clean, words, want]: [string, string, number | null, Record<string, unknown>, boolean, string[], string], i: number) => {
+      const got = n === null ? tr(c.tables, loc, key, args, clean, words) : trPlural(c.tables, loc, key, n, args, clean, words);
+      expectClose(got, want, TOL, `point ${i} ${loc} ${key} clean=${clean}`);
+    });
+  },
+  mask_words: (c) => {
+    expectClose(GRAWLIX, c.grawlix, TOL, "GRAWLIX");
+    c.points.forEach(([text, words, want]: [string, string[], string], i: number) => expectClose(maskWords(text, words), want, TOL, `point ${i} ${JSON.stringify(text)}`));
+  },
+  mature_words: (c) => {
+    c.points.forEach(([text, want]: [string | null, string[]], i: number) => expectClose(matureWords(text), want, TOL, `point ${i}`));
   },
   display_staging: (c) => {
     expectClose(DISPLAY_CONFIRM_S, c.confirm_s, TOL, "DISPLAY_CONFIRM_S");

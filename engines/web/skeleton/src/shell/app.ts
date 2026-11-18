@@ -28,11 +28,13 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): setDisplay() (the Display tab's Apply and its revert,
 //           with display log lines) and the open settings screen's staging (#308); onLook() listeners for a game
 //           HUD that follows ui_scale and text_scale (#309)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/*.json) and the
+//           clean-language switch reach the translator (#207)
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "../core/atomicFile";
 import type { DisplayCall, DisplayStaging } from "../core/displayStaging";
 import { deepCopy } from "../core/jsonUtil";
-import { I18n, PSEUDO_LOCALE, type Tables } from "../core/i18n";
+import { I18n, PSEUDO_LOCALE, matureWords, type Tables } from "../core/i18n";
 import { Log } from "../core/log";
 import { SaveStore } from "../core/saveStore";
 import { defaultSettings, settingsLoad, settingsText, telemetryAllowed, type Settings } from "../core/settings";
@@ -86,6 +88,14 @@ function loadTables(): Tables {
   const tables: Tables = {};
   for (const [path, table] of Object.entries(files)) tables[path.replace(/^.*\//, "").replace(/\.json$/, "")] = table;
   return tables;
+}
+
+/** The game's word lists for the clean-language setting (#207): data/i18n/mature/<locale>.json. */
+function loadMature(): Record<string, string[]> {
+  const files = import.meta.glob("../../data/i18n/mature/*.json", { eager: true, query: "?raw", import: "default" }) as Record<string, string>;
+  const out: Record<string, string[]> = {};
+  for (const [path, text] of Object.entries(files)) out[path.replace(/^.*\//, "").replace(/\.json$/, "")] = matureWords(text);
+  return out;
 }
 
 function openStore(): TextStore {
@@ -183,6 +193,7 @@ export class Shell {
     const { settings, problems } = settingsLoad(text);
     this.settings = settings;
     this.i18n = new I18n(loadTables(), settings.language);
+    this.i18n.mature = loadMature();
     if (text !== null && problems.length) {
       Log.warn("settings", `${SETTINGS_FILE} repaired (${problems.join(", ")})`);
       queueMicrotask(() => this.toast("toast.repaired", { n: problems.length }));
@@ -385,6 +396,7 @@ export class Shell {
     document.documentElement.classList.toggle("reduce-motion", s.access.reduce_motion);
     document.documentElement.classList.toggle("still", !!this.drive); // no blinking in scripted runs: stable screenshots
     this.i18n.locale = this.params.get("locale") || s.language;
+    this.i18n.clean = s.content.clean_language; // #207: @clean lines and the word mask
     document.documentElement.lang = this.i18n.locale === PSEUDO_LOCALE ? "en" : this.i18n.locale;
     const look = [s.display.ui_scale, s.access.text_scale, s.access.readable_font, s.access.line_spacing].join("|");
     if (look !== this.look) {

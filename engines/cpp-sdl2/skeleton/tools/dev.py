@@ -70,6 +70,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): check fails on a TEST_CASE name holding ';' (CMake splits
 #           it, so doctest_discover_tests registers a test that matches nothing and passes)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -909,7 +911,7 @@ def build_parser():
                         "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), display (the Display tab's "
                         "Apply: stage, warn, apply, the 15 s confirm reverts in real time, discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm: "
+                        "show:<screen> (title, menu, settings, content, pause, subtitle, play, juice, credits, apply or confirm: "
                         "opens that screen; add "
                         "--screenshot); "
                         "the run ends at DRIVE_DONE")

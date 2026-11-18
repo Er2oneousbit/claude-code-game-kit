@@ -20,6 +20,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
 //           and its keep-or-revert confirm (FGameKitDisplayStaging, #308); Coverage wants at least five of them
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words (#171, #207)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (GameKitFeel.h: impact,
 //           float_text, trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
@@ -538,6 +540,8 @@ namespace GameKitGoldenTests
 		               FString::Printf(TEXT("problem count (%s):"), *FString::Join(L.Problems, TEXT(", "))));
 		Run.SameNumber(GameKit::EffectiveShake(*L.Settings), Run.Field(Case, TEXT("effective_shake")), TEXT("effective_shake"));
 		Run.SameBool(GameKit::TelemetryAllowed(*L.Settings), Run.Field(Case, TEXT("telemetry_allowed")), TEXT("telemetry_allowed"));
+		Run.SameBool(GameKit::BloodEnabled(*L.Settings), Run.Field(Case, TEXT("blood_enabled")), TEXT("blood_enabled"));
+		Run.SameBool(GameKit::CleanLanguage(*L.Settings), Run.Field(Case, TEXT("clean_language")), TEXT("clean_language"));
 	}
 
 	void CheckRebind(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
@@ -631,6 +635,81 @@ namespace GameKitGoldenTests
 			const int64 N = static_cast<int64>(Run.NumAt(P, 1));
 			Run.SameText(GameKit::Plural(Locale, N), Run.At(P, 2), TEXT("plural ") + Write(P, 0));
 			Run.SameText(GameKit::TrPlural(Tables, Locale, Key, N), Run.At(P, 3), TEXT("tr_plural ") + Write(P, 0));
+		}
+	}
+
+	void CheckPluralRules(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		for (const TSharedPtr<FJsonValue>& S : Run.List(Case, TEXT("sweep")))
+		{
+			const FString Locale = Run.TextAt(S, 0);
+			const int64 Start = static_cast<int64>(Run.NumAt(S, 1));
+			TArray<FString> Cats;
+			Run.TextAt(S, 2).ParseIntoArray(Cats, TEXT(" "));
+			for (int32 K = 0; K < Cats.Num(); ++K)
+			{
+				Run.SameText(GameKit::Plural(Locale, Start + K), MakeString(Cats[K]),
+				             FString::Printf(TEXT("plural_rules %s n=%lld"), *Locale, static_cast<long long>(Start + K)));
+			}
+		}
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			Run.SameText(GameKit::Plural(Run.TextAt(P, 0), static_cast<int64>(Run.NumAt(P, 1))), Run.At(P, 2),
+			             TEXT("plural_rules ") + Write(P, 0));
+		}
+	}
+
+	TArray<FString> WordsFrom(FGoldenRun& Run, const TSharedPtr<FJsonValue>& V)
+	{
+		TArray<FString> Words;
+		if (Is(V, EJson::Array))
+		{
+			for (const TSharedPtr<FJsonValue>& W : V->AsArray())
+			{
+				Words.Add(Run.AsText(W, TEXT("word")));
+			}
+		}
+		return Words;
+	}
+
+	void CheckTrClean(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		const FGameKitStringTables Tables = GameKit::StringTablesFromJson(Run.Obj(Case, TEXT("tables")));
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			const TSharedPtr<FJsonValue> N = Run.At(P, 2);
+			const bool bClean = Is(Run.At(P, 4), EJson::Boolean) && Run.At(P, 4)->AsBool();
+			const TArray<FString> Words = WordsFrom(Run, Run.At(P, 5));
+			const FString Got = Is(N, EJson::Number)
+				? GameKit::TrPlural(Tables, Run.TextAt(P, 0), Run.TextAt(P, 1), static_cast<int64>(N->AsNumber()),
+				                    ArgsFrom(Run.At(P, 3)), bClean, Words)
+				: GameKit::Tr(Tables, Run.TextAt(P, 0), Run.TextAt(P, 1), ArgsFrom(Run.At(P, 3)), bClean, Words);
+			Run.SameText(Got, Run.At(P, 6), TEXT("tr_clean ") + Write(P, 0));
+		}
+	}
+
+	void CheckMaskWords(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		Run.SameText(GameKit::Grawlix, Run.Field(Case, TEXT("grawlix")), TEXT("grawlix"));
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			Run.SameText(GameKit::MaskWords(Run.TextAt(P, 0), WordsFrom(Run, Run.At(P, 1))), Run.At(P, 2),
+			             TEXT("mask_words ") + Write(P, 0));
+		}
+	}
+
+	void CheckMatureWords(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			const TSharedPtr<FJsonValue> Text = Run.At(P, 0);
+			const TSharedPtr<FJsonValue> Parsed = Is(Text, EJson::String) ? Parse(Text->AsString()) : nullptr;
+			TArray<TSharedPtr<FJsonValue>> Got;
+			for (const FString& W : GameKit::MatureWords(Is(Parsed, EJson::Object) ? Parsed->AsObject() : nullptr))
+			{
+				Got.Add(MakeString(W));
+			}
+			Run.SameValue(MakeArray(Got), Run.At(P, 1), TEXT("mature_words ") + Write(P, 0));
 		}
 	}
 
@@ -851,6 +930,8 @@ namespace GameKitGoldenTests
 		{TEXT("glyph_set"), CheckGlyphSet}, {TEXT("glyph_name"), CheckGlyphName}, {TEXT("prompt_binding"), CheckPromptBinding},
 		{TEXT("save_load"), CheckSaveLoad}, {TEXT("tr"), CheckTr}, {TEXT("plural"), CheckPlural}, {TEXT("pseudo"), CheckPseudo},
 		{TEXT("narration"), CheckNarration}, {TEXT("display_staging"), CheckDisplayStaging},
+		{TEXT("plural_rules"), CheckPluralRules}, {TEXT("tr_clean"), CheckTrClean}, {TEXT("mask_words"), CheckMaskWords},
+		{TEXT("mature_words"), CheckMatureWords},
 	};
 	constexpr int32 MinDisplayStagingCases = 5;   // the five Apply scripts of #308: a truncated file must not pass
 

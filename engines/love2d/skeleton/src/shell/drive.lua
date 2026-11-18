@@ -9,9 +9,10 @@
 --           crash          raises an error in a frame (conf.lua's handler writes the crash file, exit 1)
 --           pseudo         (with --locale pseudo) visits every screen and checks every visible label
 --           pseudo-plant   the same plus one label too small for its text: must fail and name it
---           show:<screen>  title | settings | pause | subtitle | juice | credits | apply | confirm: opens it,
---                          then ends (--screenshot); apply = the Display tab with a staged change, confirm =
---                          the keep-or-revert confirm (its countdown held, so pictures repeat)
+--           show:<screen>  title | settings | content | pause | subtitle | juice | credits | apply | confirm:
+--                          opens it, then ends (--screenshot); apply = the Display tab with a staged change,
+--                          confirm = the keep-or-revert confirm (its countdown held, so pictures repeat),
+--                          content = the Accessibility tab at the Blood and Clean language rows
 --           display        the Display tab's Apply (#308): DRIVE_DISPLAY staged (a mode change), warned (Back),
 --                          applied (the confirm, focus on Keep), reverted <ms> ms (the countdown ran out in real
 --                          time; settings.json holds the old mode), discarded (a second change, Back twice), Back
@@ -21,6 +22,7 @@
 --           hanging. Add a scenario: a function in SCENARIOS, then document it in docs/ENGINE_FLOW.md.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 --           and the pseudo tour through the Display tab's staged change, warning and confirm (#308)
 -- ---------------------------------------------------------------------------
@@ -383,6 +385,14 @@ function SHOW.settings(d)
   d:press("ui_down")
   d:focus("audio.master")
   d:press("ui_left")
+  d:frames(5)
+end
+function SHOW.content(d)
+  d:to_menu()
+  d:open("settings", "settings")
+  d:to_tab("access")
+  d:press("ui_down")
+  d:focus("access.clean_language")
   d:frames(5)
 end
 function SHOW.apply(d)

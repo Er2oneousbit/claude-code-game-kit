@@ -49,6 +49,8 @@
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): MzDrive, RPG Maker MZ smoke --drive (#280)
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnityShaders compares the camera pictures and names
 #           the pipeline, and the HDRP helper is gated on the package (#260)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content (#171, #207) in the C++ help; the
+#           show:credits check reads the help without argparse's wrapping (a long choice list is cut mid-word)
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnrealShaders compares the translucent and Post
 #           Process variants too (#260)
 # ---------------------------------------------------------------------------
@@ -408,7 +410,8 @@ class CppReports(TempRoot):
                 pass
         text = " ".join(buf.getvalue().split())
         for name in ("crash (", "pseudo (", "pseudo-plant (", "bug (", "display (",
-                     "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm"):
+                     "show:<screen> (title, menu, settings, content, pause, subtitle, play, juice, credits, apply or "
+                     "confirm"):
             self.assertIn(name, text)
 
 
@@ -433,7 +436,18 @@ class ShowCredits(unittest.TestCase):
                 text = self.smoke_help(engine)
                 at = text.find("show:")
                 self.assertGreaterEqual(at, 0, f"{engine}: smoke -h names no show: drive")
-                self.assertIn("credits", text[at:at + 200], f"{engine}: show:credits missing from smoke -h")
+                # argparse breaks a long |-joined list mid-word ("cre dits"), so read the window without spaces
+                window = text[at:at + 260].replace(" ", "")
+                self.assertIn("credits", window, f"{engine}: show:credits missing from smoke -h")
+
+    def test_every_smoke_help_offers_show_content(self):
+        """#171, #207: show:content pictures the Blood and Clean language rows on every engine with show: drives."""
+        for engine in self.ENGINES:
+            with self.subTest(engine=engine):
+                text = self.smoke_help(engine)
+                at = text.find("show:")
+                window = text[at:at + 260].replace(" ", "")
+                self.assertIn("content", window, f"{engine}: show:content missing from smoke -h")
 
     def test_godot_accepts_show_credits(self):
         self.assertEqual(load("godot").drive_name("show:credits"), "show:credits")

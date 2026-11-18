@@ -218,7 +218,7 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   - `display` (#308): `DRIVE_DISPLAY staged` (the mode one step on, not applied), `warned` (Back), `applied` (the
     confirm, focus on Keep), `reverted <ms> ms` (it ran out after 15 real seconds, sooner than 14 fails; the mode and
     `settings.json` are back where they were), `discarded` (a second change, Back twice). About 20 s.
-  - `show:title|settings|pause|subtitle|juice|credits|apply|confirm` (with `--screenshot`): opens that screen, freezes it, captures it
+  - `show:title|settings|content|pause|subtitle|juice|credits|apply|confirm` (content: the Blood and Clean language rows) (with `--screenshot`): opens that screen, freezes it, captures it
     (credits: the first lines, standing still; `apply`: the Display tab with a staged change, `confirm`: its
     confirm, countdown held).
   - `access[:res=WxH][,scale=N][,pad]`: every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`

@@ -10,13 +10,16 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging, the Display tab's Apply and its
 #           keep-or-revert confirm, step by step (#308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+#           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 # ---------------------------------------------------------------------------
 extends GutTest
 
 const Golden = preload("res://tests/golden_util.gd")
 const FILE: String = "shell.json"
 const KNOWN_TYPES: PackedStringArray = ["defaults", "settings_load", "rebind", "glyph_set", "glyph_name",
-		"prompt_binding", "save_load", "tr", "plural", "pseudo", "narration", "display_staging"]
+		"prompt_binding", "save_load", "tr", "plural", "pseudo", "narration", "display_staging", "plural_rules",
+		"tr_clean", "mask_words", "mature_words"]
 const PLURAL_KEY: String = "apples" # as in tools/golden_vectors.py build_shell()
 
 var _file: Dictionary = {}
@@ -78,6 +81,8 @@ func test_settings_load() -> void:
 		_check(r["problems"].size(), c["problems"], "%s: problem count %s" % [c["name"], r["problems"]])
 		_check(GameSettings.effective_shake(r["settings"]), c["effective_shake"], "%s: effective_shake" % c["name"])
 		_check(GameSettings.telemetry_allowed(r["settings"]), c["telemetry_allowed"], "%s: telemetry_allowed" % c["name"])
+		_check(GameSettings.blood_enabled(r["settings"]), c["blood_enabled"], "%s: blood_enabled" % c["name"])
+		_check(GameSettings.clean_language(r["settings"]), c["clean_language"], "%s: clean_language" % c["name"])
 	_report("settings_load", cases.size())
 
 
@@ -146,8 +151,52 @@ func test_plural() -> void:
 	for c: Dictionary in cases:
 		for p: Array in c["points"]:
 			_check(I18n.plural(p[0], float(p[1])), p[2], "%s category %s" % [c["name"], p])
-			_check(I18n.translate_plural(c["tables"], p[0], PLURAL_KEY, float(p[1])), p[3], "%s text %s" % [c["name"], p])
+			_check(I18n.translate_plural(c["tables"], p[0], str(c.get("key", PLURAL_KEY)), float(p[1])), p[3],
+					"%s text %s" % [c["name"], p])
 	_report("plural", cases.size())
+
+
+func test_plural_rules() -> void:
+	var cases: Array = _cases("plural_rules")
+	for c: Dictionary in cases:
+		for s: Array in c["sweep"]:
+			var cats: PackedStringArray = str(s[2]).split(" ")
+			for k: int in cats.size():
+				_check(I18n.plural(s[0], float(s[1]) + k), cats[k], "%s %s n=%d" % [c["name"], s[0], int(s[1]) + k])
+		for p: Array in c["points"]:
+			_check(I18n.plural(p[0], float(p[1])), p[2], "%s %s" % [c["name"], p])
+	_report("plural_rules", cases.size())
+
+
+func test_tr_clean() -> void:
+	var cases: Array = _cases("tr_clean")
+	for c: Dictionary in cases:
+		for p: Array in c["points"]:
+			var words: PackedStringArray = PackedStringArray(p[5])
+			var got: String
+			if typeof(p[2]) == TYPE_NIL:
+				got = I18n.translate(c["tables"], p[0], p[1], p[3], bool(p[4]), words)
+			else:
+				got = I18n.translate_plural(c["tables"], p[0], p[1], float(p[2]), p[3], bool(p[4]), words)
+			_check(got, p[6], "%s %s" % [c["name"], p])
+	_report("tr_clean", cases.size())
+
+
+func test_mask_words() -> void:
+	var cases: Array = _cases("mask_words")
+	for c: Dictionary in cases:
+		assert_eq(I18n.GRAWLIX, str(c["grawlix"]), "grawlix")
+		for p: Array in c["points"]:
+			_check(I18n.mask_words(p[0], PackedStringArray(p[1])), p[2], "%s %s" % [c["name"], p])
+	_report("mask_words", cases.size())
+
+
+func test_mature_words() -> void:
+	var cases: Array = _cases("mature_words")
+	for c: Dictionary in cases:
+		for p: Array in c["points"]:
+			_check(Array(I18n.mature_words(p[0])), p[1], "%s %s" % [c["name"], p])
+	_report("mature_words", cases.size())
 
 
 func test_pseudo() -> void:

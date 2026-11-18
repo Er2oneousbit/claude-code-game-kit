@@ -6,7 +6,7 @@
 //           markers, as the Godot, LÖVE and web shells, so tools/access/sweep.py reads Unreal's output too.
 // Usage   : menus            title -> settings: master volume 0.5, reduce motion on -> back (saves) -> quit;
 //                            prints SETTINGS_WRITTEN <path> once the file holds the new values
-//           show:<screen>    title | main_menu | settings | pause | help | history | credits | loading | subtitle |
+//           show:<screen>    title | main_menu | settings | content | pause | help | history | credits | loading | subtitle |
 //                            juice: opens it, then ends (dev.py smoke --screenshot draws it); juice hits the box and
 //                            prints DRIVE_JUICE {hits, trauma, frozen, squash, flash, ...}: every primitive took
 //           crash            a planted fatal error through the crash handler: CRASH_WRITTEN <path>, exit 1 (expected)
@@ -41,6 +41,8 @@
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the model is marked scripted (#276)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display, show:apply, show:confirm; pseudo checks the
 //           Display tab with a change waiting and the confirm (#308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the Blood and Clean language rows (#171,
+//           #207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -66,7 +68,7 @@ public:
 	static constexpr int32 PlantWidth = 24;          // pseudo-plant: the planted label's column, in design pixels
 	static constexpr double RealSlackS = 2.0;     // display: the confirm reverts within this of its 15 real seconds
 	static constexpr float RealWaitS = 0.01f;     // display: sleep per frame while the confirm counts down
-	static const TCHAR* ShowScreens[12];          // what show:<screen> knows
+	static const TCHAR* ShowScreens[13];          // what show:<screen> knows
 	static const TCHAR* AccessActions[7];         // both devices must bind these
 	static const TCHAR* PromptActions[6];         // ACCESS_PROMPTS lists these
 

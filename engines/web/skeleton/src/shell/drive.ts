@@ -3,7 +3,7 @@
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
 // Usage   : ?drive=menus | crash | pseudo | pseudo-plant | display
-//           | show:<title|settings|pause|subtitle|juice|credits|apply|confirm>
+//           | show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>
 //           | access[:res=WxH][,scale=N][,pad] (every screen reported for tools/access/sweep.py)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
 // Notes   : Browser only. Every scenario ends with DRIVE_DONE <scenario>; a failed step logs DRIVE_ABORT (an
@@ -31,13 +31,14 @@
 //           time; sooner than 14 s fails) runs out and reverts -> the mode and settings.json are back where they
 //           were -> a second staged change, Back twice: discarded, back on the menu
 //   show  : open one screen, settle, freeze the game (credits: the text at its top, standing still), SHOWN <screen>
-//           (smoke takes the screenshot)
+//           (smoke takes the screenshot); content: the Accessibility tab scrolled to the Blood and Clean language rows
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the still frame goes through the shell's GameHost,
 //           so web and web-3d share this file (#175)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits (#284)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 //           and the pseudo tour checks the Display tab's pending, warning and confirm states (#308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning goes once the mode is stepped back,
 //           and a rebind waiting when the confirm reverts is cancelled
 // ---------------------------------------------------------------------------
@@ -356,6 +357,13 @@ async function show(shell: Shell, d: Driver, what: string): Promise<void> {
       await d.screen("settings");
       await d.tab("audio");
       await d.focus("audio.master"); // a control with visible focus
+      break;
+    case "content":
+      await d.toMenu();
+      await d.choose("menu", "menu.settings");
+      await d.screen("settings");
+      await d.tab("access");
+      await d.focus("content.clean_language"); // the last row: the list scrolls it into view
       break;
     case "pause":
       await d.toMenu();

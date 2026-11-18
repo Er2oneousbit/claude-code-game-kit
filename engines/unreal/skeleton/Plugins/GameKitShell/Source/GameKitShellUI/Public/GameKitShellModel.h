@@ -50,6 +50,8 @@
 //           an Apply row, a Keep/Revert confirm counted down in real time (FPlatformTime, not Update's Dt), Back that
 //           warns once (#308); disabled rows; HudScale(), HudFontSize() and the "hud_scale_changed" event (#309)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): T() honours content.clean_language with the word lists
+//           of data/i18n/mature/ (MatureWords), BloodEnabled(), and the Blood and Clean language rows (#171, #207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -229,6 +231,13 @@ public:
 	/** A locale for this run only, as --locale gives (the pseudo drive switches to "pseudo"); "" for the setting. */
 	void SetLocaleOverride(const FString& InLocale) { Opt.Locale = InLocale; ++Version; }
 	FString T(const FString& Key, const FGameKitTrArgs& Args = FGameKitTrArgs()) const;
+	/** The word lists of every locale in the current chain (data/i18n/mature/<locale>.json, #207). */
+	TArray<FString> MatureWords() const;
+	/** #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18). */
+	bool BloodEnabled() const;
+	/** false: a game with no blood hides the Blood row (SOP-18); no strong language hides Clean language (SOP-19). */
+	static constexpr bool bShowBloodSetting = true;
+	static constexpr bool bShowLanguageSetting = true;
 	/** A value the game made up (a name, a number) through the "{v}" template, so the pseudo check sees it. */
 	FString Content(const FString& Text) const;
 	/** CREDITS.md without HTML comments (tools/credits.py writes one, #279): one line or many, an unclosed one runs to
@@ -361,6 +370,7 @@ private:
 	FOptions Opt;
 	TArray<FGameKitScreen> Stack;
 	FGameKitStringTables Tables;
+	TMap<FString, TArray<FString>> Mature;   // locale -> words (#207)
 	TSharedPtr<FJsonObject> Colours;
 	FString CaptureAction;
 	int32 CaptureSlotIndex = -1;
@@ -378,6 +388,7 @@ private:
 	double LastHudScale = 1.0;                         // hud_scale_changed fires when HudScale() leaves it (#309)
 
 	void LoadTables();
+	void LoadMature();
 	FGameKitScreen Build(const FString& Name);
 	void BuildTab(FGameKitScreen& Screen);
 	FGameKitRow Field(const TCHAR* Section, const TCHAR* Field, EGameKitRowKind Kind, double Lo = 0.0, double Hi = 1.0,

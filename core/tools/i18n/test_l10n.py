@@ -14,6 +14,9 @@
 # Notes   : Standard library only, offline. Set L10N_LIVE_URL (an OpenAI-compatible server on this machine, e.g.
 #           http://127.0.0.1:1234/v1) and optionally L10N_LIVE_MODEL to also draft three lines with a real model.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the plural categories agree with the engines' CLDR
+#           plural() in tools/golden_vectors.py, which now has a rule for every language (no helper-gap warning);
+#           a data/i18n/ with only the word lists passes check
 # ---------------------------------------------------------------------------
 import io
 import json
@@ -193,11 +196,32 @@ class L10nExam(unittest.TestCase):
         self.assertEqual(rules.placeholder_problem("{n} hits", "{count} coups"), "placeholders: lost {n}, added {count}")
         self.assertIn("lost %d", rules.placeholder_problem("%d %d", "%d"))      # a multiset, not a set
         self.assertEqual(rules.categories("ru"), ("one", "few", "many", "other"))
-        self.assertEqual(rules.categories("pt-BR"), ("one", "other"))
+        self.assertEqual(rules.categories("pt-BR"), ("one", "many", "other"))
+        self.assertEqual(rules.required_categories("pt-BR"), ("one", "other"))
         self.assertEqual(rules.categories("ja"), ("other",))
         self.assertIsNone(rules.categories("xx"))
+        self.assertEqual(rules.categories("fr"), ("one", "many", "other"))    # whole millions (CLDR 46)
+        self.assertEqual(rules.categories("cs"), ("one", "few", "other"))     # many is for fractions only
         self.assertIsNone(rules.helper_gap("fr"))
-        self.assertIn("no ru rule", rules.helper_gap("ru"))
+        self.assertIsNone(rules.helper_gap("ru"))                         # the engines' plural() knows ru now
+        self.assertEqual(rules.split_plural("hits.few@clean"), ("hits", "few"))
+        self.assertEqual(rules.plural_groups({"hits.one": "a", "hits.one@clean": "b", "hits.other": "c"}),
+                         {"hits": ["one", "other"]})
+
+    def test_the_categories_agree_with_the_engines_plural(self):
+        """The round trip asks translators for exactly the forms the engines' plural() can pick (#87 found ru few and
+        many imported but never shown): same languages, same categories, in the reference and here."""
+        ref = HERE.parent / "golden_vectors.py"
+        if not ref.is_file():
+            self.skipTest("the shell's reference is not in this project")
+        sys.path.insert(0, str(ref.parent))
+        import golden_vectors as gv
+        self.assertEqual(set(rules.CATEGORIES), set(gv.PLURAL_FAMILY_OF))
+        self.assertEqual(rules.HELPER_RULES, set(gv.PLURAL_FAMILY_OF))
+        for lang in sorted(rules.CATEGORIES):
+            reached = {gv.plural(lang, n) for n in list(range(0, 2001)) + [k * 1000000 for k in range(1, 11)]}
+            self.assertEqual(set(rules.categories(lang)), reached | {"other"}, lang)
+            self.assertEqual(rules.categories(lang), gv.plural_categories(lang), lang)
         self.assertEqual(rules.plural_groups(json.loads(EN)), {"hits": ["one", "other"]})
 
     def test_draft_problems_a_small_model_makes(self):
@@ -244,7 +268,7 @@ class L10nExam(unittest.TestCase):
     def test_export_xliff_and_csv(self):
         rc, out = self.cli("export", "ru")
         self.assertEqual(rc, 0, out)
-        self.assertIn("no ru rule", out)                               # the helper cannot pick few / many yet
+        self.assertNotIn("no ru rule", out)                            # the engines' plural() picks few and many
         self.assertTrue((self.tmp / "l10n" / ".gdignore").is_file())
         u = self.units()
         self.assertEqual(list(u)[-4:], ["hits.one", "hits.other", "hits.few", "hits.many"])
@@ -458,10 +482,14 @@ class L10nExam(unittest.TestCase):
         self.assertIn("ru greet: placeholders", out)
         self.assertIn("ru hits: plural forms hits.few, hits.many missing", out)
         self.assertIn("pseudo menu.quit: the budget 5 is below the pseudo-locale's 6", out)
-        self.assertIn("no ru rule", out)
+        self.assertNotIn("no ru rule", out)
         self.assertEqual(self.cli("check", "--font", "nope.ttf")[0], 2)
-        # a project with no tables at all passes (the tool ships into every game)
+        # a project with no tables at all passes (the tool ships into every game), and so does one that holds only
+        # the clean-language word lists core ships (#207: RPG Maker MZ has data/i18n/mature/en.json and no en.json)
         shutil.rmtree(self.tmp / "data")
+        self.assertEqual(self.cli("check")[0], 0)
+        (self.tmp / "data" / "i18n" / "mature").mkdir(parents=True)
+        put(self.tmp / "data" / "i18n" / "mature" / "en.json", '{"words": []}', encoding="utf-8")
         self.assertEqual(self.cli("check")[0], 0)
         self.assertEqual(self.cli("export", "ru")[0], 2)
 

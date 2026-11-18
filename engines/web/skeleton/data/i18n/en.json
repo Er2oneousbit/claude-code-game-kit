@@ -139,6 +139,8 @@
  "controls.preset.one_hand_right": "One hand (right)",
  "controls.preset_done": "One-handed layout set. You can still rebind anything.",
  "access.narration": "Narrate menus",
+ "content.blood": "Blood",
+ "content.clean_language": "Clean language",
  "narrate.button": "button",
  "narrate.toggle": "toggle",
  "narrate.slider": "slider",

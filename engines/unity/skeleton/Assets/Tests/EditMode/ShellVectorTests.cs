@@ -10,6 +10,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (DisplayStaging, the
 //           Display tab's Apply and its keep-or-revert confirm, #308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -25,7 +27,7 @@ namespace {{GAME_SLUG}}.Tests
         private static readonly string[] REQUIRED_TYPES =
         {
             "defaults", "settings_load", "rebind", "glyph_set", "glyph_name", "prompt_binding", "save_load", "tr",
-            "plural", "pseudo", "narration", "display_staging",
+            "plural", "pseudo", "narration", "display_staging", "plural_rules", "tr_clean", "mask_words", "mature_words",
         };
         private const int MIN_STAGING_CASES = 5;    // #308: the Display tab's Apply scripts
 
@@ -96,6 +98,29 @@ namespace {{GAME_SLUG}}.Tests
                     Points(c, tol, where, pt => Bindings.NarrationLine((string)pt[0], (string)pt[1], (string)pt[2]), 3);
                     break;
                 case "display_staging": RunDisplayStaging(c, tol, where); break;
+                case "plural_rules": RunPluralRules(c, tol, where); break;
+                case "tr_clean":
+                    var cleanTables = I18n.TablesFromJson(G.Get(c, "tables"));
+                    Points(c, tol, where, pt => pt[2] == null
+                        ? I18n.Tr(cleanTables, (string)pt[0], (string)pt[1], (Dictionary<string, object>)pt[3], (bool)pt[4], Words(pt[5]))
+                        : I18n.TrPlural(cleanTables, (string)pt[0], (string)pt[1], Json.ToNumber(pt[2]),
+                                        (Dictionary<string, object>)pt[3], (bool)pt[4], Words(pt[5])), 6);
+                    break;
+                case "mask_words":
+                    Assert.AreEqual(G.Str(c, "grawlix"), I18n.GRAWLIX, where + " grawlix");
+                    Points(c, tol, where, pt => I18n.MaskWords((string)pt[0], Words(pt[1])), 2);
+                    break;
+                case "mature_words":
+                    Points(c, tol, where, pt =>
+                    {
+                        object parsed = null;
+                        if (pt[0] is string text)
+                        {
+                            Json.TryParse(text, out parsed);
+                        }
+                        return I18n.MatureWords(parsed).ConvertAll(w => (object)w);
+                    }, 1);
+                    break;
                 default:
                     Assert.Fail($"unknown case type '{type}' in {FILE}: add a runner for it here");
                     break;
@@ -110,6 +135,8 @@ namespace {{GAME_SLUG}}.Tests
                             $"{where}: problem count (got: {string.Join(" | ", r.Problems)})");
             G.AssertClose(GameSettings.EffectiveShake(r.Settings), G.Get(c, "effective_shake"), tol, where + " effective_shake");
             G.AssertClose(GameSettings.TelemetryAllowed(r.Settings), G.Get(c, "telemetry_allowed"), tol, where + " telemetry_allowed");
+            G.AssertClose(GameSettings.BloodEnabled(r.Settings), G.Get(c, "blood_enabled"), tol, where + " blood_enabled");
+            G.AssertClose(GameSettings.CleanLanguage(r.Settings), G.Get(c, "clean_language"), tol, where + " clean_language");
         }
 
         private static void RunRebind(Dictionary<string, object> c, double tol, string where)
@@ -186,9 +213,36 @@ namespace {{GAME_SLUG}}.Tests
                 var pt = (List<object>)p;                  // [locale, n, plural form, tr_plural text]
                 string locale = (string)pt[0];
                 double n = Json.ToNumber(pt[1]);
-                var actual = new List<object> { I18n.Plural(locale, n), I18n.TrPlural(tables, locale, "apples", n) };
+                string key = G.Get(c, "key") as string ?? "apples";
+                var actual = new List<object> { I18n.Plural(locale, n), I18n.TrPlural(tables, locale, key, n) };
                 G.AssertClose(actual, pt.GetRange(2, 2), tol, $"{where} {Json.Stringify(pt)}");
             }
+        }
+
+        private static void RunPluralRules(Dictionary<string, object> c, double tol, string where)
+        {
+            foreach (object s in G.List(c, "sweep"))
+            {
+                var sw = (List<object>)s;                  // [locale, first n, "cat cat ..."]
+                string locale = (string)sw[0];
+                double start = Json.ToNumber(sw[1]);
+                string[] cats = ((string)sw[2]).Split(' ');
+                for (int k = 0; k < cats.Length; k++)
+                {
+                    Assert.AreEqual(cats[k], I18n.Plural(locale, start + k), $"{where} {locale} n={start + k}");
+                }
+            }
+            Points(c, tol, where, pt => I18n.Plural((string)pt[0], Json.ToNumber(pt[1])), 2);
+        }
+
+        private static List<string> Words(object list)
+        {
+            var words = new List<string>();
+            foreach (object w in (List<object>)list)
+            {
+                words.Add((string)w);
+            }
+            return words;
         }
 
         // points = [inputs..., expected]: inputs are the first `inputs` items, the expected value is the next one

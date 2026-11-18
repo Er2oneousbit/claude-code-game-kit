@@ -110,6 +110,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): test and smoke build first when a C++ source is newer
 #           than its built module (they ran the old binaries and passed on code that was never compiled)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -1456,7 +1458,7 @@ def build_parser():
                         "display (the Display tab's Apply: stage, warn, apply, the 15 s confirm reverts in real time, "
                         "discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, main_menu, settings, pause, help, history, credits, loading, subtitle, "
+                        "show:<screen> (title, main_menu, settings, content, pause, help, history, credits, loading, subtitle, "
                         "juice, apply, confirm; add --screenshot)")
     p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
                                                    "project; the editor draws it off-screen, a GPU)")

@@ -32,6 +32,8 @@
 --           (App.window_size), and a refused exclusive fullscreen falls back to borderless (#308, seen on a real window);
 --           a first run takes the window's own size as display.resolution (adopt_window_size), so a revert restores it
 --           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): on_look_changed returns the function that stops it
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) and the
+--           clean-language switch reach the translator; App:blood_enabled() (#171, #207)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -107,6 +109,16 @@ local function load_tables()
   return tables
 end
 
+-- the game's word lists for the clean-language setting (#207): data/i18n/mature/<locale>.json
+local function load_mature()
+  local lists, dir = {}, I18N_DIR .. "mature/"
+  for _, file in ipairs(love.filesystem.getDirectoryItems(dir)) do
+    local loc = file:match("^(.+)%.json$")
+    if loc then lists[loc] = I18n.mature_words(love.filesystem.read(dir .. file), Json.try_decode) end
+  end
+  return lists
+end
+
 local function load_dialogue()
   local text = love.filesystem.read(DIALOGUE_FILE)
   if not text then return Dialogue.parse({ lines = {} }) end
@@ -168,6 +180,7 @@ function App:load()
   self.settings_existed = source ~= "none"
   for _, p in ipairs(problems) do Log.warn("settings", "fixed: " .. p) end
   self.i18n = I18n.new(load_tables(), "en")
+  self.i18n.mature = load_mature()
   self.saves = SaveStore.new(self.store)
   self.telemetry = Telemetry.new(self.store, function() return Settings.telemetry_allowed(self.settings) end,
                                  Telemetry.new_session(love.math.random))
@@ -221,6 +234,7 @@ function App:apply_settings()
   end
   self.look = look
   self.i18n:set_locale(self.kit.locale or s.language)
+  self.i18n.clean = Settings.clean_language(s)          -- #207: @clean lines and the word mask
   if love.audio then love.audio.setVolume(self.kit.automated and 0 or s.audio.master) end
   self.bus_gains = self.buses and AudioAccess.user_bus_gains(self.buses, s.audio) or nil
   if self.music then self.music:set_volume(self:bus_volume("music")) end
@@ -342,6 +356,8 @@ end
 
 -- ---- Text ------------------------------------------------------------------------------------------------------
 function App:t(key, args) return self.i18n:t(key, args) end
+-- #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).
+function App:blood_enabled() return Settings.blood_enabled(self.settings) end
 function App:tp(key, n, args) return self.i18n:tp(key, n, args) end
 -- a value the game made up (a number, a name) shown through a "{name}" template, so the pseudo check sees it
 function App:tv(value) return self.i18n:t("value.raw", { v = value }) end

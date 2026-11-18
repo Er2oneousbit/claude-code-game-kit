@@ -11,6 +11,8 @@
 //           passes --data-dir, so a test never touches the player's files. data/ is found next to the exe, then in
 //           the working folder, then in the project (CARGO_MANIFEST_DIR, for cargo run and the tests).
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the built-in word list and data_mature() for the
+//           clean-language setting (#207)
 // ---------------------------------------------------------------------------
 use std::path::{Path, PathBuf};
 
@@ -19,6 +21,8 @@ pub const BUILTIN_I18N: &[(&str, &str)] = &[
     ("en", include_str!("../../data/i18n/en.json")),
     ("fr", include_str!("../../data/i18n/fr.json")),
 ];
+/// The word lists for the clean-language mask (#207): data/i18n/mature/<locale>.json.
+pub const BUILTIN_MATURE: &[(&str, &str)] = &[("en", include_str!("../../data/i18n/mature/en.json"))];
 pub const BUILTIN_PRESETS: &str = include_str!("../../data/input/presets.json");
 pub const BUILTIN_COLOURS: &str = include_str!("../../data/access/colours.json");
 
@@ -58,6 +62,30 @@ impl Store {
             return out;
         };
         if let Ok(entries) = std::fs::read_dir(dir.join(I18N_DIR)) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                    continue;
+                }
+                if let (Some(stem), Ok(text)) = (
+                    path.file_stem().and_then(|s| s.to_str()),
+                    std::fs::read_to_string(&path),
+                ) {
+                    out.push((stem.to_string(), text));
+                }
+            }
+        }
+        out.sort();
+        out
+    }
+
+    /// (locale, text) of every data/i18n/mature/<locale>.json in the project's data folder (#207).
+    pub fn data_mature(&self) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        let Some(dir) = self.project_data.as_ref() else {
+            return out;
+        };
+        if let Ok(entries) = std::fs::read_dir(dir.join(I18N_DIR).join("mature")) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.extension().and_then(|e| e.to_str()) != Some("json") {
