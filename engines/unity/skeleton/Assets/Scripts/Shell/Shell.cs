@@ -164,7 +164,8 @@ namespace {{GAME_SLUG}}.Shell
         {
             // data/achievements.json is optional: without it every call is "unknown" and nothing is written
             string text = ShellFiles.ReadOrNull("data/" + PlatformRules.ACHIEVEMENTS_FILE);
-            Platform = new PlatformService(DataDir, text, PlatformBackends.Make(Smoke));
+            var defs = PlatformRules.AchievementsLoad(text, out _);
+            Platform = new PlatformService(DataDir, text, PlatformBackends.Make(Smoke, defs, DataDir));
             foreach (string p in Platform.Problems)
             {
                 Debug.LogWarning($"[WARN][platform] {p}");

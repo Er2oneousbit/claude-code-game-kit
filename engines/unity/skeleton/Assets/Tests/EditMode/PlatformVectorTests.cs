@@ -211,6 +211,50 @@ namespace {{GAME_SLUG}}.Tests
             CollectionAssert.AreEqual(new object[] { "save_1.json" }, ((NullPlatformBackend)ps.Backend).Cloud);
             Directory.Delete(dir, true);
         }
+
+        private sealed class FakeSteam : ISteamCalls
+        {
+            public readonly List<string> Log = new List<string>();
+            public bool StoreOk = true;
+            public event System.Action<bool> OverlayChanged;
+            public void Overlay(bool active) => OverlayChanged?.Invoke(active);
+            public bool SetAchievement(string id) { Log.Add("SetAchievement " + id); return true; }
+            public bool GetAchievement(string id, out bool achieved) { achieved = id == "first"; return true; }
+            public bool SetStat(string id, int value) { Log.Add($"SetStat {id} {value}"); return true; }
+            public bool SetStat(string id, float value) { Log.Add($"SetStatF {id}"); return true; }
+            public bool GetStat(string id, out int value) { value = 4; return true; }
+            public bool GetStat(string id, out float value) { value = 0f; return true; }
+            public bool StoreStats() { Log.Add("StoreStats"); return StoreOk; }
+            public bool IndicateAchievementProgress(string id, uint current, uint max) => true;
+            public bool ResetAllStats(bool achievementsToo) => true;
+            public bool SetRichPresence(string key, string value) { Log.Add($"SetRichPresence {key} {value}"); return true; }
+            public void ClearRichPresence() { }
+            public bool FileWrite(string name, byte[] data) { Log.Add("FileWrite " + name); return true; }
+            public void RunCallbacks() => Log.Add("RunCallbacks");
+        }
+
+        [Test]
+        public void Platform_SteamBackendMapsCallsAndARefusedStore()
+        {
+            string dir = Scratch();
+            var fake = new FakeSteam();
+            var defs = PlatformRules.AchievementsLoad(SAMPLE, out _);
+            var steam = new SteamPlatformBackend(defs, dir, fake);
+            Same(steam.Remote(), Json.Parse("{\"unlocked\": [\"first\"], \"stats\": {\"kills\": 4}}"), 0, "remote");
+            var ps = new PlatformService(dir, SAMPLE, steam);
+            Assert.AreEqual("ok", ps.AddStat("kills", 12));   // the store had 4: 16, and kills_10 unlocks
+            CollectionAssert.AreEqual(new[] { "SetStat kills 16", "SetAchievement kills_10", "StoreStats" }, fake.Log);
+            fake.Log.Clear();
+            fake.StoreOk = false;
+            Assert.AreEqual("ok", ps.SetStat("kills", 20));
+            Assert.AreEqual("failed", ps.Flush());
+            Assert.IsFalse(ps.Rules.Online, "a refused StoreStats takes the layer offline");
+            fake.Overlay(true);
+            Assert.AreEqual(true, ps.Update());
+            Assert.AreEqual(null, ps.Update());
+            Assert.AreEqual("RunCallbacks", fake.Log[fake.Log.Count - 1]);
+            Directory.Delete(dir, true);
+        }
     }
 }
 
