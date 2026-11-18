@@ -22,6 +22,8 @@
 #   Service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 #          connect(backend.remote()) ; after every op: write the state file when it changed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Rules.store_failed and Service.update take a store
+#           that failed after it was accepted (Steam's UserStatsStored) back onto the queue
 # ---------------------------------------------------------------------------
 class_name PlatformLayer
 extends RefCounted
@@ -499,6 +501,19 @@ class Rules:
 		online = false
 		return _done("offline")
 
+	## A store the backend accepted failed later (Steam's UserStatsStored callback): the same as a refused
+	## store_stats. The batch's stats and unlocks are pending again and the layer is offline until connect_remote().
+	## batch: the set_stat / set_achievement calls that store carried.
+	func store_failed(batch: Array) -> Dictionary:
+		online = false
+		for call: Variant in batch:
+			var c: Array = call
+			if c[0] == "set_stat" and stat_defs.has(c[1]) and not pending_stats.has(c[1]):
+				pending_stats.append(c[1])
+			elif c[0] == "set_achievement" and unlocked.has(c[1]) and not pending_unlocks.has(c[1]):
+				pending_unlocks.append(c[1])
+		return _done("failed")
+
 	## Testing only: refused offline (a reset is never queued).
 	func reset_all() -> Dictionary:
 		if not online:
@@ -639,8 +654,15 @@ class Service:
 	func overlay(is_active: bool, screen: String) -> String:
 		return PlatformLayer.overlay_action(is_active, screen)
 
-	## Each frame: the backend's callbacks (the null backend does nothing).
+	## Each frame: the backend's callbacks (the null backend does nothing); a store that failed late (a backend with
+	## take_store_failure(), Steam's UserStatsStored) goes back on the queue and the layer goes offline.
 	func update() -> void:
 		backend.update()
+		if backend.has_method("take_store_failure"):
+			var batch: Variant = backend.call("take_store_failure")
+			while batch != null:
+				Log.warn("platform", "a store the backend accepted failed later: kept for the next connect")
+				_after(rules.store_failed(batch))
+				batch = backend.call("take_store_failure")
 
 # {{FOOTER}}
