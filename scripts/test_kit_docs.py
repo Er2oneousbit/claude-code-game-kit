@@ -24,6 +24,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): web src/core/ displayStaging (#308) and hud (#309)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): web src/core/ feel (the recipe helpers, #170)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): web src/core/ platform (the platform layer, #84)
 # ---------------------------------------------------------------------------
 import json
 import re
@@ -55,7 +56,7 @@ WEB_CORE_WORDS = {
     "flashLimiter": "flash limiter", "feel": "feel recipes", "holdToggle": "hold toggle", "autoRepeat": "auto repeat", "settings": "settings", "bindings": "bindings",
     "saveStore": "saves", "i18n": "i18n", "userData": "user data", "dialogue": "dialogue",
     "audioDirector": "audio director", "musicDirector": "music director", "audioAccess": "audio access",
-    "analog": "analog", "displayStaging": "display staging", "hud": "hud font size", "atomicFile": None, "textStore": None, "jsonUtil": None,
+    "analog": "analog", "displayStaging": "display staging", "hud": "hud font size", "platform": "platform services", "atomicFile": None, "textStore": None, "jsonUtil": None,
 }
 WAVESMITH = "core/tools/audio/wavesmith"
 WAVESMITH_BUILTINS = {"list", "check", "test"}   # handled by wavesmith.py itself, not in SUBCOMMANDS

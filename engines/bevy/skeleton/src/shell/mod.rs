@@ -35,6 +35,8 @@
 //           tn() honour content.clean_language, blood_enabled() (#171, #207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit behind set_mature(), and t_args() and
 //           tn() mask with the chain's words folded once per locale and list (word_set) (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): shell.platform (docs/PLATFORM.md, #84): save_slot()
+//           calls its saved(), the pause screen and quit flush it, on_overlay() opens the pause menu over play
 // ---------------------------------------------------------------------------
 pub mod bug_report;
 pub mod crash;
@@ -63,6 +65,7 @@ use crate::logic::bindings::{self, Bindings};
 use crate::logic::display_staging::{self, Calls, DisplayStaging};
 use crate::logic::hud_scale;
 use crate::logic::i18n::{self, Tables};
+use crate::logic::platform::{self, PlatformService};
 use crate::logic::settings;
 use narrator::Narrator;
 use screens::{Row, RowKind};
@@ -264,6 +267,9 @@ pub struct Shell {
     pub confirm_focus: usize,
     /// The wall clock at the last frame: the confirm counts real seconds (smoke runs step the game's clock by hand).
     real_last: Option<Instant>,
+    /// Achievements, stats, presence and cloud hooks (docs/PLATFORM.md): the null backend unless the game was
+    /// built with the `steam` feature and Steam answered.
+    pub platform: PlatformService,
 }
 
 /// The player's text size for a game HUD (#309): display.ui_scale and access.text_scale. The shell writes it only
@@ -312,6 +318,7 @@ impl HudScale {
 impl Shell {
     pub fn new(cfg: &GameConfig) -> Shell {
         let store = Store::new(cfg.data_dir.clone());
+        let cfg_data_dir = store.data_dir.clone();
         let (settings, problems) = settings::load_file(&store.settings_path());
         for p in &problems {
             if p != "unreadable" || store.settings_path().exists() {
@@ -358,7 +365,15 @@ impl Shell {
             staging: DisplayStaging::default(),
             confirm_focus: 0,
             real_last: None,
+            platform: PlatformService::new(&cfg_data_dir, None, None, platform::CLOUD_MODE),
         };
+        // data/achievements.json is optional: without it every call is "unknown" and nothing is written
+        if let Some(text) = shell.store.read_data(platform::ACHIEVEMENTS_FILE) {
+            // the `steam` feature and Steam running: its backend; else the null backend
+            let defs = platform::achievements_load(Some(&text)).0;
+            let backend = crate::logic::platform_steam::make(&defs, &cfg_data_dir, cfg.automated);
+            shell.platform = PlatformService::new(&cfg_data_dir, Some(&text), backend, platform::CLOUD_MODE);
+        }
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)
         {
@@ -759,6 +774,9 @@ impl Shell {
         screens::enter(self, &mut state);
         self.stack.push(state);
         info!("shell: screen {}", name.as_str());
+        if name == ScreenName::Pause {
+            self.platform.flush(); // a checkpoint (docs/PLATFORM.md)
+        }
         self.screen_changed = true;
         self.version += 1;
     }
@@ -877,7 +895,25 @@ impl Shell {
 
     pub fn quit(&mut self) {
         info!("shell: quit");
+        self.platform.flush();
         self.quit_requested = true;
+    }
+
+    /// A save slot in the data folder ("save_1.json") whose save reaches platform.saved (the cloud hook).
+    pub fn save_slot(&mut self, file_name: &str, data: &Value) -> Result<(), String> {
+        let path = self.store.data_dir.join(file_name);
+        let platform = &mut self.platform;
+        crate::logic::save_store::write_then(&path, data, |name| {
+            platform.saved(name);
+        })
+    }
+
+    /// A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes.
+    pub fn on_overlay(&mut self, active: bool) {
+        let screen = self.top_name().map(|n| n.as_str()).unwrap_or("");
+        if self.platform.overlay(active, screen) == "pause" {
+            self.push(ScreenName::Pause);
+        }
     }
 
     /// The loading screen, then `next` (Play or the juice demo).
@@ -1154,6 +1190,9 @@ impl Plugin for ShellPlugin {
 /// One shell frame: timers, the pending presses, auto-repeat, the narrator.
 fn shell_frame(time: Res<Time>, mut shell: ResMut<Shell>, mut active: ResMut<GameActive>) {
     let dt = time.delta_secs_f64();
+    if let Some(active) = shell.platform.update() {
+        shell.on_overlay(active); // the store overlay opened or closed (a Steam build)
+    }
     shell.game_pressed.clear();
     shell.tick(dt);
     // the display confirm runs on the wall clock (#308): not game time, and not the fixed tick a smoke run steps

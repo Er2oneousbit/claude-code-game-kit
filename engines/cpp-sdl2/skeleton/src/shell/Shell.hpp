@@ -47,6 +47,8 @@
 //           word lists of data/i18n/mature/ (#171, #207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in a core::WordCache, folded once
 //           per locale, not on every t() (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): platform() (docs/PLATFORM.md, #84), save_slot() with
+//           the cloud hook, on_overlay() for the store overlay's pause; the pause menu and quit flush
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -73,7 +75,9 @@
 #include "core/HudScale.hpp"
 #include "core/I18n.hpp"
 #include "core/Menu.hpp"
+#include "core/Platform.hpp"
 #include "core/Report.hpp"
+#include "core/SaveStore.hpp"
 #include "core/ShellLogic.hpp"
 #include "shell/Draw.hpp"
 
@@ -167,6 +171,13 @@ public:
     // and smoke, else the exe's folder, where the build copies them (a shipped game started from anywhere). Join
     // the game's own files to it the same way: shell.game_dir() / "assets/spr_player.png".
     const std::filesystem::path& game_dir() const { return game_dir_; }
+    // Achievements, stats, presence and cloud hooks (docs/PLATFORM.md); valid after init(). The null backend unless
+    // the game was built with -DGAMEKIT_STEAM=ON and Steam answered.
+    core::PlatformService& platform() { return *platform_; }
+    // A save slot in the data folder whose saves reach platform().saved (the cloud hook): "save_1.json".
+    core::SaveStore save_slot(const std::string& file_name);
+    // A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes.
+    void on_overlay(bool active);
     bool say_line(const std::string& id);             // a dialogue line as a subtitle (settings permitting)
     bool caption(const std::string& event_id);        // a sound caption ("[thud]") with captions_sfx on
     void set_objective(const std::string& text) { objective_ = text; }
@@ -204,6 +215,7 @@ private:
 
     std::filesystem::path data_dir_;
     std::filesystem::path game_dir_;      // where data/ and CREDITS.md are read from (game_dir())
+    std::unique_ptr<core::PlatformService> platform_;
     nlohmann::json settings_;
     bool settings_existed_ = false;
     core::StringTables tables_;
@@ -264,6 +276,7 @@ private:
 
     // setup
     void load_tables();
+    void start_platform();
     void load_dialogue();
     nlohmann::json load_json(const std::filesystem::path& file, const char* what);
     void apply_settings();

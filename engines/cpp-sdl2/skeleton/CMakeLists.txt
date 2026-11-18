@@ -22,6 +22,8 @@
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the game_data target (data/ next to the exe)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork importer (#60); assets/ ships too
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): tests/test_capture_format.cpp (#314); tests/test_window_fit.cpp (#308)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): src/core/Platform.cpp and tests/test_golden_platform.cpp (#84);
+#           the optional GAMEKIT_STEAM backend (src/core/PlatformSteam.cpp, STEAMWORKS_SDK)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project({{GAME_SLUG}} VERSION 0.1.0 LANGUAGES CXX)
@@ -58,6 +60,8 @@ set(CORE_SOURCES
   src/core/DotworkAssets.cpp
   src/core/I18n.cpp
   src/core/Menu.cpp
+  src/core/Platform.cpp
+  src/core/PlatformSteam.cpp
   src/core/Report.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
@@ -68,6 +72,26 @@ target_include_directories(core PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(core PUBLIC project_warnings nlohmann_json::nlohmann_json)
 # One source of truth for the version (SOP-06): project(... VERSION) above, readable in code as GAME_VERSION
 target_compile_definitions(core PUBLIC GAME_VERSION="${PROJECT_VERSION}")
+
+# ---- Steam (optional, docs/PLATFORM.md): -DGAMEKIT_STEAM=ON with STEAMWORKS_SDK = the unpacked SDK's sdk/ folder ----
+# Off by default: the game builds and runs on the null backend. The SDK is never committed (its licence, verify).
+option(GAMEKIT_STEAM "Build the Steamworks backend (needs the Steamworks SDK in STEAMWORKS_SDK)" OFF)
+if(GAMEKIT_STEAM)
+  set(STEAMWORKS_SDK "$ENV{STEAMWORKS_SDK}" CACHE PATH "The Steamworks SDK's sdk/ folder (public/ and redistributable_bin/)")
+  find_path(STEAM_API_INCLUDE steam/steam_api.h HINTS "${STEAMWORKS_SDK}/public" NO_DEFAULT_PATH REQUIRED)
+  if(WIN32)
+    set(STEAM_LIB_DIR "${STEAMWORKS_SDK}/redistributable_bin/win64")
+    find_library(STEAM_API_LIB steam_api64 HINTS "${STEAM_LIB_DIR}" NO_DEFAULT_PATH REQUIRED)
+  elseif(APPLE)
+    find_library(STEAM_API_LIB steam_api HINTS "${STEAMWORKS_SDK}/redistributable_bin/osx" NO_DEFAULT_PATH REQUIRED)
+  else()
+    find_library(STEAM_API_LIB steam_api HINTS "${STEAMWORKS_SDK}/redistributable_bin/linux64" NO_DEFAULT_PATH REQUIRED)
+  endif()
+  target_compile_definitions(core PUBLIC GAMEKIT_STEAM=1)
+  target_include_directories(core PRIVATE "${STEAM_API_INCLUDE}")
+  target_link_libraries(core PUBLIC "${STEAM_API_LIB}")
+  message(STATUS "Steam backend on: ${STEAM_API_LIB} (copy its DLL / .so next to the game; never steam_appid.txt into a depot)")
+endif()
 
 # ---- game_lib: gameplay code that talks to SDL ----
 find_package(SDL3 CONFIG REQUIRED)
@@ -159,12 +183,22 @@ if(BUILD_TESTS)
     tests/test_frame_times.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
+    tests/test_golden_platform.cpp
     tests/test_menu.cpp
     tests/test_motor_access.cpp
     tests/test_reports.cpp
     tests/test_shell_files.cpp
   )
   target_link_libraries(unit_tests PRIVATE core doctest::doctest)
+  # The Steam backend's SDK half, compiled (never linked or run) against the kit's stand-in header, so a typo in
+  # it fails here and not only on a machine with the Steamworks SDK (tests/steam_standin/, docs/PLATFORM.md)
+  if(NOT GAMEKIT_STEAM)
+    add_library(steam_standin_check OBJECT src/core/PlatformSteam.cpp)
+    target_compile_definitions(steam_standin_check PRIVATE GAMEKIT_STEAM=1)
+    target_include_directories(steam_standin_check PRIVATE ${CMAKE_SOURCE_DIR}/tests/steam_standin ${CMAKE_SOURCE_DIR}/src)
+    target_link_libraries(steam_standin_check PRIVATE project_warnings nlohmann_json::nlohmann_json)
+    add_dependencies(unit_tests steam_standin_check)
+  endif()
   # The kit's golden vectors (reference: tools/golden_vectors.py). Override with -DGOLDEN_DIR=<folder>.
   set(GOLDEN_DIR "${CMAKE_SOURCE_DIR}/data/golden" CACHE PATH "Folder holding the golden vector files")
   # The game's assets folder: test_dotwork_assets.cpp loads every assets/dotwork/*.assets.json in it

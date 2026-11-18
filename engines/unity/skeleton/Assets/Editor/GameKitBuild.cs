@@ -11,6 +11,7 @@
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): SyncData copies the shell's data files into
 //           StreamingAssets before a build (#168)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): data/i18n/mature, the clean-language word lists (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): data/achievements.json (the platform layer, #84)
 // ---------------------------------------------------------------------------
 using System;
 using System.IO;
@@ -23,7 +24,7 @@ public static class GameKitBuild
 {
     // Data the shell reads at run time, relative to the project root; copied under Assets/StreamingAssets
     public static readonly string[] DATA_DIRS = { "data/i18n", "data/i18n/mature", "data/input", "data/access", "data/dialogue" };
-    public static readonly string[] DATA_FILES = { "CREDITS.md" };
+    public static readonly string[] DATA_FILES = { "CREDITS.md", "data/achievements.json" };
 
     public static void Build()
     {
@@ -74,8 +75,9 @@ public static class GameKitBuild
         {
             string src = Path.Combine(root, name);
             if (!File.Exists(src)) continue;
-            Directory.CreateDirectory(Application.streamingAssetsPath);
-            File.Copy(src, Path.Combine(Application.streamingAssetsPath, name), true);
+            string dst = Path.Combine(Application.streamingAssetsPath, name);
+            Directory.CreateDirectory(Path.GetDirectoryName(dst));
+            File.Copy(src, dst, true);
             copied++;
         }
         AssetDatabase.Refresh();

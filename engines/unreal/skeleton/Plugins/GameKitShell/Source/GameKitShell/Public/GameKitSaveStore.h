@@ -23,6 +23,8 @@
 //     write <file>.tmp ; if the current <file> is a good save, copy it to <file>.bak (atomically)
 //     rename <file>.tmp over <file>
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): OnSaved, called with the file name after a save
+//           succeeded (the platform layer's cloud hook, FPlatformService::Saved, #84)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -64,6 +66,9 @@ public:
 	bool Save(const TSharedRef<FJsonObject>& Data, FString* OutError = nullptr) const;
 
 	const FString& GetFile() const { return File; }
+	/** Runs with the save's file name (save_1.json) after Save() succeeded: FGameKitShellModel::SaveSlot points it at
+	 *  the platform layer, so a cloud-API game can send the file (docs/PLATFORM.md). */
+	TFunction<void(const FString&)> OnSaved;
 	FString GetBackupFile() const;
 
 private:

@@ -15,6 +15,8 @@ project.godot            engine config (edit via editor or carefully by hand)
 scenes/                  .tscn scenes (main.tscn is the entry)
 scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs, the feel recipe helpers...), settings,
                          bindings, saves, i18n, the Dotwork importer (dotwork_manifest.gd + dotwork_assets.gd)
+                         the platform layer (platform_layer.gd: achievements, stats, presence, cloud hooks;
+                         docs/PLATFORM.md)
                          (no gameplay knowledge; tested against data/golden/)
 scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
 scripts/game/            gameplay scripts, one per scene or entity (play.gd is the placeholder game)

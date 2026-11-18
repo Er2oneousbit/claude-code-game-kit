@@ -24,8 +24,11 @@
 //           content.clean_language and the chain's words; Blood and Clean language close the Accessibility tab
 //           (#171, #207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): T() masks with the cached fold (FGameKitWordCache)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): PlatformService built with the
+//           model, SaveSlot(), OnOverlay(); the pause screen and quit flush it, Update() runs its backend
 // ---------------------------------------------------------------------------
 #include "GameKitShellModel.h"
+#include "GameKitPlatformBackends.h"
 
 #include "GameKitAnalog.h"
 #include "GameKitAtomicFile.h"
@@ -188,6 +191,31 @@ FGameKitShellModel::FGameKitShellModel(const FOptions& InOptions)
 		}
 	}
 	LastHudScale = HudScale();   // hud_scale_changed fires on a change from here (#309)
+	// data/achievements.json is optional: without it every call is "unknown" and nothing is written
+	const TOptional<FString> AchievementsText = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, GameKit::AchievementsFile));
+	int32 DefsProblems = 0;
+	PlatformService = MakeUnique<GameKit::FPlatformService>(Opt.DataDir, AchievementsText,
+		GameKit::MakePlatformBackend(GameKit::AchievementsLoad(AchievementsText, DefsProblems), Opt.DataDir, Opt.bAutomated));
+	for (const FString& P : PlatformService->Problems)
+	{
+		UE_LOG(LogGameKitShell, Warning, TEXT("platform: %s"), *P);
+	}
+	UE_LOG(LogGameKitShell, Log, TEXT("platform backend: %s"), *PlatformService->GetBackend().Name());
+}
+
+FGameKitSaveStore FGameKitShellModel::SaveSlot(const FString& FileName)
+{
+	FGameKitSaveStore Store(FPaths::Combine(Opt.DataDir, FileName));
+	Store.OnSaved = [this](const FString& Name) { PlatformService->Saved(Name); };
+	return Store;
+}
+
+void FGameKitShellModel::OnOverlay(bool bActive)
+{
+	if (PlatformService->Overlay(bActive, TopName()) == TEXT("pause"))
+	{
+		Push(TEXT("pause"));
+	}
 }
 
 FGameKitShellModel::~FGameKitShellModel()
@@ -463,6 +491,10 @@ void FGameKitShellModel::Push(const FString& Name)
 	UE_LOG(LogGameKitShell, Log, TEXT("screen %s"), *Name);
 	NarrateScreen(Stack.Last());
 	ScreenOpened(Name);
+	if (Name == TEXT("pause") && PlatformService.IsValid())
+	{
+		PlatformService->Flush();   // a checkpoint (docs/PLATFORM.md)
+	}
 }
 
 void FGameKitShellModel::ScreenOpened(const FString& Name)
@@ -1013,6 +1045,7 @@ FGameKitScreen FGameKitShellModel::Build(const FString& Name)
 		{
 			bQuitRequested = true;
 			UE_LOG(LogGameKitShell, Log, TEXT("quit"));
+			PlatformService->Flush();
 			Event(TEXT("quit"));
 		}));
 	}
@@ -1839,6 +1872,10 @@ bool FGameKitShellModel::Dispatch(const FString& Action)
 void FGameKitShellModel::Update(double Dt)
 {
 	Time += Dt;
+	if (const TOptional<bool> Overlay = PlatformService->Update(); Overlay.IsSet())
+	{
+		OnOverlay(Overlay.GetValue());   // the store overlay opened or closed (a Steam build)
+	}
 	// The display confirm's countdown runs on the wall clock (#308): not Dt, which is game time in the game and a
 	// fixed 1/60 s per frame in a drive, and not paused with the game
 	const double Now = FPlatformTime::Seconds();

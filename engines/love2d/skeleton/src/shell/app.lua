@@ -34,6 +34,9 @@
 --           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): on_look_changed returns the function that stops it
 -- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) and the
 --           clean-language switch reach the translator; App:blood_enabled() (#171, #207)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): app.platform (docs/PLATFORM.md, #84): saves call its
+--           saved(), the pause menu and quit flush it, App:on_overlay(active) opens the pause menu over play; the
+--           luasteam backend when it is installed (src/core/platform_steam.lua)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Log = require("src.core.log")
@@ -43,6 +46,8 @@ local LogFile = require("src.core.log_file")
 local Crash = require("src.core.crash")
 local Telemetry = require("src.core.telemetry")
 local SaveStore = require("src.core.save_store")
+local Platform = require("src.core.platform")
+local PlatformSteam = require("src.core.platform_steam")
 local I18n = require("src.core.i18n")
 local Dialogue = require("src.core.dialogue")
 local Narrator = require("src.shell.narrator")
@@ -181,7 +186,11 @@ function App:load()
   for _, p in ipairs(problems) do Log.warn("settings", "fixed: " .. p) end
   self.i18n = I18n.new(load_tables(), "en")
   self.i18n.mature = load_mature()
-  self.saves = SaveStore.new(self.store)
+  local ach = love.filesystem.getInfo(Platform.ACHIEVEMENTS_FILE) and love.filesystem.read(Platform.ACHIEVEMENTS_FILE)
+  -- luasteam installed and Steam running: its backend; else (and in automated runs) the null backend (docs/PLATFORM.md)
+  local backend = not kit.automated and PlatformSteam.make(Platform.achievements_load(ach or nil), self.store) or nil
+  self.platform = Platform.service(self.store, ach or nil, backend)
+  self.saves = SaveStore.new(self.store, function(name) self.platform:saved(name) end)
   self.telemetry = Telemetry.new(self.store, function() return Settings.telemetry_allowed(self.settings) end,
                                  Telemetry.new_session(love.math.random))
   self.dialogue = load_dialogue()
@@ -392,6 +401,7 @@ function App:push(name, params)
   local screen = setmetatable({ app = self, name = name }, { __index = module })
   self.stack[#self.stack + 1] = screen
   if screen.enter then screen:enter(params or {}) end
+  if name == "pause" and self.platform then self.platform:flush() end   -- a checkpoint (docs/PLATFORM.md)
   Log.info("shell", "screen " .. name)
   self.telemetry:event("screen", name)
   return screen
@@ -464,6 +474,12 @@ function App:gamepadpressed(joystick, button) self.input:real_button(joystick, b
 function App:gamepadaxis(joystick, axis, value) self.input:real_axis(joystick, axis, value) end
 function App:mousemoved() self.input:real_mouse() end
 
+-- A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes.
+function App:on_overlay(active)
+  local top = self:top()
+  if self.platform:overlay(active, top and top.name or "") == "pause" then self:push("pause") end
+end
+
 function App:focus(focused)
   if focused or self.kit.automated then return end
   local top = self:top()
@@ -520,6 +536,7 @@ end
 function App:quit()
   Log.info("shell", "quit")
   self.telemetry:event("quit", "")
+  self.platform:flush()
   if self.kit.automated and self.kit.drive then
     self:finish("DRIVE_DONE " .. self.kit.drive, self.drive and self.drive.exit_code or 0)
   else
@@ -537,6 +554,8 @@ function App:update(dt)
     self.next_frame = math.max(now, self.next_frame) + 1 / cap
   end
   if self.drive then self.drive:update(dt) end
+  local overlay = self.platform:update()
+  if overlay ~= nil then self:on_overlay(overlay) end
   local top = self:top()
   if top and top.update then top:update(dt) end
   self.track:update(dt, self.settings.access.subtitle_hold)

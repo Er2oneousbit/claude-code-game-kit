@@ -7,6 +7,7 @@
 //           version and never edit a step that has shipped (old saves still need it). The .bak is a byte copy
 //           of the previous file, so it is exactly what that build wrote.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): OnSaved after a successful save (#84)
 // ---------------------------------------------------------------------------
 #include "GameKitSaveStore.h"
 
@@ -190,7 +191,15 @@ bool FGameKitSaveStore::Save(const TSharedRef<FJsonObject>& Data, FString* OutEr
 		FPlatformFileManager::Get().GetPlatformFile().DeleteFile(*TempPathFor(File));
 		return false;
 	}
-	return CommitTemp(File, OutError);
+	if (!CommitTemp(File, OutError))
+	{
+		return false;
+	}
+	if (OnSaved)
+	{
+		OnSaved(FPaths::GetCleanFilename(File));
+	}
+	return true;
 }
 
 // {{FOOTER}}
