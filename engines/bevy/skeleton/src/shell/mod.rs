@@ -367,12 +367,14 @@ impl Shell {
             real_last: None,
             platform: PlatformService::new(&cfg_data_dir, None, None, platform::CLOUD_MODE),
         };
-        // data/achievements.json is optional: without it every call is "unknown" and nothing is written
-        if let Some(text) = shell.store.read_data(platform::ACHIEVEMENTS_FILE) {
-            // the `steam` feature and Steam running: its backend; else the null backend
-            let defs = platform::achievements_load(Some(&text)).0;
-            let backend = crate::logic::platform_steam::make(&defs, &cfg_data_dir, cfg.automated);
-            shell.platform = PlatformService::new(&cfg_data_dir, Some(&text), backend, platform::CLOUD_MODE);
+        // data/achievements.json is optional: without it every call is "unknown" and nothing is written. The `steam`
+        // feature and Steam running: its backend, with or without achievements (presence, the overlay and cloud saves
+        // need it too; docs/PLATFORM.md section 6); else the null backend
+        let text = shell.store.read_data(platform::ACHIEVEMENTS_FILE);
+        let defs = platform::achievements_load(text.as_deref()).0;
+        let backend = crate::logic::platform_steam::make(&defs, &cfg_data_dir, cfg.automated);
+        if text.is_some() || backend.is_some() {
+            shell.platform = PlatformService::new(&cfg_data_dir, text.as_deref(), backend, platform::CLOUD_MODE);
         }
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)

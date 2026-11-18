@@ -384,6 +384,63 @@ fn the_steam_backend_maps_calls_and_a_refused_store() {
 }
 
 #[test]
+fn an_enabled_steam_backend_starts_without_achievements() {
+    // docs/PLATFORM.md section 6: Steam starts whether or not data/achievements.json exists
+    let dir = Temp::new("noach");
+    let fake = FakeSteam::default();
+    let none = platform::achievements_load(None).0;
+    let backend = platform_steam::make_with(&none, &dir.0, false, || {
+        Some(Box::new(fake.clone()) as Box<dyn SteamApi>)
+    });
+    assert!(backend.is_some(), "no achievements file: Steam still starts");
+    let mut ps = PlatformService::new(&dir.0, None, Some(Box::new(backend.unwrap())), "auto");
+    assert_eq!(ps.set_presence("status", "Menu"), "ok");
+    assert_eq!(*fake.log.lock().unwrap(), vec!["SetRichPresence status Menu"]);
+    assert!(
+        platform_steam::make_with(&none, &dir.0, false, || None).is_none(),
+        "Steam did not start: null"
+    );
+    assert!(
+        platform_steam::make_with(
+            &none,
+            &dir.0,
+            true,
+            || Some(Box::new(fake.clone()) as Box<dyn SteamApi>)
+        )
+        .is_none()
+    );
+}
+
+#[test]
+fn a_late_user_stats_stored_failure_requeues_the_store() {
+    let dir = Temp::new("late");
+    let fake = FakeSteam::default();
+    *fake.store_ok.lock().unwrap() = true;
+    let defs = platform::achievements_load(Some(SAMPLE)).0;
+    let backend = SteamBackend::new(defs, dir.0.clone(), Box::new(fake.clone()));
+    let stored = backend.stored.clone();
+    let mut ps = PlatformService::new(&dir.0, Some(SAMPLE), Some(Box::new(backend)), "auto");
+    assert_eq!(ps.add_stat("kills", 12.0), "ok"); // the store had 4: 16, kills_10 unlocks and flushes
+    assert!(ps.rules.online);
+    stored.lock().unwrap().push(false); // UserStatsStored: failed
+    ps.update();
+    assert!(!ps.rules.online, "a late failure takes the layer offline");
+    assert_eq!(
+        ps.rules.state()["pending"],
+        json!({"stats": ["kills"], "unlocks": ["kills_10"], "cloud": []})
+    );
+    fake.log.lock().unwrap().clear();
+    ps.rules.connect(&json!({}));
+    assert_eq!(
+        *fake.log.lock().unwrap(),
+        vec!["SetStat kills 16", "SetAchievement kills_10", "StoreStats"]
+    );
+    stored.lock().unwrap().push(true);
+    ps.update();
+    assert!(ps.rules.online);
+}
+
+#[test]
 fn without_the_steam_feature_or_in_an_automated_run_the_backend_is_null() {
     let dir = Temp::new("nosteam");
     assert!(platform_steam::make(&json!({}), &dir.0, true).is_none());
