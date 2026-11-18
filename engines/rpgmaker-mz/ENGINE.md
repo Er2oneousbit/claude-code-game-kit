@@ -21,7 +21,8 @@ game/                     the RPG Maker MZ project: open its .rmmzproject file i
 game/js/plugins/GameCore.js   engine-free rules: no $game*, Scene_*, Window_*. Tested in Node. Yours.
 game/js/plugins/GameAudio.js  the kit's audio rules (sound events, music, access), engine-free, golden-tested in Node.
 game/js/plugins/GameJuice.js  the kit's juice rules (shake, hitstop, easing, follow camera, input buffer, coyote time,
-                          spring and squash, flash limiter, hold toggle, auto repeat), engine-free, golden-tested.
+                          spring and squash, flash limiter, hold toggle, auto repeat, the SOP-18 recipe helpers impact,
+                          floatText and trailPush), engine-free, golden-tested.
 game/js/plugins/GameShell.js  the kit's shell rules (settings with repair, effectiveShake, bindings and glyph names,
                           i18n with the pseudo-locale, versioned saves), engine-free, golden-tested.
 game/js/plugins/GameAccess.js MZ glue: the settings in MZ's config file, five options on MZ's Options screen (more on

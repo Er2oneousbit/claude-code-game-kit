@@ -95,6 +95,24 @@
     "blend": {"enum": ["normal", "add"]},
     "clips": {"type": "array", "items": {"$ref": "#/$defs/clip"}, "minItems": 1},
     "directions": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": {"$ref": "#/$defs/name"}}},
+    "light": {
+     "type": "object", "required": ["clip", "texture", "color", "radius", "energy"], "additionalProperties": false,
+     "properties": {
+      "clip": {"$ref": "#/$defs/name"}, "texture": {"$ref": "#/$defs/path"},
+      "color": {"type": "string", "pattern": "^#[0-9a-f]{6}$"}, "radius": {"type": "number", "exclusiveMinimum": 0},
+      "energy": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 1}
+     }
+    },
+    "tracer": {
+     "type": "object", "required": ["width", "taper", "spacing", "length", "steps"], "additionalProperties": false,
+     "properties": {
+      "width": {"type": "number", "exclusiveMinimum": 0}, "taper": {"type": "number", "minimum": 0},
+      "spacing": {"type": "number", "exclusiveMinimum": 0}, "length": {"type": "number", "exclusiveMinimum": 0},
+      "steps": {"type": "array", "minItems": 2, "items": {
+       "type": "object", "required": ["at", "rgba"], "additionalProperties": false,
+       "properties": {"at": {"type": "number", "minimum": 0}, "rgba": {"type": "array", "items": {"type": "number", "minimum": 0}, "minItems": 4, "maxItems": 4}}}}
+     }
+    },
     "godot": {"$ref": "#/$defs/path"}
    }
   },

@@ -22,6 +22,8 @@
 //           and its keep-or-revert confirm (FGameKitDisplayStaging, #308); Coverage wants at least five of them
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
 //           mask_words and mature_words (#171, #207)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (GameKitFeel.h: impact,
+//           float_text, trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 #include "Misc/AutomationTest.h"
 
@@ -34,6 +36,7 @@
 #include "GameKitCoyoteTimer.h"
 #include "GameKitDisplayStaging.h"
 #include "GameKitEase.h"
+#include "GameKitFeel.h"
 #include "GameKitFlashLimiter.h"
 #include "GameKitFollowCamera.h"
 #include "GameKitHitstop.h"
@@ -449,6 +452,69 @@ namespace GameKitGoldenTests
 		}
 	}
 
+	void CheckImpact(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		const TSharedPtr<FJsonObject> K = Run.Obj(Case, TEXT("params"));
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			const GameKit::FImpact R = GameKit::Impact(Run.NumAt(P, 0), Run.NumAt(P, 1), Run.Num(K, TEXT("hitstop_min")),
+				Run.Num(K, TEXT("hitstop_max")), Run.Num(K, TEXT("trauma_min")), Run.Num(K, TEXT("trauma_max")), Run.Num(K, TEXT("flash_at")));
+			Run.SameNumber(R.Hitstop, Run.At(P, 2), TEXT("impact hitstop ") + Write(P, 0));
+			Run.SameNumber(R.Trauma, Run.At(P, 3), TEXT("impact trauma ") + Write(P, 0));
+			Run.SameBool(R.bFlash, Run.At(P, 4), TEXT("impact flash ") + Write(P, 0));
+		}
+	}
+
+	void CheckFloatText(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		const TSharedPtr<FJsonObject> K = Run.Obj(Case, TEXT("params"));
+		for (const TSharedPtr<FJsonValue>& P : Run.List(Case, TEXT("points")))
+		{
+			const GameKit::FFloatText R = GameKit::FloatText(Run.NumAt(P, 0), Run.Num(K, TEXT("life")), Run.Num(K, TEXT("rise")),
+				Run.Num(K, TEXT("pop_s")));
+			Run.SameNumber(R.Dy, Run.At(P, 1), TEXT("float_text dy ") + Write(P, 0));
+			Run.SameNumber(R.Scale, Run.At(P, 2), TEXT("float_text scale ") + Write(P, 0));
+			Run.SameNumber(R.Alpha, Run.At(P, 3), TEXT("float_text alpha ") + Write(P, 0));
+			Run.SameBool(R.bDone, Run.At(P, 4), TEXT("float_text done ") + Write(P, 0));
+		}
+	}
+
+	void CheckTrail(FGoldenRun& Run, const TSharedPtr<FJsonObject>& Case)
+	{
+		const TSharedPtr<FJsonObject> K = Run.Obj(Case, TEXT("params"));
+		TArray<FVector2D> Pts;
+		int32 I = 0;
+		for (const TSharedPtr<FJsonObject>& Step : Run.Steps(Case))
+		{
+			const FString Call = Run.Text(Step, TEXT("call"));
+			if (Call == TEXT("push"))
+			{
+				Pts = GameKit::TrailPush(Pts, Run.Num(Step, TEXT("x")), Run.Num(Step, TEXT("y")), Run.Num(K, TEXT("spacing")),
+					Run.Num(K, TEXT("max_len")));
+			}
+			else if (Call == TEXT("shrink"))
+			{
+				Pts = GameKit::TrailShrink(Pts, Run.Num(Step, TEXT("amount")));
+			}
+			else
+			{
+				Run.UnknownCall(Call);
+				++I;
+				continue;
+			}
+			TArray<TSharedPtr<FJsonValue>> Listed;
+			for (const FVector2D& Q : Pts)
+			{
+				Listed.Add(MakeArray({MakeNumber(Q.X), MakeNumber(Q.Y)}));
+			}
+			const TSharedRef<FJsonObject> Got = MakeShared<FJsonObject>();
+			Got->SetField(TEXT("points"), MakeArray(Listed));
+			Got->SetField(TEXT("length"), MakeNumber(GameKit::TrailLength(Pts)));
+			Run.SameValue(MakeObject(Got), Run.Field(Step, TEXT("expect")), StepLabel(I, *Call));
+			++I;
+		}
+	}
+
 	// ---- shell.json --------------------------------------------------------------------------
 
 	/** A JSON string as text, null as "no file". */
@@ -856,6 +922,7 @@ namespace GameKitGoldenTests
 		{TEXT("noise"), CheckNoise}, {TEXT("shake"), CheckShake}, {TEXT("hitstop"), CheckHitstop}, {TEXT("ease"), CheckEase},
 		{TEXT("follow"), CheckFollow}, {TEXT("input_buffer"), CheckInputBuffer}, {TEXT("coyote"), CheckCoyote},
 		{TEXT("spring"), CheckSpring}, {TEXT("squash"), CheckSquash}, {TEXT("flash_limiter"), CheckFlashLimiter},
+		{TEXT("impact"), CheckImpact}, {TEXT("float_text"), CheckFloatText}, {TEXT("trail"), CheckTrail},
 	};
 
 	const FGoldenType ShellTypes[] = {

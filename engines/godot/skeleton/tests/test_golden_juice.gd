@@ -7,13 +7,15 @@
 #           not know fails test_every_case_type_is_known, so a new vector type cannot be skipped silently.
 #           Expected values are only ever read from the JSON (tools/golden_vectors.py writes it).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (Feel: impact, float_text,
+#           trail; SOP-18 step 4, #170, #164)
 # ---------------------------------------------------------------------------
 extends GutTest
 
 const Golden = preload("res://tests/golden_util.gd")
 const FILE: String = "juice.json"
 const KNOWN_TYPES: PackedStringArray = ["noise", "shake", "hitstop", "ease", "follow", "input_buffer", "coyote",
-		"spring", "squash", "flash_limiter"]
+		"spring", "squash", "flash_limiter", "impact", "float_text", "trail"]
 
 var _file: Dictionary = {}
 var _tol: float = 0.0
@@ -207,5 +209,45 @@ func test_flash_limiter() -> void:
 				continue
 			_check({"result": fl.request(step["now"])}, step["expect"], "%s step %d" % [c["name"], i])
 	_report("flash_limiter", cases.size())
+
+
+func test_impact() -> void:
+	var cases: Array = _cases("impact")
+	for c: Dictionary in cases:
+		var pr: Dictionary = c["params"]
+		for p: Array in c["points"]:
+			var r: Dictionary = Feel.impact(p[0], p[1], pr["hitstop_min"], pr["hitstop_max"], pr["trauma_min"],
+					pr["trauma_max"], pr["flash_at"])
+			_check([r["hitstop"], r["trauma"], r["flash"]], [p[2], p[3], p[4]], "%s damage=%s" % [c["name"], p[0]])
+	_report("impact", cases.size())
+
+
+func test_float_text() -> void:
+	var cases: Array = _cases("float_text")
+	for c: Dictionary in cases:
+		var pr: Dictionary = c["params"]
+		for p: Array in c["points"]:
+			var r: Dictionary = Feel.float_text(p[0], pr["life"], pr["rise"], pr["pop_s"])
+			_check([r["dy"], r["scale"], r["alpha"], r["done"]], [p[1], p[2], p[3], p[4]], "%s t=%s" % [c["name"], p[0]])
+	_report("float_text", cases.size())
+
+
+func test_trail() -> void:
+	var cases: Array = _cases("trail")
+	for c: Dictionary in cases:
+		var pr: Dictionary = c["params"]
+		var pts: Array = []
+		for i: int in c["steps"].size():
+			var step: Dictionary = c["steps"][i]
+			match step["call"]:
+				"push":
+					pts = Feel.trail_push(pts, step["x"], step["y"], pr["spacing"], pr["max_len"])
+				"shrink":
+					pts = Feel.trail_shrink(pts, step["amount"])
+				_:
+					_bad_call(c, step)
+					continue
+			_check({"points": pts, "length": Feel.trail_length(pts)}, step["expect"], "%s step %d" % [c["name"], i])
+	_report("trail", cases.size())
 
 # {{FOOTER}}

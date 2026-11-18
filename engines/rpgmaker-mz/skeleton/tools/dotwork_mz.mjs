@@ -2,8 +2,10 @@
 // dotwork_mz.mjs
 // Purpose : Convert Dotwork's art (the engine-neutral asset manifest, <assets_dir>/dotwork/<pack>.assets.json) into
 //           RPG Maker MZ's own image layouts in the game folder: character sheets, object sheets, faces, side-view
-//           battlers, enemies, the window skin, IconSet.png and B to E tileset sheets. Records what it wrote and
-//           the numbers the database needs (icon indexes, face indexes, tile ids) in <src_dir>/dotwork/mz_export.json.
+//           battlers, enemies, the window skin, IconSet.png, A1 / A2 autotiles and B to E tileset sheets, battle
+//           backs and parallaxes; and its maps into MZ's database (data/MapNNN.json, Tilesets.json, MapInfos.json;
+//           tools/dotwork_mz_maps.mjs). Records what it wrote and the numbers the database needs (icon indexes,
+//           face indexes, tile ids, map ids) in <src_dir>/dotwork/mz_export.json.
 // Usage   : python tools/dev.py dotwork [options]                 (the usual way; options as below)
 //           node tools/dotwork_mz.mjs [--manifest FILE ...] [--game DIR] [--scale N] [--sheet NAME]
 //                                     [--only KINDS] [--stand walk|idle] [--side-view] [--replace] [--dry-run]
@@ -24,7 +26,10 @@
 //                         arrows, pause sign and 32 text colours (the last three kept from the existing skin);
 //                         the ui_kit parts are taken 1:1 (Dotwork already drew them at the kit's `scale`)
 //             IconSet.png img/system: 16 columns of 32 x 32 icons; ours are appended below the existing ones
-//             tilesets    img/tilesets: B to E sheets of 16 x 16 tiles in two 8-column halves; B's tile 0 is empty
+//             tilesets    img/tilesets: B to E sheets of 16 x 16 tiles in two 8-column halves; B's tile 0 is empty;
+//                         A1 / A2 sheets of 16 x 12 tiles, an autotile kind per 2 x 3 tile block
+//             maps        data/MapNNN.json: width x height x 6 tile ids (4 tile layers, shadows, regions)
+//             battlebacks img/battlebacks1 (the floor) and battlebacks2; parallaxes img/parallaxes
 //           Pixel art is never shrunk: every scale is a whole number (System.json tileSize / the art's tile size).
 //           Never overwrites a file it did not write (MZ's own Window.png, a sheet you drew) unless --replace,
 //           which first keeps the original in build/dotwork_mz/originals/.
@@ -37,19 +42,25 @@
 //   -> write the record (hashes of the files written + the indexes the database needs)
 //   --check: the recorded files exist, are unchanged and have MZ's shapes
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blob47 terrain as A1 / A2 autotiles, every other
+//           tile of a square tileset on B to E, maps into MZ's database, battle backs and parallaxes (#286)
 // ---------------------------------------------------------------------------
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PngError, blank, blit, crop, decodePng, encodePng, fill, pixel, scale, stretch } from "./pngio.mjs";
+import {
+  DEFAULT_SCREEN, DOTWORK_NOTE, SHEET_TILES, autotilePlan, autotiledTiles, claimId, composeAutotileSheet, composeBattleback, dataText,
+  mapFile, mapPlan, parallaxPlan, resolveLayers, tilesetEntry,
+} from "./dotwork_mz_maps.mjs";
 
 // ---- Tunables / constants -------------------------------------------------------------------------------
 export const SPEC_FORMAT = "dotwork-assets";
 export const SPEC_MAJOR = 1;
 export const RECORD_FORMAT = "dotwork-mz-export";
 export const RECORD_VERSION = 1;
-export const KINDS = ["characters", "objects", "faces", "sv", "enemies", "icons", "window", "tilesets"];   // --only
+export const KINDS = ["characters", "objects", "faces", "sv", "enemies", "icons", "window", "tilesets", "maps", "backgrounds"];   // --only
 export const MZ = {
   tileSize: 48,                    // System.json "tileSize" when present (MZ's default 48)
   face: 144, faceCols: 4, faceRows: 2,
@@ -86,9 +97,7 @@ const TEXT_COLOURS = [
   "#80ff80", "#c08080", "#8080ff", "#ff80ff", "#00a040", "#00e060", "#a060e0", "#c080ff",
 ];
 const MZ_SKIPS = {   // kinds MZ has no place for in this converter, and why (printed once per asset)
-  map: "MZ maps are data/MapNNN.json painted with A1 to E tile ids; with no autotiles converted yet, paint the map in MZ's editor",
   font: "MZ draws text with TrueType or WOFF fonts (fonts/, css); a BMFont needs a plugin",
-  background: "battle backgrounds and parallaxes (img/battlebacks1, battlebacks2, parallaxes) are a later step",
   particles: "MZ's effects are Effekseer files (effects/); the emitter has no place",
   transition: "MZ fades screens itself; a rule image needs a plugin",
   normal_map: "MZ has no lit sprites",
@@ -153,7 +162,7 @@ export function loadManifest(file, doc = null) {
 
 /**
  * The loaded result of the kinds MZ uses, in the shape of assetspec.expected() (data/golden/dotwork/expected.json):
- * animated_sprite, sprite, icon, portrait, tileset, ui_kit. Other kinds are left out (MZ_SKIPS says why).
+ * animated_sprite, sprite, icon, portrait, tileset, ui_kit, and maps of square tilesets. Other kinds are left out.
  */
 export function expectedOf(doc) {
   const out = {};
@@ -194,6 +203,25 @@ export function expectedOf(doc) {
       const terrains = {};
       for (const s of a.terrain_sets || []) for (const t of s.terrains) terrains[`${s.id}/${t.id}`] = t.name;
       out[key] = { tile_size: a.tile_size, shape: a.shape, tiles: n, collision_tiles: coll, animated_tiles: anim, terrains, masks: sorted };
+    } else if (a.kind === "map") {
+      // maps of square tilesets (MZ's maps are square): the cells the converter resolves and places (#286)
+      const ts = doc.assets.find((x) => x.kind === "tileset" && x.name === a.tileset);
+      if (!ts || ts.shape !== "square") continue;
+      const [tw, th] = a.tile_size, layers = {}, terrain = {}, placed = {};
+      for (const L of resolveLayers(a, ts)) {
+        layers[L.name] = L.cells.length;
+        if (L.rows) terrain[L.name] = L.rows;
+        placed[L.name] = L.cells.map((c) => {
+          const at = ts.atlases.find((x) => x.id === c.tile[0]);
+          const t = at.tiles.find((x) => x.col === c.tile[1] && x.row === c.tile[2]) || {};
+          const [ox, oy] = t.origin || [at.tile_size[0] / 2, at.tile_size[1] / 2];
+          return [c.x, c.y, ...c.tile, r6((c.x + 0.5) * tw - ox), r6((c.y + 0.5) * th - oy)];
+        });
+      }
+      const centres = [];
+      for (let y = 0; y < a.size[1]; y++) for (let x = 0; x < a.size[0]; x++) centres.push([x, y, r6((x + 0.5) * tw), r6((y + 0.5) * th)]);
+      out[key] = { size: a.size, shape: "square", tile_size: a.tile_size, layers, terrain, placed, centres,
+        objects: (a.objects || []).map((o) => [o.asset, r6(o.x), r6(o.y)]) };
     } else if (a.kind === "ui_kit") {
       const parts = {};
       for (const p of a.parts) parts[p.name] = { size: p.size, margins: p.margins ?? null, hotspot: p.hotspot ?? null };
@@ -207,10 +235,12 @@ export function expectedOf(doc) {
 /** MZ's tile size and battle view from data/System.json (MZ's defaults when there is no project yet). */
 export function mzSettings(game) {
   const file = join(game, "data", "System.json");
-  if (!existsSync(file)) return { tileSize: MZ.tileSize, sideView: false, found: false };
+  if (!existsSync(file)) return { tileSize: MZ.tileSize, sideView: false, found: false, screen: DEFAULT_SCREEN };
   const sys = readJson(file, "MZ system file");
   const tile = Number(sys.tileSize) || MZ.tileSize;   // (verify) MZ 1.x keeps it in System.json; absent = 48
-  return { tileSize: tile, sideView: !!sys.optSideView, found: true };
+  const adv = sys.advanced || {};   // (verify) MZ 1.x keeps the screen size in System.json advanced
+  const screen = [Number(adv.screenWidth) || DEFAULT_SCREEN[0], Number(adv.screenHeight) || DEFAULT_SCREEN[1]];
+  return { tileSize: tile, sideView: !!sys.optSideView, found: true, screen };
 }
 
 /**
@@ -393,12 +423,14 @@ export function tileSlot(id) {
 }
 
 /**
- * Plain tiles (no terrain) of a square tileset placed on B to E sheets: stamps first as blocks (in the editor's
- * palette, 8 tiles wide, the left half above the right one), then every other plain tile in atlas order. B's
- * tile 0 is MZ's empty tile and stays free. Returns { tiles: {"atlas,col,row": {sheet, id, tile_id, passable}},
- * sheets, skipped } or { skip }.
+ * The tiles of a square tileset that are not MZ autotiles placed on B to E sheets: stamps first as blocks (in the
+ * editor's palette, 8 tiles wide, the left half above the right one), then every other tile in atlas order (the
+ * terrain tiles of a terrain that did not become an autotile too, so maps can place them cell by cell). B's tile
+ * 0 is MZ's empty tile and stays free. autotiled: "set/terrain" -> the "atlas,col,row" keys of the tiles an
+ * autotile draws (autotiledTiles); that terrain's other variants still go on B to E for the maps. Returns
+ * { tiles: {"atlas,col,row": {sheet, id, tile_id, passable}}, sheets, notes } or { skip }.
  */
-export function tilesetPlan(ts, k, tile) {
+export function tilesetPlan(ts, k, tile, autotiled = new Map()) {
   const [tw, th] = ts.tile_size;
   if (ts.shape !== "square" || tw !== th) return { name: ts.name, skip: `${ts.name}: ${ts.shape} tiles; MZ maps are square` };
   if (tw * k !== tile) return { name: ts.name, skip: `${ts.name}: ${tw} px tiles at scale ${k} are ${tw * k} px, MZ's tiles are ${tile} px (set MZ's tile size or --scale)` };
@@ -407,7 +439,7 @@ export function tilesetPlan(ts, k, tile) {
   for (const at of ts.atlases) {
     for (const t of at.tiles) {
       const key = `${at.id},${t.col},${t.row}`;
-      if ("terrain" in t) terrain.push(key);
+      if ("terrain" in t && autotiled.get(`${t.terrain_set ?? 0}/${t.terrain}`)?.has(key)) terrain.push(key);
       else if (at.tile_size[0] !== tw || at.tile_size[1] !== th || t.origin) odd.push(key);
       else plain.set(key, { atlas: at, tile: t });
     }
@@ -448,7 +480,6 @@ export function tilesetPlan(ts, k, tile) {
     if (!at) { notes.push(`${ts.name}: more than ${4 * 256 - 1} plain tiles; the rest did not fit on B to E`); break; }
     put(key, at[0]);
   }
-  if (terrain.length) notes.push(`${ts.name}: ${terrain.length} terrain tile(s) skipped: MZ autotiles (A1 to A4) are built from quarter tiles, not blob or corner tiles (a later step)`);
   if (odd.length) notes.push(`${ts.name}: ${odd.length} tile(s) larger than a cell or off-centre skipped`);
   const anim = Object.values(tiles).filter((t) => t.animated).length;
   if (anim) notes.push(`${ts.name}: ${anim} animated tile(s) keep their first frame (B to E tiles do not animate)`);
@@ -663,7 +694,28 @@ class Writer {
 
   /** Write img to game/<rel> (posix) if the policy allows; returns true when the file now holds it. */
   put(rel, img) {
-    const bytes = encodePng(img), hash = sha256(bytes);
+    return this.putBytes(rel, encodePng(img), `${img.width}x${img.height}`);
+  }
+
+  /** The same for a text file Dotwork owns whole (a map, data/MapNNN.json). */
+  putText(rel, text) {
+    return this.putBytes(rel, Buffer.from(text, "utf8"), `${text.length} characters`);
+  }
+
+  /** A shared database file (data/Tilesets.json, MapInfos.json): only its <dotwork> entries are ours, so it is
+   *  written whenever the text changes and never recorded by hash. Returns true when the file holds the text. */
+  putShared(rel, text) {
+    const file = join(this.paths.game, ...rel.split("/"));
+    if (existsSync(file) && readFileSync(file, "utf8") === text) { this.same++; return true; }
+    this.wrote++;
+    if (this.opts.dryRun) { this.log("dry", `would update ${rel}`); return true; }
+    writeFileSync(file, text);
+    this.log("OK", `${rel} (its Dotwork entries)`);
+    return true;
+  }
+
+  putBytes(rel, bytes, what) {
+    const hash = sha256(bytes);
     const file = join(this.paths.game, ...rel.split("/"));
     if (existsSync(file)) {
       const now = sha256(readFileSync(file));
@@ -685,10 +737,10 @@ class Writer {
     }
     this.files[rel] = hash;
     this.wrote++;
-    if (this.opts.dryRun) { this.log("dry", `would write ${rel} (${img.width}x${img.height})`); return true; }
+    if (this.opts.dryRun) { this.log("dry", `would write ${rel} (${what})`); return true; }
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, bytes);
-    this.log("OK", `${rel} (${img.width}x${img.height})`);
+    this.log("OK", `${rel} (${what})`);
     return true;
   }
 
@@ -732,6 +784,7 @@ export function exportAll(paths, manifests, opts = {}, log = () => {}) {
     return n;
   };
   const sheetChars = [];
+  const pendingMaps = [];   // maps planned per pack, written into MZ's database once every pack is read
   const iconImgs = [], iconNames = [];
   let windowDone = false;
   const tryAsset = (m, what, fn) => {
@@ -744,10 +797,13 @@ export function exportAll(paths, manifests, opts = {}, log = () => {}) {
   };
   for (const m of manifests) {
     const load = imageLoader(m);
-    const r = report[m.pack] = { characters: {}, objects: {}, faces: {}, sv_actors: {}, enemies: {}, icons: {}, tilesets: {}, skipped: [] };
+    const r = report[m.pack] = { characters: {}, objects: {}, faces: {}, sv_actors: {}, enemies: {}, icons: {}, tilesets: {},
+      maps: {}, battlebacks: {}, parallaxes: {}, skipped: [] };
     const note = (text) => { r.skipped.push(text); notes.push(`${m.pack}: ${text}`); };
+    const tsPlans = {};   // tileset name -> { plan, auto, sheets }: what the maps of this pack are placed with
     for (const a of m.doc.assets) {
       if (MZ_SKIPS[a.kind]) { note(`${a.kind} ${a.name}: ${MZ_SKIPS[a.kind]}`); continue; }
+      if (a.kind === "map") continue;   // after every tileset and object of the pack (below)
       if (a.kind === "animated_sprite") {
         if (characterSource(a)) {
           tryAsset(m, a.name, () => {
@@ -818,21 +874,76 @@ export function exportAll(paths, manifests, opts = {}, log = () => {}) {
           if (!cur) note(`ui_kit ${a.name}: no hover or focus button: the cursor stays as it was`);
         });
       } else if (a.kind === "tileset") {
-        if (!only.has("tilesets")) continue;
+        if (!only.has("tilesets") && !only.has("maps")) continue;
         tryAsset(m, a.name, () => {
-          const plan = tilesetPlan(a, k, mz.tileSize);
-          if (plan.skip) { note(plan.skip); return; }
+          const first = tilesetPlan(a, k, mz.tileSize);
+          if (first.skip) { note(first.skip); return; }
+          // blob47 terrain that splits into quarter tiles becomes A1 / A2 autotiles (#286); the rest goes on B to E
+          const auto = autotilePlan(a, load);
+          auto.notes.forEach(note);
+          const plan = tilesetPlan(a, k, mz.tileSize, autotiledTiles(auto));
           plan.notes.forEach(note);
           const files = {};
+          for (const letter of ["A1", "A2"]) {
+            const img = composeAutotileSheet(auto, letter, k, mz.tileSize);
+            if (!img) continue;
+            const file = named("tilesets", m.pack, `${m.pack}_${a.name}_${letter}`);
+            if (w.put(`img/tilesets/${file}.png`, img)) files[letter] = file;
+          }
           for (const [letter, slots] of Object.entries(plan.sheets)) {
             const file = named("tilesets", m.pack, `${m.pack}_${a.name}_${letter}`);
             if (w.put(`img/tilesets/${file}.png`, composeTileSheet(load, plan, slots))) files[letter] = file;
           }
-          if (Object.keys(files).length) r.tilesets[a.name] = { sheets: files, tiles: plan.tiles };
+          const autotiles = Object.fromEntries(Object.entries(auto.terrains).map(([key, t]) => [key,
+            { terrain: t.name, sheet: t.sheet, kind: t.kind, tile_id: t.base, passable: !t.impassable }]));
+          tsPlans[a.name] = { plan, auto, sheets: files };
+          if (Object.keys(files).length) r.tilesets[a.name] = { sheets: files, tiles: plan.tiles, ...(Object.keys(autotiles).length ? { autotiles } : {}) };
         });
+      } else if (a.kind === "background") {
+        if (!only.has("backgrounds")) continue;
+        tryAsset(m, a.name, () => backgroundOut(m, a, load, note));
       } else {
         note(`${a.kind} ${a.name}: unknown kind, skipped`);
       }
+    }
+    // maps last: they place the pack's tilesets and objects (#286); written into MZ's database after every pack
+    if (only.has("maps")) {
+      for (const a of m.doc.assets.filter((x) => x.kind === "map")) {
+        tryAsset(m, a.name, () => {
+          const ts = m.doc.assets.find((x) => x.kind === "tileset" && x.name === a.tileset);
+          const tp = tsPlans[a.tileset];
+          if (!ts || !tp) { note(`map ${a.name}: its tileset ${a.tileset} has no MZ sheets (${ts ? ts.shape : "missing"}); not converted`); return; }
+          const objects = Object.fromEntries(Object.entries(r.objects).map(([name, o]) => [name, o.file]));
+          const mp = mapPlan(a, ts, tp.plan, tp.auto, objects);
+          mp.notes.forEach(note);
+          pendingMaps.push({ m, r, a, mp, tileset: a.tileset, tp });
+        });
+      }
+    }
+
+    function backgroundOut(mf, bg, ld, nt) {
+      if (bg.role === "battle") {
+        const { back1, back2, factor, notes: bn } = composeBattleback(ld, bg, mz.screen);
+        bn.forEach(nt);
+        const out = { factor };
+        const f1 = named("battlebacks1", mf.pack, bg.name);
+        if (w.put(`img/battlebacks1/${f1}.png`, back1)) out.battleback1 = f1;
+        if (back2) {
+          const f2 = named("battlebacks2", mf.pack, bg.name);
+          if (w.put(`img/battlebacks2/${f2}.png`, back2)) out.battleback2 = f2;
+        }
+        r.battlebacks[bg.name] = out;
+        return;
+      }
+      const layers = [];
+      for (const p of parallaxPlan(bg, k)) {
+        const file = named("parallaxes", mf.pack, bg.layers.length > 1 ? `${bg.name}_${p.layer}` : bg.name);
+        if (w.put(`img/parallaxes/${file}.png`, scale(ld(p.image), p.factor))) {
+          layers.push({ file, loop_x: p.loop_x, loop_y: p.loop_y, sx: p.sx, sy: p.sy });
+        }
+      }
+      if (bg.layers.length > 1) nt(`background ${bg.name}: an MZ map shows one parallax; each layer is its own file (set one per map, or draw the others as pictures)`);
+      r.parallaxes[bg.name] = layers;
     }
 
     function objectOut(mf, a, ld) {
@@ -877,12 +988,14 @@ export function exportAll(paths, manifests, opts = {}, log = () => {}) {
       iconNames.forEach(([r, name], i) => { r.icons[name] = baseRows * MZ.iconCols + i; });
     }
   }
+  const data = pendingMaps.length ? writeDatabase(paths, w, old?.data, pendingMaps, notes, log) : (old?.data ?? null);
   for (const rel of Object.keys(old?.files || {})) {
     if (!(rel in w.files)) log("info", `${rel}: an earlier export wrote it, this one did not (left in place; delete it if unused)`);
   }
   const record = {
     format: RECORD_FORMAT, version: RECORD_VERSION, tile_size: mz.tileSize, scale: k, side_view: sideView,
     iconset_base_rows: baseRows, files: Object.fromEntries(Object.entries({ ...w.files }).sort()), packs: report,
+    ...(data ? { data } : {}),
   };
   if (!opts.dryRun) {
     const text = pretty(record) + "\n";
@@ -892,6 +1005,72 @@ export function exportAll(paths, manifests, opts = {}, log = () => {}) {
     }
   }
   return { record, failures, notes, written: w.wrote, unchanged: w.same, held: w.held };
+}
+
+// ---- MZ's database: tilesets, maps, map list (#286) -----------------------------------------------------------
+/** The text of a map file: one top-level key per line, the tile data and the events on one line each. */
+export function mapText(obj) {
+  return `{\n${Object.entries(obj).map(([key, v]) => `${JSON.stringify(key)}:${JSON.stringify(v)}`).join(",\n")}\n}\n`;
+}
+
+/**
+ * Put the converted maps into MZ's database: a tileset entry per Dotwork tileset a map uses (data/Tilesets.json),
+ * the map (data/MapNNN.json) and its row in data/MapInfos.json. Entries carry DOTWORK_NOTE in their note (a map's
+ * row has no note: it is ours while its name and file are); an entry whose note lost it is the user's and is never
+ * touched (its slot is given up and a new one claimed). Needs MZ's own data/Tilesets.json and MapInfos.json (a
+ * project MZ made): without them the maps are left out with a note. Returns the record's data part.
+ */
+export function writeDatabase(paths, w, oldData, pending, notes, log) {
+  const dir = join(paths.game, "data");
+  const tsFile = join(dir, "Tilesets.json"), infoFile = join(dir, "MapInfos.json");
+  if (!existsSync(tsFile) || !existsSync(infoFile)) {
+    notes.push(`maps: no MZ database in ${posix(relative(paths.root, dir)) || "data"} (Tilesets.json, MapInfos.json): make the MZ project first (dev.py setup --from), then run dotwork again; ${pending.length} map(s) not written`);
+    return oldData ?? null;
+  }
+  const tilesets = readJson(tsFile, "MZ tilesets");
+  const infos = readJson(infoFile, "MZ map list");
+  if (!Array.isArray(tilesets) || !Array.isArray(infos)) throw new ConvertError("data/Tilesets.json or MapInfos.json is not MZ's list of entries");
+  const out = { tilesets: {}, maps: {} };
+  const tsIds = {};
+  for (const p of pending) {
+    const key = `${p.m.pack}/${p.tileset}`;
+    if (tsIds[key]) continue;
+    const name = `Dotwork ${p.m.pack} ${p.tileset}`;
+    const id = claimId(tilesets, oldData?.tilesets?.[key], name);
+    while (tilesets.length <= id) tilesets.push(null);
+    tilesets[id] = tilesetEntry(id, name, p.tp.sheets, p.tp.plan, p.tp.auto);
+    tsIds[key] = out.tilesets[key] = id;
+  }
+  const lastOrder = () => Math.max(0, ...infos.filter(Boolean).map((e) => Number(e.order) || 0));
+  for (const p of pending) {
+    const key = `${p.m.pack}/${p.a.name}`, name = `${p.m.pack}_${p.a.name}`;
+    const owned = (e) => e && e.name === name;
+    let id = claimId(infos, oldData?.maps?.[key], name, owned);
+    const rel = (n) => `data/Map${String(n).padStart(3, "0")}.json`;
+    // a free slot whose map file exists belongs to someone else: look further
+    while (!owned(infos[id]) && existsSync(join(paths.game, ...rel(id).split("/"))) && !w.ours(rel(id))) id++;
+    const text = mapText(mapFile(p.mp, tsIds[`${p.m.pack}/${p.tileset}`], p.a.name));
+    if (!w.putText(rel(id), text)) {
+      // kept as the user edited it: the id stays ours on record, so the next run neither moves nor copies the map
+      notes.push(`${p.m.pack}: map ${p.a.name}: ${rel(id)} was changed in MZ since the export; kept (--replace overwrites it)`);
+      out.maps[key] = id;
+      continue;
+    }
+    while (infos.length <= id) infos.push(null);
+    const was = infos[id];
+    infos[id] = { id, expanded: false, name, order: owned(was) ? was.order : lastOrder() + 1, parentId: owned(was) ? was.parentId : 0,
+      scrollX: owned(was) ? was.scrollX : 0, scrollY: owned(was) ? was.scrollY : 0 };
+    out.maps[key] = id;
+    p.r.maps[p.a.name] = { map_id: id, file: rel(id), tileset_id: tsIds[`${p.m.pack}/${p.tileset}`], cells: p.mp.placed, events: p.mp.events.length - 1 };
+  }
+  w.putShared("data/Tilesets.json", dataText(tilesets));
+  w.putShared("data/MapInfos.json", dataText(infos));
+  for (const [kind, ids] of Object.entries(oldData || {})) {
+    for (const [key, id] of Object.entries(ids)) {
+      if (!(key in out[kind])) log("info", `${kind} ${key} (id ${id}): an earlier export made it, this one did not (left in MZ's database)`);
+    }
+  }
+  return out;
 }
 
 // ---- --check ------------------------------------------------------------------------------------------------
@@ -907,6 +1086,9 @@ export function shapeProblem(rel, w, h) {
   if (rel.startsWith("img/sv_actors/")) return w % MZ.svCols || h % MZ.svRows ? `${w}x${h} does not split into ${MZ.svCols} x ${MZ.svRows} frames` : null;
   if (rel === "img/system/Window.png") return w !== MZ.skin || h !== MZ.skin ? `${w}x${h}, MZ's window skin is ${MZ.skin} x ${MZ.skin}` : null;
   if (rel === "img/system/IconSet.png") return w !== MZ.icon * MZ.iconCols || h % MZ.icon ? `${w}x${h}, MZ reads ${MZ.iconCols} columns of ${MZ.icon} px icons` : null;
+  if (rel.startsWith("img/tilesets/") && /_A[12]\.png$/.test(name)) {   // autotile sheets: 16 x 12 tiles (768 x 576 at 48 px)
+    return w % SHEET_TILES[0] || h % SHEET_TILES[1] || w / SHEET_TILES[0] !== h / SHEET_TILES[1] ? `${w}x${h} is not ${SHEET_TILES[0]} x ${SHEET_TILES[1]} square tiles` : null;
+  }
   if (rel.startsWith("img/tilesets/")) return w % MZ.tilesetCols || h % MZ.tilesetRows || w !== h ? `${w}x${h} is not ${MZ.tilesetCols} x ${MZ.tilesetRows} square tiles` : null;
   return null;
 }
@@ -923,6 +1105,15 @@ export function checkExport(paths, manifests) {
     if (!existsSync(file)) { problems.push(`${rel} is missing (python tools/dev.py dotwork writes it again)`); continue; }
     const bytes = readFileSync(file);
     if (sha256(bytes) !== hash) warnings.push(`${rel} changed since the export (kept; dotwork leaves it alone without --replace)`);
+    if (rel.endsWith(".json")) {   // a map file: MZ reads it as JSON with its tile data the map's size
+      try {
+        const map = JSON.parse(bytes.toString("utf8"));
+        if (!Array.isArray(map.data) || map.data.length !== map.width * map.height * 6) problems.push(`${rel}: its tile data is not ${map.width} x ${map.height} x 6`);
+      } catch (err) {
+        problems.push(`${rel}: not valid JSON (${err.message})`);
+      }
+      continue;
+    }
     try {
       const img = decodePng(bytes, rel);
       const bad = shapeProblem(rel, img.width, img.height);
@@ -957,8 +1148,10 @@ Usage: node tools/dotwork_mz.mjs [options]        (python tools/dev.py dotwork [
   -h, --help        this help
 
 Writes img/characters ($<name>.png, !$<prop>.png), img/faces, img/sv_actors (side-view games), img/enemies or
-img/sv_enemies, img/system/Window.png and IconSet.png, img/tilesets (<pack>_<tileset>_B.png ...), and the record
-<src_dir>/dotwork/mz_export.json: the icon, face and tile ids to use in MZ's database.
+img/sv_enemies, img/system/Window.png and IconSet.png, img/tilesets (<pack>_<tileset>_A1.png, _A2.png, _B.png ...),
+img/battlebacks1 and 2, img/parallaxes, the maps (data/MapNNN.json plus their Tilesets.json and MapInfos.json
+entries, which carry <dotwork> in their note; needs MZ's own database), and the record
+<src_dir>/dotwork/mz_export.json: the icon, face, tile and map ids to use in MZ's database.
 Exit: 0 ok, 1 an asset failed or --check found a problem, 2 usage or nothing to convert.`;
 
 export function parseArgs(argv) {

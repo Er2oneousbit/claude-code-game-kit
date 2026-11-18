@@ -19,6 +19,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the demo places objects through map_to_local
 #           (cell (0, 0)'s centre is the tile map's origin, not its top-left; isometric maps too), #285
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the demo shows the pack's additive effect (#286)
 # ---------------------------------------------------------------------------
 import os
 
@@ -34,6 +35,7 @@ DEMO_CAMERA_WIDTH = 480.0                    # orthographic width in Unreal unit
 DEMO_SCALE = 1.0                             # draw scale of every demo actor
 DEMO_LABEL_LINES = 3                         # the label's height in font lines (TextRender draws offline fonts small)
 WALK_CLIPS = ("walk_s", "walk_e", "walk_w", "walk_n")   # the character clip the demo plays, first found
+DEMO_EFFECT_AT = (16.0, 8.0)                 # the additive effect's offset from the walker's feet (art pixels, right, up)
 
 
 def manifests(root):
@@ -115,6 +117,12 @@ def build_demo(done):
         actor = spawn(unreal.PaperFlipbookActor, mid_x, mid_z, y=20.0)
         actor.get_editor_property("render_component").set_editor_property(
             "source_flipbook", walker["clips"][clip]["flipbook"])
+    effect = first(done, "animated_sprite", lambda r: r["blend"] == "add")
+    if effect:
+        # an additive effect (blend "add", MI_DotworkAdditive) over the map, beside the walker
+        actor = spawn(unreal.PaperFlipbookActor, mid_x + DEMO_EFFECT_AT[0], mid_z + DEMO_EFFECT_AT[1], y=25.0)
+        actor.get_editor_property("render_component").set_editor_property(
+            "source_flipbook", next(iter(effect["clips"].values()))["flipbook"])
     font = first(done, "font")
     if font:
         codes = set(font["codes"])

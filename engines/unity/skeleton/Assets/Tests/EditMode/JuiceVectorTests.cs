@@ -6,6 +6,8 @@
 // Notes   : The expected values come from the file at test time (tools/golden_vectors.py writes it); never
 //           copy them in here. A case type without a runner fails, so a new vector type cannot be skipped.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (Feel: impact, float_text,
+//           trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -21,6 +23,7 @@ namespace {{GAME_SLUG}}.Tests
         private static readonly string[] REQUIRED_TYPES =
         {
             "noise", "shake", "hitstop", "ease", "follow", "input_buffer", "coyote", "spring", "squash", "flash_limiter",
+            "impact", "float_text", "trail",
         };
 
         public static IEnumerable<TestCaseData> Cases()
@@ -60,6 +63,9 @@ namespace {{GAME_SLUG}}.Tests
                 case "spring": RunSpring(c, tol); break;
                 case "squash": RunSquash(c, tol); break;
                 case "flash_limiter": RunFlashLimiter(c, tol); break;
+                case "impact": RunImpact(c, tol); break;
+                case "float_text": RunFloatText(c, tol); break;
+                case "trail": RunTrail(c, tol); break;
                 default:
                     Assert.Fail($"unknown case type '{type}' in {FILE}: add a runner for it here");
                     break;
@@ -97,7 +103,60 @@ namespace {{GAME_SLUG}}.Tests
             }
         }
 
+        private static void RunImpact(Dictionary<string, object> c, double tol)
+        {
+            var p = G.Obj(c, "params");
+            foreach (object o in G.List(c, "points"))
+            {
+                var pt = (List<object>)o;
+                var r = Feel.Impact(Json.ToNumber(pt[0]), Json.ToNumber(pt[1]), G.Num(p, "hitstop_min"), G.Num(p, "hitstop_max"),
+                                    G.Num(p, "trauma_min"), G.Num(p, "trauma_max"), G.Num(p, "flash_at"));
+                G.AssertClose(new List<object> { r.Hitstop, r.Trauma, r.Flash }, pt.GetRange(2, 3), tol,
+                              $"{G.Str(c, "name")} {Json.Stringify(pt)}");
+            }
+        }
+
+        private static void RunFloatText(Dictionary<string, object> c, double tol)
+        {
+            var p = G.Obj(c, "params");
+            foreach (object o in G.List(c, "points"))
+            {
+                var pt = (List<object>)o;
+                var r = Feel.FloatText(Json.ToNumber(pt[0]), G.Num(p, "life"), G.Num(p, "rise"), G.Num(p, "pop_s"));
+                G.AssertClose(new List<object> { r.Dy, r.Scale, r.Alpha, r.Done }, pt.GetRange(1, 4), tol,
+                              $"{G.Str(c, "name")} {Json.Stringify(pt)}");
+            }
+        }
+
         // ---- Runners: scripted steps (call, inputs, expect) -----------------------------
+
+        private static void RunTrail(Dictionary<string, object> c, double tol)
+        {
+            var p = G.Obj(c, "params");
+            var pts = new List<double[]>();
+            Steps(c, (st, call, where) =>
+            {
+                if (call == "push")
+                {
+                    pts = Feel.TrailPush(pts, G.Num(st, "x"), G.Num(st, "y"), G.Num(p, "spacing"), G.Num(p, "max_len"));
+                }
+                else if (call == "shrink")
+                {
+                    pts = Feel.TrailShrink(pts, G.Num(st, "amount"));
+                }
+                else
+                {
+                    return false;
+                }
+                var listed = new List<object>();
+                foreach (double[] q in pts)
+                {
+                    listed.Add(new List<object> { q[0], q[1] });
+                }
+                G.AssertClose(G.Make("points", listed, "length", Feel.TrailLength(pts)), G.Obj(st, "expect"), tol, where);
+                return true;
+            });
+        }
 
         private static void RunShake(Dictionary<string, object> c, double tol)
         {

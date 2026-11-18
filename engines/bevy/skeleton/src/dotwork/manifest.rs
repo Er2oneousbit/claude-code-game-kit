@@ -27,6 +27,7 @@
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 terrain,
 //           the variant pick, stamps layers, tile origins, the extra kinds loaded, a cell with no tile warns once
 //           per layer, an unknown layer kind is skipped
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light and tracer
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::Path;
@@ -413,12 +414,38 @@ fn animated(name: &str, d: AnimatedSpriteDef, files: &Files) -> Result<AnimatedS
             }
         }
     }
+    let light = match d.light {
+        Some(l) => {
+            let clip = clips
+                .iter()
+                .find(|c| c.name == l.clip)
+                .ok_or_else(|| format!("light names clip {:?}, which is not here", l.clip))?;
+            if l.energy.len() != clip.durations.len() {
+                return Err(format!(
+                    "light has {} energies for the {} frames of {}",
+                    l.energy.len(),
+                    clip.durations.len(),
+                    l.clip
+                ));
+            }
+            Some(Light {
+                texture: files.existing(&l.texture).map_err(|e| format!("light: {e}"))?,
+                clip: l.clip,
+                color: l.color,
+                radius: l.radius,
+                energy: l.energy,
+            })
+        }
+        None => None,
+    };
     Ok(AnimatedSprite {
         name: name.into(),
         role: d.role,
         additive: d.blend.as_deref() == Some("add"),
         clips,
         directions: d.directions,
+        light,
+        tracer: d.tracer,
     })
 }
 

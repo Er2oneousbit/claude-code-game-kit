@@ -47,6 +47,9 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): asset manifest 1.1.0 (#285): corners4 terrain,
 //           the variant pick, isometric placement on Unity's Isometric Grid, stamps layers, the extra kinds loaded
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): an animated sprite's light (its texture imported,
+//           its energies checked against its clip) and tracer (asset manifest 1.2.0, #164); the PNG walk skips a
+//           particles emitter (a real Dotwork particle pack names its texture there by bare name: import failed)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -302,9 +305,15 @@ namespace {{GAME_SLUG}}.Dotwork
             }
             else if (v is Dictionary<string, object> d)
             {
-                foreach (object x in d.Values)
+                foreach (KeyValuePair<string, object> kv in d)
                 {
-                    CollectPngs(x);
+                    // a particles asset's emitter is Dotwork's own JSON: its "texture" names the asset's texture by its
+                    // bare file name and a debris emitter's palette_from names the game PNG its colours came from;
+                    // neither is a path in the manifest (every real Dotwork particle pack failed to import, #164)
+                    if (kv.Key != "emitter")
+                    {
+                        CollectPngs(kv.Value);
+                    }
                 }
             }
             else if (v is List<object> l)
@@ -729,11 +738,44 @@ namespace {{GAME_SLUG}}.Dotwork
                 }
                 clips.Add((c, sprites));
             }
+            Dictionary<string, object> lightObj = M.Obj(a, "light");   // manifest 1.2.0 (#164)
+            Sprite lightTexture = null;
+            double[] energy = null;
+            if (lightObj != null)
+            {
+                string lightClip = M.Str(lightObj, "clip", "");
+                List<object> en = M.List(lightObj, "energy") ?? new List<object>();
+                energy = en.Select(Json.ToNumber).ToArray();
+                (Dictionary<string, object> c, List<Sprite> s) owner = clips.Find(x => M.Str(x.c, "name") == lightClip);
+                if (owner.c == null)
+                {
+                    throw new DotworkImportException($"light names clip {lightClip}, which it does not have");
+                }
+                if (energy.Length != owner.s.Count)
+                {
+                    throw new DotworkImportException($"light has {energy.Length} energies for the {owner.s.Count} frames of {lightClip}");
+                }
+                lightTexture = WantWhole(M.Str(lightObj, "texture"), name + "_light");
+            }
             if (_plan)
             {
                 return;
             }
             var entry = new DotworkAnimated { name = name, role = M.Str(a, "role", ""), blend = M.Str(a, "blend", "normal") };
+            if (lightObj != null)
+            {
+                entry.hasLight = true;
+                entry.light = new DotworkLight
+                {
+                    clip = M.Str(lightObj, "clip", ""), color = M.Str(lightObj, "color", "#ffffff"), texture = lightTexture,
+                    radius = (float)M.Num(lightObj, "radius", 0), energy = energy.Select(e => (float)e).ToArray(),
+                };
+            }
+            Dictionary<string, object> tracerObj = M.Obj(a, "tracer");
+            if (tracerObj != null)
+            {
+                entry.tracerJson = Json.Stringify(tracerObj);
+            }
             string dir = $"{_outDir}/animated/{name}";
             foreach ((Dictionary<string, object> c, List<Sprite> sprites) in clips)
             {

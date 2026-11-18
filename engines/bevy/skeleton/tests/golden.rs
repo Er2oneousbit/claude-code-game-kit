@@ -23,6 +23,8 @@
 //           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
 //           and its keep-or-revert confirm (logic::display_staging, #308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (logic::feel: impact,
+//           float_text, trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -32,6 +34,7 @@ use {{GAME_SLUG}}::logic::audio_access;
 use {{GAME_SLUG}}::logic::audio_director::{AudioDirector, PlayResult};
 use {{GAME_SLUG}}::logic::coyote::Coyote;
 use {{GAME_SLUG}}::logic::display_staging::{self, DisplayStaging};
+use {{GAME_SLUG}}::logic::feel::{self, FloatTuning, ImpactTuning};
 use {{GAME_SLUG}}::logic::flash_limiter::FlashLimiter;
 use {{GAME_SLUG}}::logic::follow::Follow;
 use {{GAME_SLUG}}::logic::hitstop::Hitstop;
@@ -48,7 +51,7 @@ const AUDIO: &str = "audio.json";
 const MUSIC: &str = "music.json";
 const ACCESS: &str = "access.json";
 const CREDITS: &str = "credits.json";
-const JUICE_TYPES: [&str; 10] = [
+const JUICE_TYPES: [&str; 13] = [
     "noise",
     "shake",
     "hitstop",
@@ -59,6 +62,9 @@ const JUICE_TYPES: [&str; 10] = [
     "spring",
     "squash",
     "flash_limiter",
+    "impact",
+    "float_text",
+    "trail",
 ];
 const SHELL_TYPES: [&str; 16] = [
     "plural_rules",
@@ -213,6 +219,9 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "spring" => spring_steps(case, exam),
         "squash" => squash(case, exam),
         "flash_limiter" => flash_limiter(case, exam),
+        "impact" => impact_points(case, exam),
+        "float_text" => float_text_points(case, exam),
+        "trail" => trail_steps(case, exam),
         "defaults" => exam.check("defaults", settings::defaults(), &case["expect"]),
         "settings_load" => settings_load(case, exam),
         "rebind" => rebind(case, exam),
@@ -398,6 +407,64 @@ fn flash_limiter(case: &Value, exam: &mut Exam) {
             }
             other => exam.fail(format!("step {n}: unknown call {other:?}")),
         }
+    }
+}
+
+fn impact_points(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let t = ImpactTuning {
+        hitstop_min: f(&pr["hitstop_min"]),
+        hitstop_max: f(&pr["hitstop_max"]),
+        trauma_min: f(&pr["trauma_min"]),
+        trauma_max: f(&pr["trauma_max"]),
+        flash_at: f(&pr["flash_at"]),
+    };
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let r = feel::impact(f(&p[0]), f(&p[1]), &t);
+        exam.check(
+            &format!("impact({}, {})", p[0], p[1]),
+            json!([r.hitstop, r.trauma, r.flash]),
+            &json!([p[2], p[3], p[4]]),
+        );
+    }
+}
+
+fn float_text_points(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let k = FloatTuning {
+        life: f(&pr["life"]),
+        rise: f(&pr["rise"]),
+        pop_s: f(&pr["pop_s"]),
+    };
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let r = feel::float_text(f(&p[0]), &k);
+        exam.check(
+            &format!("float_text({})", p[0]),
+            json!([r.dy, r.scale, r.alpha, r.done]),
+            &json!([p[1], p[2], p[3], p[4]]),
+        );
+    }
+}
+
+fn trail_steps(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let mut pts: Vec<[f64; 2]> = Vec::new();
+    for (n, st, call) in steps(case) {
+        match call {
+            "push" => pts = feel::trail_push(&pts, f(&st["x"]), f(&st["y"]), f(&pr["spacing"]), f(&pr["max_len"])),
+            "shrink" => pts = feel::trail_shrink(&pts, f(&st["amount"])),
+            other => {
+                exam.fail(format!("step {n}: unknown call {other:?}"));
+                continue;
+            }
+        }
+        exam.check(
+            &format!("step {n}"),
+            json!({"points": pts, "length": feel::trail_length(&pts)}),
+            &st["expect"],
+        );
     }
 }
 
@@ -849,6 +916,9 @@ golden! {
     juice_spring: JUICE, "spring";
     juice_squash: JUICE, "squash";
     juice_flash_limiter: JUICE, "flash_limiter";
+    juice_impact: JUICE, "impact";
+    juice_float_text: JUICE, "float_text";
+    juice_trail: JUICE, "trail";
     shell_defaults: SHELL, "defaults";
     shell_settings_load: SHELL, "settings_load";
     shell_rebind: SHELL, "rebind";

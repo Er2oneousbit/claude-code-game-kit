@@ -19,6 +19,10 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' shape,
 //           tile size, placed cells and centres, corner keys, the extra kinds loaded, a stamps layer
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a `blend: add` clip spawns as an additive quad, not
+//           a sprite (#286; a headless App, no renderer)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects keep their light and tracer
+//           (spec 1.2.0, #164)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -28,8 +32,11 @@ use bevy::math::{URect, UVec2};
 use bevy::sprite::Anchor;
 use serde_json::{Map, Value, json};
 
+use {{GAME_SLUG}}::dotwork::additive::{ADDITIVE_BLEND, frame_uv, make_additive, pivot_offset};
 use {{GAME_SLUG}}::dotwork::manifest::{self, ClipTexture, LayerKind, Pack};
-use {{GAME_SLUG}}::dotwork::{DotworkLibrary, FramePlayer, default_asset_root};
+use {{GAME_SLUG}}::dotwork::{
+    Dotwork, DotworkAdditive, DotworkAdditiveMaterial, DotworkCache, DotworkLibrary, FramePlayer, default_asset_root,
+};
 
 /// The spec's tolerance for every number in expected.json.
 const TOLERANCE: f64 = 1e-6;
@@ -415,6 +422,32 @@ fn extra_kinds_are_loaded_with_their_data() {
 }
 
 #[test]
+fn shooting_effects_keep_their_light_and_tracer() {
+    let pack = golden_pack();
+    let muzzle = &pack.animated["vfx_muzzle"];
+    assert!(muzzle.additive);
+    let light = pack.animated["vfx_muzzle_light"]
+        .light
+        .as_ref()
+        .expect("the muzzle light's light");
+    assert_eq!(light.energy, vec![1.2, 0.6, 0.0]);
+    assert!(light.texture.ends_with("vfx_muzzle_light_light.png"));
+    let tracer = pack.animated["vfx_tracer"]
+        .tracer
+        .as_ref()
+        .expect("the tracer's ribbon");
+    assert_eq!(
+        (tracer["spacing"].as_f64(), tracer["length"].as_f64()),
+        (Some(4.0), Some(32.0))
+    );
+    assert!(pack.animated["hero"].light.is_none());
+    assert_eq!(
+        pack.particles["vfx_stone_debris_particles"].emitter["direction"],
+        json!([1, 0])
+    );
+}
+
+#[test]
 fn a_stamps_layer_places_every_tile_of_the_stamp() {
     let pack = golden_pack();
     let (yard, ts) = (&pack.maps["yard"], &pack.tilesets["ground_yard"]);
@@ -519,6 +552,80 @@ fn the_library_finds_assets_across_packs() {
     assert!(lib.transition("transition_wipe").is_some() && lib.normal_map("spr_crate_n").is_some());
     assert!(lib.image_asset("logo_golden").is_some());
     assert!(lib.animated("nobody").is_none());
+}
+
+#[test]
+fn an_additive_clip_draws_as_an_additive_quad() {
+    use bevy::ecs::system::RunSystemOnce;
+    use bevy::material::descriptor::{FragmentState, RenderPipelineDescriptor};
+    use bevy::prelude::*;
+    use bevy::render::render_resource::{BlendFactor, BlendState, ColorTargetState, ColorWrites, TextureFormat};
+    use bevy::sprite_render::{AlphaMode2d, Material2d};
+
+    // no window and no renderer: the assets the Dotwork parameter writes, and the golden pack as the library
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Image>()
+        .init_asset::<TextureAtlasLayout>()
+        .init_asset::<Mesh>()
+        .init_asset::<DotworkAdditiveMaterial>()
+        .init_resource::<DotworkCache>()
+        .insert_resource(DotworkLibrary {
+            packs: vec![golden_pack()],
+            failed: vec![],
+        });
+    let (spark, hero) = app
+        .world_mut()
+        .run_system_once(|mut commands: Commands, mut dw: Dotwork| {
+            (
+                dw.spawn_clip(&mut commands, "fx_spark", "play").unwrap(),
+                dw.spawn_clip(&mut commands, "hero", "walk_s").unwrap(),
+            )
+        })
+        .unwrap();
+    let world = app.world();
+    // fx_spark is `blend: add`: a quad with the additive material, never a (normally blended) sprite
+    assert!(world.get::<Sprite>(spark).is_none(), "an additive clip is no sprite");
+    let material = world
+        .get::<MeshMaterial2d<DotworkAdditiveMaterial>>(spark)
+        .expect("the additive material");
+    let m = world
+        .resource::<Assets<DotworkAdditiveMaterial>>()
+        .get(&material.0)
+        .unwrap();
+    assert_eq!(m.alpha_mode(), AlphaMode2d::Blend, "drawn in the transparent pass");
+    assert!(m.base.texture.is_some());
+    assert!(world.get::<Mesh2d>(spark).is_some() && world.get::<DotworkAdditive>(spark).is_some());
+    // the hero blends normally: a sprite as before
+    assert!(world.get::<Sprite>(hero).is_some());
+    assert!(world.get::<MeshMaterial2d<DotworkAdditiveMaterial>>(hero).is_none());
+    // the pipeline: every colour target adds src * alpha to what is there and keeps the target's alpha
+    let mut d = RenderPipelineDescriptor {
+        fragment: Some(FragmentState {
+            targets: vec![Some(ColorTargetState {
+                format: TextureFormat::Rgba8UnormSrgb,
+                blend: Some(BlendState::ALPHA_BLENDING),
+                write_mask: ColorWrites::ALL,
+            })],
+            ..default()
+        }),
+        ..default()
+    };
+    make_additive(&mut d);
+    let blend = d.fragment.unwrap().targets[0].as_ref().unwrap().blend.unwrap();
+    assert_eq!(blend, ADDITIVE_BLEND);
+    assert_eq!(
+        (blend.color.src_factor, blend.color.dst_factor),
+        (BlendFactor::SrcAlpha, BlendFactor::One)
+    );
+    // a sheet frame's uvs, and the quad moved so the pivot sits on the origin (feet: up by half the height)
+    let uv = frame_uv(URect::new(16, 0, 32, 24), UVec2::new(64, 24));
+    assert_eq!(uv.transform_point2(Vec2::ZERO), Vec2::new(0.25, 0.0));
+    assert_eq!(uv.transform_point2(Vec2::ONE), Vec2::new(0.5, 1.0));
+    assert_eq!(
+        pivot_offset(Anchor::BOTTOM_CENTER.0, UVec2::new(16, 24)),
+        Vec2::new(0.0, 12.0)
+    );
 }
 
 #[test]

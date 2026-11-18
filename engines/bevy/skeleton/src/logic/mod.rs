@@ -18,6 +18,7 @@
 //           2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): charmap (which characters a font can draw)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): display_staging (the Display tab's Apply, #308),
 //           hud_scale (a game HUD's text size, #309)
+//           2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): feel (the recipe helpers of SOP-18 step 4, #170)
 // ---------------------------------------------------------------------------
 pub mod math;
 pub mod rng;
@@ -25,6 +26,7 @@ pub mod rng;
 // Juice: game feel
 pub mod coyote;
 pub mod ease;
+pub mod feel;
 pub mod flash_limiter;
 pub mod follow;
 pub mod hitstop;
