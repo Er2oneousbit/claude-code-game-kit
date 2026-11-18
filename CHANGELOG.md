@@ -3,6 +3,54 @@
 0.4.0 is the first public release. Versions before it were internal builds, renumbered from 2.x and 3.x into 0.x
 (same order, same contents); 0.3.1 was the release candidate and was never published, so its work is in 0.4.0.
 
+## 0.16.0 (2026-11-18): platform services and Steam, localization, content settings, shooting effects, the engine gaps closed (#84, #86, #87, #51, #171, #207, #170, #164, #286, #260, #280)
+- **Platform services (#84):** an engine-neutral layer for achievements, stats, rich presence, the overlay's pause and
+  cloud-save hooks, with an offline queue that replays on connect (`core/docs/PLATFORM.md`; reference `Platform` in
+  `core/tools/golden_vectors.py`, 19 cases in `data/golden/platform.json`). Ported to all nine engines, wired into
+  each save store and pause flow, with a null backend: a game without `data/achievements.json` runs exactly as before.
+  A Steam adapter per engine behind an off-by-default switch (GodotSteam, luasteam, Greenworks, the Steamworks SDK in
+  C++ and Unreal, the `steamworks` crate in Bevy, Steamworks.NET in Unity; none in a browser). An enabled adapter
+  starts Steam with or without achievements; a store Steam refuses later puts the batch back and goes offline.
+  `doctor` says where each engine expects the SDK once achievements exist.
+- **SteamPipe uploads (#86, the Steam half):** `dev.py ship --target steam --app ID --depot ID[=DIR] [--branch B]` builds
+  the app_build VDF and runs steamcmd; `--dry-run` prints the VDF and the command, `--preview` uploads nothing; no
+  password option (Steam Guard is done by hand); a depot holding `steam_appid.txt` or a secret is refused.
+- **Localization round trip (#87):** `tools/i18n/l10n.py export | draft | review | import | check`: XLIFF 1.2 or CSV with
+  context and length budgets, machine drafts from a local model server (LM Studio, Ollama, llama.cpp or any OpenAI-
+  compatible one, or a command), a review state per line, and an import that refuses lost lines, changed English,
+  broken placeholders, over-budget lines and half-translated plural groups; `check` also reads every font's glyphs.
+- **Plural rules (CLDR 46):** `plural()` knows the categories of 77 languages in every engine (Russian and Ukrainian
+  `few`/`many`, Polish, Arabic and the rest), checked against CLDR's own rules up to 10^8.
+- **Content settings (#171, #207):** a Content section with Blood (on by default) and Clean language (off): `@clean`
+  variants of any line, a whole-word mask from `data/i18n/mature/<locale>.json`, the same in every engine (pinned
+  Unicode tables), cached per locale. Rows in every shell including MZ's Options, each hideable; `smoke --drive
+  show:content` and, on web and Godot, `--drive content`.
+- **Game-feel recipes (#170):** SOP-18's recipe table (hit confirm, damage numbers, knockback, recoil, camera kick,
+  landing squash, pickup pop, afterimages, bursts, spread, slow-mo, blood off) and three helpers in every engine:
+  `impact`, `float_text` and a distance-kept tracer trail.
+- **Shooting effects (#164):** Dotwork makes muzzle flashes, muzzle lights, tracers and wall debris that samples the
+  wall's colours; asset manifest 1.2.0 adds `light` and `tracer` to an animated sprite, and every importer keeps them.
+- **A Cyrillic font (#51):** Dotwork's dialogue font covers U+0400 to U+045F plus Ґ, № and ʼ (ru, uk, be, bg, sr, mk).
+- **Importer gaps closed (#286):** Phaser multi-page fonts; additive blending in Bevy and Unreal; Unreal font offsets
+  and animated tiles; RPG Maker MZ autotiles, maps, battle backs and parallaxes. The golden fixture gains a two-page
+  font and the effects.
+- **Shader checks (#260):** Unreal's translucent and post-process materials and Unity HDRP are compared with the golden
+  images too.
+- **RPG Maker MZ (#280):** battle flashes through the flash limiter, larger text and line spacing, more Options rows,
+  versioned saves and `smoke --drive menus|access|crash`.
+- **Fixed on the way:** Unity and web-3d could not import a real Dotwork particle pack; Bevy and Unity's Display Apply
+  button could not be reached with the arrow keys; toggling a setting in Godot threw focus to the tab row; a held MZ
+  map lost its id; the font checker skipped Belarusian; a C++ state loader read a dangling value; `ship.py` crashed
+  when stdin closed; the l10n tool's own source broke scaffolding.
+- **Upgrade notes:** settings gain a `content` section (old files load its defaults). `plural()` changes some outputs
+  (Portuguese 0 is "one"; French, Spanish, Italian, Portuguese and Catalan whole millions are "many"). `tr` takes
+  optional `clean` and `words` arguments. Save stores gain an optional saved hook. MZ games run `python tools/dev.py
+  setup` once so `check` finds the new GamePlatform plugin. Edited shell, settings and Dotwork importer files come back
+  as `.gold`.
+- **Still (verify):** no Steam adapter has run against real Steam (the next step is app 480); a real steamcmd upload;
+  RPG Maker MZ inside MZ; Godot and Bevy web-export shader checks; Unreal kerning pairs, Niagara particles and Unity
+  URP additive; Ollama and llama.cpp servers.
+
 ## 0.15.6 (2026-11-15): a bug hunt over 0.15, the Display Apply on real windows, smaller rebaked models (#312, #313, #314, #282)
 A review of everything 0.15.0 to 0.15.5 shipped, and live runs of what was marked (verify); every bug found is fixed
 here, each with a test that fails on the old code.
