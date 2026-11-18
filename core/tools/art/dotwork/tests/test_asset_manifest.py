@@ -13,6 +13,8 @@
 #           Live, opt-in: DOTWORK_LIVE_GROUND=1 with GODOT_BIN and COMFYUI_ROOT renders a small ground pack and has
 #           Godot paint its map; every terrain cell Godot chose must hold the tile the spec's rule names (2 minutes).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0's light and tracer rules, the left pivot
+#           (#164)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): MapbuildPicks, and the live exam checks the variant
 #           too: mapbuild sets the spec's pick on every terrain cell of a Godot map scene (#307)
 # ---------------------------------------------------------------------------
@@ -227,6 +229,23 @@ class Validator(unittest.TestCase):
             asset(d, "animated_sprite", "hero")["directions"]["walk"]["s"] = "nope"
         self.assertFinds(direction, "not in clips")
 
+    def test_light_and_tracer_rules(self):
+        # spec 1.2.0 (#164): a light names a real clip, one energy per frame, a real texture; tracer steps rise
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_muzzle_light")["light"].update(clip="nope"),
+                         "not in clips")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_muzzle_light")["light"]["energy"].append(0.1),
+                         "energies for the 3 frames")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_muzzle_light")["light"].update(
+            texture="art/fx/vfx/muzzle_light/nope.png"), "not found")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_muzzle_light")["light"].update(color="orange"),
+                         "does not match")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_tracer")["tracer"]["steps"].reverse(),
+                         "tracer steps")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_tracer")["tracer"].update(taper=2),
+                         "tracer taper")
+        self.assertFinds(lambda d: asset(d, "animated_sprite", "vfx_tracer")["tracer"].update(glow=1),
+                         "unknown key 'glow'")
+
     def test_tile_and_map_rules(self):
         def mask(d):
             ts = asset(d, "tileset", "ground_yard")
@@ -430,6 +449,7 @@ class Writer(unittest.TestCase):
         self.assertEqual(assetmap.pivot_of("center", 15, 9), [7.5, 4.5])
         self.assertEqual(assetmap.pivot_of(None, 4, 4), [2, 2])
         self.assertEqual(assetmap.pivot_of("right", 32, 8), [32, 4])
+        self.assertEqual(assetmap.pivot_of("left", 16, 8), [0, 4])          # a muzzle flash's barrel tip (#164)
         self.assertEqual(assetmap.pivot_of("tail_tip_bottom_left_third", 16, 15), [4, 15])
 
     def test_written_only_when_changed(self):

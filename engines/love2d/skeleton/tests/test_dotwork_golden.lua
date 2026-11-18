@@ -16,6 +16,7 @@
 -- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the loaded result's new map
 --           fields, the extra kinds compared instead of skipped, the vectors and rule cases.
 -- Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map without a size loads
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects' light and tracer (spec 1.2.0)
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Golden = require("tests.helpers.golden")
@@ -190,11 +191,27 @@ function T.test_no_asset_beyond_expected()
   A.eq(n + #model.skipped, #Json.sorted_keys(expected.assets), "every asset imported or skipped once")
 end
 
--- Every kind of the golden pack loads now (spec 1.1.0): nothing is skipped and nothing warns.
+-- Every kind of the golden pack loads now (spec 1.2.0): nothing is skipped and nothing warns.
 function T.test_golden_pack_loads_without_warnings()
   A.eq(#model.warnings, 0, table.concat(model.warnings, "\n"))
   A.eq(#model.skipped, 0, "no kind of the golden pack is skipped")
   A.eq(#model.problems, 0, table.concat(model.problems, "\n"))
+end
+
+-- Spec 1.2.0 (#164): the shooting effects' light and tracer are kept for the game, the light's texture loaded.
+function T.test_shooting_effects_keep_light_and_tracer()
+  local muzzle = model.animated_sprite.vfx_muzzle
+  A.eq(muzzle.blend, "add")
+  A.eq(muzzle.clips.play.pivot[1], 0, "the barrel tip is the left edge")
+  local light = model.animated_sprite.vfx_muzzle_light.light
+  A.truthy(light and light.texture:match("vfx_muzzle_light_light%.png$"), "light texture")
+  A.eq(#light.energy, 3)
+  A.eq(light.energy[1], 1.2)
+  local tracer = model.animated_sprite.vfx_tracer.tracer
+  A.eq(tracer.spacing, 4)
+  A.eq(tracer.length, 32)
+  A.eq(model.animated_sprite.hero.light, nil)
+  A.eq(model.particles.vfx_stone_debris_particles.emitter.direction[1], 1)
 end
 
 -- ---- The extra kinds are exposed by name with their data ---------------------------------------

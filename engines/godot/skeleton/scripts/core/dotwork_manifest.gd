@@ -26,6 +26,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created, the Godot importer (#307)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map's size is optional, as in the schema
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (its
+#           texture checked) and tracer, kept for the game
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -68,7 +70,7 @@ const TRANSPOSE: int = 4
 const M32: int = 0xFFFFFFFF
 const TWO_32: float = 4294967296.0
 
-# Fields each kind may carry (spec 1.1.0). Others are warned about once and ignored.
+# Fields each kind may carry (spec 1.2.0). Others are warned about once and ignored.
 const KNOWN: Dictionary = {
 	"background": ["kind", "name", "role", "layers", "godot"],
 	"bg_layer": ["name", "image", "size", "velocity", "repeat", "wobble_px", "scale"],
@@ -76,7 +78,7 @@ const KNOWN: Dictionary = {
 	"transition": ["kind", "name", "image", "size", "transition", "godot"],
 	"normal_map": ["kind", "name", "image", "size", "target", "convention", "godot"],
 	"image": ["kind", "name", "role", "image", "size", "pivot", "godot"],
-	"animated_sprite": ["kind", "name", "role", "blend", "clips", "directions", "godot"],
+	"animated_sprite": ["kind", "name", "role", "blend", "clips", "directions", "light", "tracer", "godot"],
 	"sprite": ["kind", "name", "role", "image", "size", "pivot", "content_rect", "collision", "shadow", "godot"],
 	"icon": ["kind", "name", "sizes"],
 	"portrait": ["kind", "name", "size", "expressions", "animation"],
@@ -518,6 +520,21 @@ func _convert_animated_sprite(a: Dictionary, where: String) -> Dictionary:
 					_problem("%s: direction %s/%s names clip %s, which it does not have" % [where, action, dir,
 							clip_name])
 				s["directions"][action][dir] = clip_name
+	if typeof(a.get("light")) == TYPE_DICTIONARY: # spec 1.2.0 (#164): a light that pulses with a clip
+		var light: Dictionary = a["light"]
+		var lw: String = where + " light"
+		var clip_name: Variant = _need(light, "clip", "string", lw)
+		var energy: Array = _need(light, "energy", "list", lw)
+		if not (s["clips"] as Dictionary).has(clip_name):
+			_problem("%s: clip %s is not one of its clips" % [lw, clip_name])
+		elif energy.size() != (s["clips"][clip_name]["frames"] as Array).size():
+			_problem("%s: %d energies for the %d frames of %s" % [lw, energy.size(),
+					(s["clips"][clip_name]["frames"] as Array).size(), clip_name])
+		s["light"] = {"clip": clip_name, "texture": _file(_need(light, "texture", "string", lw), lw),
+				"color": _need(light, "color", "string", lw), "radius": _need(light, "radius", "number", lw),
+				"energy": energy}
+	if typeof(a.get("tracer")) == TYPE_DICTIONARY: # a ribbon along the real path (Feel.trail_push)
+		s["tracer"] = a["tracer"]
 	return s
 
 

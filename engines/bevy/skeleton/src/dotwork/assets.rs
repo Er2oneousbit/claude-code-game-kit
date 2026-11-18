@@ -15,6 +15,7 @@
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): a tile's key and
 //           origin, map layers of kind stamps, a cell's key (mask or corner bits), the five extra kinds
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the additive note points at additive.rs (#286)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light and tracer
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -66,6 +67,22 @@ pub struct AnimatedSprite {
     pub clips: Vec<Clip>,
     /// `{action: {direction: clip}}`, such as walk -> s -> walk_s.
     pub directions: BTreeMap<String, BTreeMap<String, String>>,
+    /// Spec 1.2.0 (#164): a light that pulses with a clip (a muzzle light), for a game that draws 2D lights.
+    pub light: Option<Light>,
+    /// Spec 1.2.0 (#164): a ribbon along the real path (width, taper, spacing, length, steps); logic::feel::trail_push
+    /// keeps its points.
+    pub tracer: Option<Value>,
+}
+
+/// A light that pulses with `clip`: frame i shows `energy[i]` (the last is 0).
+#[derive(Debug, Clone)]
+pub struct Light {
+    pub clip: String,
+    /// Asset path of a white radial falloff.
+    pub texture: String,
+    pub color: String,
+    pub radius: f64,
+    pub energy: Vec<f64>,
 }
 
 impl AnimatedSprite {

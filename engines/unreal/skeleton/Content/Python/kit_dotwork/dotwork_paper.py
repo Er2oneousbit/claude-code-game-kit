@@ -58,6 +58,8 @@
 #           and centres read back from Paper2D, particles loaded (texture + emitter tag)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): additive clips (MI_DotworkAdditive), fonts with their
 #           x offsets (re-laid-out pages), animated tiles in the tile user data, assets a pack dropped pruned (#286)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (its
+#           texture imported, a light tag on its clip's flipbook) and tracer (a tag on every flipbook), kept in the records
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -356,11 +358,23 @@ class Importer:
             self.tag(fb, "blend", a.get("blend", "normal"))
             if a.get("directions"):
                 self.tag(fb, "directions", a["directions"])
+            if a.get("tracer"):                       # spec 1.2.0 (#164): the ribbon a game draws along the real path
+                self.tag(fb, "tracer", a["tracer"])
             clips[c["name"]] = {"flipbook": fb, "sheet": sheet, "files": sorted({f["file"] for f in frames}),
                                 "loop": c["loop"]}
+        light = a.get("light")                        # spec 1.2.0 (#164): the firing light pulse
+        if light:
+            if light.get("clip") not in clips or len(light.get("energy") or []) != len(
+                    next(c for c in a["clips"] if c["name"] == light.get("clip"))["frames"]):
+                raise spec.ManifestError(f"{a['name']}: light names clip {light.get('clip')!r} or its energies do "
+                                        f"not match its frames")
+            light = dict(light, texture=self.texture(light["texture"]))
+            self.tag(clips[light["clip"]]["flipbook"], "light",
+                     {k: v for k, v in a["light"].items()})
         self.records[f"animated_sprite/{a['name']}"] = {"kind": "animated_sprite", "clips": clips,
                                                         "blend": a.get("blend", "normal"),
-                                                        "directions": a.get("directions") or {}}
+                                                        "directions": a.get("directions") or {},
+                                                        "light": light, "tracer": a.get("tracer")}
 
     def _icon(self, a):
         self.records[f"icon/{a['name']}"] = {"kind": "icon",

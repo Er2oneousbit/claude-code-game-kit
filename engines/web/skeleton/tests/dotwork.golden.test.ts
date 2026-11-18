@@ -9,6 +9,7 @@
 //           The hash and roll vectors and the cell centres are the spec's own (ASSET_MANIFEST.md 1.1.0).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 cases (#285)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects' light and tracer (spec 1.2.0)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a font's page 1 glyphs (#286)
 // ---------------------------------------------------------------------------
 import { readFileSync } from "node:fs";
@@ -118,6 +119,19 @@ describe("golden pack (data/golden/dotwork)", () => {
     expect(plan.textures.get(n.target)!.normal).toBe(n.image);
     expect(plan.files).toContain(n.image);
     expect(n.convention).toBe("opengl");
+  });
+
+  it("keeps the shooting effects' light and tracer for the game (spec 1.2.0, #164)", () => {
+    const { plan } = golden();
+    expect(plan.warnings).toEqual([]);
+    const muzzle = plan.animatedSprites.get("vfx_muzzle")!;
+    expect([muzzle.blend, muzzle.clips[0].pivot, muzzle.clips[0].origin]).toEqual(["add", [0, 4], [0, 0.5]]);
+    const light = plan.animatedSprites.get("vfx_muzzle_light")!.light!;
+    expect(light.energy).toEqual([1.2, 0.6, 0]);
+    expect(plan.textures.has(light.texture)).toBe(true);
+    const tracer = plan.animatedSprites.get("vfx_tracer")!.tracer!;
+    expect([tracer.spacing, tracer.length, tracer.steps[0].at, tracer.steps[tracer.steps.length - 1].at]).toEqual([4, 32, 0, 0.8333]);
+    expect(plan.particles.get("vfx_stone_debris_particles")!.emitter.direction).toEqual([1, 0]);
   });
 
   it("picks the variant with the cell's roll: two full path cells, one of each tile", () => {

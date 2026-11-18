@@ -162,7 +162,7 @@ and GPU minutes. One test machine's setup and test (tip, E68):
   | Seamless 128 px terrain (refine, then inpaint the seam cross) | Usable, 6 of 8; plain AI tiles at 32 px are noise |
   | Corner autotiles from those textures (a small script, no AI) | Usable, under 1 s |
   | Whole-scene map | Angle and scale drift: backdrops only. Repaint a map drawn in code instead, at strength 0.3 to 0.45 |
-  | Effects (fireball, explosion, muzzle flash, heal, steam) drawn on black and animated with Wan | Good to excellent: about 2 min per clip; draw them with additive blending (Godot: `CanvasItemMaterial` blend mode Add) |
+  | Effects (fireball, explosion, heal, steam) drawn on black and animated with Wan; a muzzle flash, tracer, firing light and wall-impact debris are drawn in code instead (Dotwork `vfx` lane, no GPU; SOP-18 step 4) | Good to excellent: about 2 min per clip; draw them with additive blending (Godot: `CanvasItemMaterial` blend mode Add) |
   | 8-direction objects; sidescroller tiles | 8 directions made in Dotwork (an airship; its views come out rotated one step, KNOWN_ISSUES); sidescroller tiles not run yet **(verify)** |
 
 - **The refine step** (tip, E68): never shrink a klein render straight to sprite size, which loses the detail. Shrink

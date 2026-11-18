@@ -6,8 +6,9 @@ clip and for how long, where a sprite's feet are, what collides, which tile fits
 how a bitmap font is laid out. An importer per engine reads it (#55 to #62, and Godot's for packs with no Godot
 resources, #307); this page is the contract they are built and tested against.
 
-- Spec version: **1.1.0** (`assetspec.VERSION`; 1.1.0 added the `stamps` map layer and defined the corners rule, the
-  variant pick and isometric placement, #285; a 1.0.0 manifest still loads)
+- Spec version: **1.2.0** (`assetspec.VERSION`; 1.2.0 added an `animated_sprite`'s optional `light` and `tracer`
+  for the shooting effects, #164; 1.1.0 added the `stamps` map layer and defined the corners rule, the variant pick
+  and isometric placement, #285; 1.0.0 and 1.1.0 manifests still load)
 - Schema: [asset_manifest.schema.json](asset_manifest.schema.json) (JSON Schema 2020-12)
 - Validator and reference loader: `assetspec.py` (standard library only, Python 3.8+)
 - Writer: `assetmap.py` (called by `dotwork.py pack`, `character`, the hand-polish re-exports and `manifest`); a 3D
@@ -77,6 +78,7 @@ would).
 |---|---|
 | 1.0.0 | the format (2026-11-11, #83) |
 | 1.1.0 | map layer kind `stamps`; the rules every importer follows for corners4 terrain, variant picks and isometric placement, and the `placed` and `centres` lists in the loaded result (#285) |
+| 1.2.0 | an `animated_sprite`'s optional `light` (a firing light pulse) and `tracer` (a ribbon along the real path), and the `left` pivot of a muzzle flash (#164); the loaded result is unchanged, so an importer only has to accept the two fields (and may hand them to the game) |
 
 ## The document
 ```json
@@ -124,11 +126,17 @@ The first eight are **core**: every importer handles them. The other five are **
 | `clips[].loop` | bool | false: play once and hold the last frame (attacks, deaths, one-shot effects) |
 | `clips[].holds` | numbers | optional: the relative hold of every frame (absent: all 1) |
 | `clips[].frame_size` | `[w, h]` | every frame of a clip is this size; clips of one asset may differ (a death clip is wider) |
-| `clips[].pivot` | point | the feet for characters (`[w/2, h]`), the centre for effects, the head of a trail (`[w, h/2]`) |
+| `clips[].pivot` | point | the feet for characters (`[w/2, h]`), the centre for effects, the head of a trail (`[w, h/2]`), the barrel tip of a muzzle flash (`[0, h/2]`: it points right) |
 | `clips[].sheet` | path | optional: one image holding every frame of the clip, and each `rect` is in it. Dotwork's are one horizontal strip per clip; `render_sprites.py` puts every direction of an action in one sheet, a row each, so its rects have a `y` |
 | `clips[].frames[]` | `{file, rect, duration}` | `file` is the frame's own PNG (always shipped); `rect` is in `sheet` when there is one, else `[0, 0, w, h]` |
 | `clips[].length` | number | seconds, the sum of the durations |
 | `directions` | `{action: {dir: clip}}` | optional: clips named `<action>_<dir>` grouped, `{"walk": {"s": "walk_s", "e": "walk_e"}}` |
+| `light` | object | optional (1.2.0): a light that pulses with a clip, for engines with 2D lights (the clip itself is the additive glow every engine draws). `clip`: the clip it follows; `texture`: a white radial falloff; `color`: `#rrggbb`; `radius`: px it reaches; `energy`: one number per frame of the clip (frame i shows `energy[i]`, the last is 0) |
+| `tracer` | object | optional (1.2.0): a ribbon along the projectile's real path. `width`: px at the head; `taper`: the tail's width as a fraction of it; `spacing` and `length`: px between kept points and the longest trail (the juice module's `trail_push`); `steps`: `[{at, rgba}]` colour steps from the tail (`at` 0) to the head (1), `rgba` 0..255 with alpha 0..1 |
+
+The light and the tracer are data for the game: the light's energy goes through the flash limiter like any flash
+(SOP-18's recipe table), and the tracer's points come from `trail_push` each frame. An importer that has no use for
+them ignores them, as it ignores any field it does not know.
 
 A character's frames share one canvas per clip with the feet on the bottom edge, centred; a jump that leaves the
 ground keeps its height inside the frame (README, Godot notes), so the pivot stays the ground point. A west clip made
@@ -207,7 +215,9 @@ its image at (`margins`, `stretch_margin` and `hotspot` are in that image's pixe
 
 ### particles, transition, normal_map, image
 - `particles`: `texture` (a white mask, tinted by the emitter's colour steps) and `emitter`, the emitter JSON as Dotwork
-  writes it for engines without GPUParticles2D (amount, lifetime, one_shot, colours ...).
+  writes it for engines without GPUParticles2D (amount, lifetime, one_shot, colours ...). Wall-impact debris (#164)
+  throws its chips along the node's +x (turn it to the surface normal) with gravity in world space, and says where its
+  colours came from in `palette_from` (`source`: the sampled PNG, `rect`: the cell in it, or null).
 - `transition`: `image` (greyscale), `size`, `transition` (wipe, iris, spiral ...). A pixel is covered once the transition's
   progress (0 to 1) passes its grey value / 255 (black first, white last; lane_transitions.py's shader is the reference).
 - `normal_map`: `image`, `target` (the image it lights), `convention: "opengl"` (green up; flip green for a y-down
@@ -363,7 +373,11 @@ on the transitions, a raised block with its own origin), plus `atlas_order_check
 `atlas_order`, whose atlases are listed id 1 first: a port that sorts atlases by `id` picks the other variant on four
 of its six cells. Its two fonts: `tiny` (one page) and `duo` (#286: two pages, with the sampled glyph `A` on page 1,
 drawn 1 px right of the pen and 1 px down, and a kerning pair), so an importer that draws a font from one texture or
-drops the x offset fails on `duo`'s sample.
+drops the x offset fails on `duo`'s sample. The shooting effects (#164, 1.2.0): `vfx_muzzle` (16x8 additive frames in a
+sheet, the pivot on the left edge, so a port that swaps width and height or assumes square frames fails),
+`vfx_muzzle_light` (with a `light`, its texture and three energies), `vfx_tracer` (with a `tracer`) and
+`vfx_stone_debris_particles` (a second particle set whose emitter, as `lane_vfx` writes it, names its texture by bare
+file name and its `palette_from` source: an importer that walks the emitter for paths fails on it).
 
 | In `expected.json` | What an importer compares |
 |---|---|

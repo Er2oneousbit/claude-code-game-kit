@@ -7,6 +7,8 @@
 // Notes   : One test per case. A case type this file does not know FAILS, so a new vector type added to
 //           tools/golden_vectors.py cannot be skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (impact, float_text,
+//           trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -81,6 +83,28 @@ const RUNNERS = {
     flash_limiter: (c, tol) => {
         const fl = new GameJuice.FlashLimiter(c.params.max_flashes, c.params.window_s);
         steps(c, { request: (step, w) => expectClose({ result: fl.request(step.now) }, step.expect, tol, w) });
+    },
+    impact: (c, tol) => {
+        const p = c.params;
+        c.points.forEach(([dmg, full, hs, tr, flash], i) => {
+            const r = GameJuice.impact(dmg, full, p.hitstop_min, p.hitstop_max, p.trauma_min, p.trauma_max, p.flash_at);
+            expectClose([r.hitstop, r.trauma, r.flash], [hs, tr, flash], tol, `point ${i}`);
+        });
+    },
+    float_text: (c, tol) => {
+        const p = c.params;
+        c.points.forEach(([t, dy, scale, alpha, done], i) => {
+            const r = GameJuice.floatText(t, p.life, p.rise, p.pop_s);
+            expectClose([r.dy, r.scale, r.alpha, r.done], [dy, scale, alpha, done], tol, `point ${i}`);
+        });
+    },
+    trail: (c, tol) => {
+        let pts = [];
+        const check = (step, w) => expectClose({ points: pts, length: GameJuice.trailLength(pts) }, step.expect, tol, w);
+        steps(c, {
+            push: (step, w) => { pts = GameJuice.trailPush(pts, step.x, step.y, c.params.spacing, c.params.max_len); check(step, w); },
+            shrink: (step, w) => { pts = GameJuice.trailShrink(pts, step.amount); check(step, w); },
+        });
     },
 };
 

@@ -27,6 +27,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick (hash32, cell_roll, pick_variant), stamps layers, cell centres and placement, the extra kinds loaded
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): AnimatedSprite::light and tracer
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -80,11 +81,20 @@ struct Clip {
     const std::string& texture_of(std::size_t i) const { return sheet.empty() ? frames.at(i).file : sheet; }
 };
 enum class Blend { Normal, Add };
+// Spec 1.2.0 (#164): a light that pulses with a clip (frame i shows energy[i]), for a game that draws 2D lights.
+struct Light {
+    std::string clip, texture, color;   // texture: a white radial falloff (path relative to the base, as frames)
+    double radius = 0.0;                // px it reaches
+    std::vector<double> energy;         // one per frame of the clip
+};
+
 struct AnimatedSprite {
     std::string name, role;
     Blend blend = Blend::Normal;
     std::vector<Clip> clips;
     std::map<std::string, std::map<std::string, std::string>> directions;   // action -> dir -> clip name
+    std::optional<Light> light;         // spec 1.2.0: the firing light pulse (a muzzle light)
+    nlohmann::json tracer;              // spec 1.2.0: a ribbon along the real path (null if none; core::trail_push)
     const Clip* clip(const std::string& clip_name) const;
     // The clip for an action facing dir ("walk", "e"), or nullptr.
     const Clip* directed(const std::string& action, const std::string& dir) const;

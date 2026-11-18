@@ -25,6 +25,8 @@
 #           with an additive material, the water tiles carry their animation in Paper2D's tile user data, the
 #           two-page font's glyph lands at its xoffset with its xadvance, and a re-import removes what the pack
 #           dropped (and nothing of yours)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects keep their light and tracer
+#           (spec 1.2.0, #164)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -103,6 +105,21 @@ def checks_286(imp):
     sample = paper._font_back(f)["sample"] if f else None
     if not sample or sample[5] != 1 or sample[7] != 5 or sample[8] != 1:
         diffs.append(f"{key}: glyph {code} should land 1 px right of the pen and advance 5 on page 1, got {sample}")
+    diffs += checks_164(imp)
+    return diffs
+
+
+def checks_164(imp):
+    """Spec 1.2.0 (#164): the shooting effects' light (its texture imported) and tracer are kept for the game."""
+    diffs = []
+    light = (imp.records.get("animated_sprite/vfx_muzzle_light") or {}).get("light")
+    if not light or light.get("energy") != [1.2, 0.6, 0.0] or not light.get("texture"):
+        diffs.append(f"animated_sprite/vfx_muzzle_light: light should be kept with its texture, got {light}")
+    tracer = (imp.records.get("animated_sprite/vfx_tracer") or {}).get("tracer")
+    if not tracer or tracer.get("spacing") != 4.0 or tracer.get("length") != 32:
+        diffs.append(f"animated_sprite/vfx_tracer: tracer should be kept, got {tracer}")
+    if (imp.records.get("animated_sprite/hero") or {}).get("light"):
+        diffs.append("animated_sprite/hero: has no light")
     return diffs
 
 

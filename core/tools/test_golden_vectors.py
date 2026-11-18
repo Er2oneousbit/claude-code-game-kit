@@ -9,6 +9,7 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown every credits screen strips (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its confirm (#308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Platform, the platform services layer's rules (#84)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): FeelRecipes, the recipe helpers worked by hand (#170)
 # ---------------------------------------------------------------------------
 import json
 import math
@@ -133,6 +134,84 @@ class Juice(unittest.TestCase):
         for a in (0.3, -0.5, 2.0):
             sx, sy = gv.squash(a)
             self.assertAlmostEqual(sx * sy, 1.0)
+
+
+class FeelRecipes(unittest.TestCase):
+    """The helpers SOP-18's recipe table builds on (#170), worked by hand."""
+
+    def test_impact_scales_between_min_and_max(self):
+        # 4 of 10 damage: f = 0.4, hitstop 0.03 + 0.07 * 0.4 = 0.058, trauma 0.15 + 0.45 * 0.4 = 0.33, below flash_at
+        r = gv.impact(4.0, 10.0)
+        self.assertAlmostEqual(r["hitstop"], 0.058)
+        self.assertAlmostEqual(r["trauma"], 0.33)
+        self.assertFalse(r["flash"])
+        self.assertEqual(gv.impact(25.0, 10.0), {"hitstop": 0.1, "trauma": 0.6, "flash": True})   # clamped
+        self.assertEqual(gv.impact(0.0, 10.0), {"hitstop": 0.0, "trauma": 0.0, "flash": False})   # a miss
+        self.assertTrue(gv.impact(5.0, 10.0)["flash"])                                          # f == flash_at
+
+    def test_impact_stays_under_hitstop_cap(self):
+        # the largest confirm must fit under Hitstop's 0.25 s cap, so a stack of hits never freezes longer
+        self.assertLessEqual(gv.impact(1e9, 1.0)["hitstop"], gv.Hitstop().max_s)
+
+    def test_float_text_rises_pops_and_fades(self):
+        # half its life: out_cubic(0.5) = 0.875 of the rise, in_cubic(0.5) = 0.125 of the fade
+        r = gv.float_text(0.4, life=0.8, rise=24.0, pop_s=0.12)
+        self.assertAlmostEqual(r["dy"], -21.0)
+        self.assertAlmostEqual(r["alpha"], 0.875)
+        self.assertEqual(r["scale"], 1.0)
+        self.assertGreater(gv.float_text(0.06)["scale"], 1.0)          # overshoot while it pops in
+        end = gv.float_text(0.8)
+        self.assertTrue(end["done"])
+        self.assertAlmostEqual(end["alpha"], 0.0)
+
+    def test_float_text_reduce_motion_stays_put(self):
+        for t in (0.0, 0.3, 0.8):
+            r = gv.float_text(t, rise=0.0, pop_s=0.0)
+            self.assertEqual((r["dy"], r["scale"]), (0.0, 1.0))
+
+    def test_trail_keeps_points_by_distance(self):
+        # spacing 6: the head follows until it is 6 px past the point before it, then a new point starts
+        pts = []
+        for x in (0.0, 2.0, 4.0, 7.0, 9.0):
+            pts = gv.trail_push(pts, x, 0.0, spacing=6.0, max_len=100.0)
+        self.assertEqual(pts, [[0.0, 0.0], [7.0, 0.0], [9.0, 0.0]])
+
+    def test_trail_is_the_same_at_any_frame_rate(self):
+        # the same straight flight at 30 and 120 updates: the same length (the cap), the head in the same place
+        def fly(n):
+            pts = []
+            for i in range(n + 1):
+                pts = gv.trail_push(pts, 120.0 * i / n, 0.0, spacing=6.0, max_len=40.0)
+            return pts
+        a, b = fly(30), fly(120)
+        self.assertAlmostEqual(gv.trail_length(a), 40.0)
+        self.assertAlmostEqual(gv.trail_length(b), 40.0)
+        self.assertEqual(a[-1], b[-1])
+
+    def test_trail_cap_cuts_the_tail_inside_a_segment(self):
+        pts = gv.trail_push([[0.0, 0.0], [10.0, 0.0]], 30.0, 0.0, spacing=6.0, max_len=25.0)
+        self.assertEqual(pts, [[5.0, 0.0], [10.0, 0.0], [30.0, 0.0]])
+
+    def test_trail_follows_a_curve(self):
+        # a quarter circle: the kept points stay on it (a fixed straight streak would not)
+        pts = []
+        for i in range(20):
+            a = i / 19 * math.pi / 2
+            pts = gv.trail_push(pts, 10 * math.cos(a), 10 * math.sin(a), spacing=2.0, max_len=100.0)
+        for x, y in pts:
+            self.assertAlmostEqual(math.hypot(x, y), 10.0)
+        self.assertGreater(len(pts), 4)
+
+    def test_trail_shrink_catches_up_and_ends(self):
+        pts = [[0.0, 0.0], [10.0, 0.0], [12.0, 0.0]]
+        self.assertEqual(gv.trail_shrink(pts, 4.0), [[4.0, 0.0], [10.0, 0.0], [12.0, 0.0]])
+        self.assertEqual(gv.trail_shrink(pts, 11.0), [[11.0, 0.0], [12.0, 0.0]])
+        self.assertEqual(gv.trail_shrink(pts, 50.0), [[12.0, 0.0]])     # the head alone: draw nothing
+        self.assertEqual(gv.trail_shrink([], 1.0), [])
+
+    def test_vectors_cover_every_helper(self):
+        types = {c["type"] for c in gv.build_juice()["cases"]}
+        self.assertTrue({"impact", "float_text", "trail"} <= types)
 
 
 class Shell(unittest.TestCase):

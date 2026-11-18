@@ -58,7 +58,7 @@ build/              .love and the fused Windows exe (git-ignored)
   size pixel parameters (`light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`) draw a Canvas of
   the whole frame through them. `check` compiles them and `smoke --shaders` compares each with its golden image;
   both open a small window off-screen (`--headless` cannot draw shaders).
-- **Dotwork art** (tools/art/dotwork/ASSET_MANIFEST.md, spec 1.1.0; 1.0.0 packs still load): `DotworkLoader.load_all()`
+- **Dotwork art** (tools/art/dotwork/ASSET_MANIFEST.md, spec 1.2.0; 1.0.0 and 1.1.0 packs still load): `DotworkLoader.load_all()`
   reads every `assets/dotwork/*.assets.json` (headless, also from the .love); `DotworkView.new()` (in draw) gives
   `view:animated(model.animated_sprite.hero)` (`:play_direction("walk", "e")`, `:update(dt)`, `:draw(x, y, 2)` with
   the pivot at x, y), `view:draw_sprite`, `view:map(model.map.yard)` (a SpriteBatch per atlas and layer),

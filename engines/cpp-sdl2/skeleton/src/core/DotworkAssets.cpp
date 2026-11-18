@@ -17,6 +17,8 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick, stamps layers, cell centres and placement, the extra kinds read and checked
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (checked
+//           against its clip) and tracer read
 // ---------------------------------------------------------------------------
 #include "core/DotworkAssets.hpp"
 
@@ -132,6 +134,28 @@ AnimatedSprite read_animated_sprite(const json& a) {
                 s.directions[action][dir] = clip_name.get<std::string>();
             }
         }
+    }
+    const auto light = a.find("light");   // spec 1.2.0 (#164)
+    if (light != a.end() && light->is_object()) {
+        Light L;
+        L.clip = light->at("clip").get<std::string>();
+        L.texture = path_of(*light, "texture");
+        L.color = light->at("color").get<std::string>();
+        L.radius = light->at("radius").get<double>();
+        L.energy = light->at("energy").get<std::vector<double>>();
+        const Clip* clip = s.clip(L.clip);
+        if (clip == nullptr) {
+            throw std::runtime_error("light names clip " + L.clip + ", which it does not have");
+        }
+        if (L.energy.size() != clip->frames.size()) {
+            throw std::runtime_error("light has " + std::to_string(L.energy.size()) + " energies for the " +
+                                     std::to_string(clip->frames.size()) + " frames of " + L.clip);
+        }
+        s.light = std::move(L);
+    }
+    const auto tracer = a.find("tracer");
+    if (tracer != a.end() && tracer->is_object()) {
+        s.tracer = *tracer;
     }
     return s;
 }

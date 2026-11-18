@@ -28,6 +28,8 @@
 --           `origin` field, else the atlas tile's centre) on the cell centre, isometric in Godot's diamond-down
 --           layout, so an iso map's left column sits left of x = 0.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light
+--           (its texture loaded) and tracer, kept for the game
 -- Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the
 --           probability pick (hash32 / cell_roll), stamps layers, cell centres and placed positions, the extra
 --           kinds loaded as data instead of skipped.
@@ -77,7 +79,7 @@ Manifest.CORNER_BITS = {
 Manifest.FLIP_H, Manifest.FLIP_V, Manifest.TRANSPOSE = 1, 2, 4
 local M32 = 4294967296                    -- 2^32: hash32 keeps every step below it (the bit library is int32)
 
--- Fields each kind may carry (spec 1.1.0). Others are warned about once and ignored.
+-- Fields each kind may carry (spec 1.2.0). Others are warned about once and ignored.
 local KNOWN = {
   background = { "kind", "name", "role", "layers", "godot" },
   bg_layer = { "name", "image", "size", "velocity", "repeat", "wobble_px", "scale" },
@@ -85,7 +87,7 @@ local KNOWN = {
   transition = { "kind", "name", "image", "size", "transition", "godot" },
   normal_map = { "kind", "name", "image", "size", "target", "convention", "godot" },
   image = { "kind", "name", "role", "image", "size", "pivot", "godot" },
-  animated_sprite = { "kind", "name", "role", "blend", "clips", "directions", "godot" },
+  animated_sprite = { "kind", "name", "role", "blend", "clips", "directions", "light", "tracer", "godot" },
   sprite = { "kind", "name", "role", "image", "size", "pivot", "content_rect", "collision", "shadow", "godot" },
   icon = { "kind", "name", "sizes" },
   portrait = { "kind", "name", "size", "expressions", "animation" },
@@ -459,6 +461,21 @@ function convert.animated_sprite(ctx, a, where)
       s.directions[action][dir] = clip_name
     end
   end
+  local light = opt(a.light)               -- spec 1.2.0 (#164): a light that pulses with a clip
+  if type(light) == "table" then
+    local lw = where .. " light"
+    local clip = s.clips[ctx:need(light, "clip", "string", lw)]
+    local energy = ctx:need(light, "energy", "list", lw)
+    if not clip then
+      ctx:problem(lw .. ": clip " .. tostring(light.clip) .. " is not one of its clips")
+    elseif #energy ~= #clip.frames then
+      ctx:problem(lw .. ": " .. #energy .. " energies for the " .. #clip.frames .. " frames of " .. clip.name)
+    end
+    s.light = { clip = light.clip, texture = ctx:file(ctx:need(light, "texture", "string", lw), lw),
+                color = ctx:need(light, "color", "string", lw), radius = ctx:need(light, "radius", "number", lw),
+                energy = energy }
+  end
+  if type(opt(a.tracer)) == "table" then s.tracer = a.tracer end   -- a ribbon along the real path (Feel.trail_push)
   return s
 end
 

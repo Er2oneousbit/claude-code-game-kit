@@ -28,6 +28,9 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the platform services layer (#84 phase 1):
 #           achievements_load, Platform (unlock once, stat rules, offline queue and replay, presence, cloud hooks),
 #           NullBackend, cloud_partition, overlay_action, platform_state_load, and platform.json's cases
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the feel recipe helpers SOP-18's table builds on
+#           (#170, #164): impact (hit confirm scaled by damage), float_text (a damage number's ease), trail_push,
+#           trail_shrink and trail_length (a tracer's point history by distance), and their juice.json cases
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -275,6 +278,85 @@ class FlashLimiter:
             self.times.append(now)
             return True
         return False
+
+
+# ------------------------------------------------------------------------------------------ feel recipes
+# The small engine-free helpers SOP-18's recipe table builds on (#170): pure functions, no settings read, no clock and
+# no random number generator. The rest of the recipes are compositions a game writes itself (SOP-18 step 4).
+# Their tunables are the keyword defaults below (the ports use the same defaults); a game passes its own.
+
+
+def impact(damage, full, hitstop_min=0.03, hitstop_max=0.1, trauma_min=0.15, trauma_max=0.6, flash_at=0.5):
+    """Hit confirm scaled by damage: f = damage / full clamped to 0..1 (full <= 0 counts every hit as full), then
+    hitstop and trauma linear from their min at the smallest hit to their max at a full one, and flash when
+    f >= flash_at. No damage (<= 0) is no confirm at all. The flash is a request: it still goes through the flash
+    limiter and the player's flash_limit, and the trauma through the shake's intensity (effective_shake)."""
+    if damage <= 0.0:
+        return {"hitstop": 0.0, "trauma": 0.0, "flash": False}
+    f = 1.0 if full <= 0.0 else min(max(damage / full, 0.0), 1.0)
+    return {"hitstop": hitstop_min + (hitstop_max - hitstop_min) * f,
+            "trauma": trauma_min + (trauma_max - trauma_min) * f, "flash": f >= flash_at}
+
+
+def float_text(t, life=0.8, rise=24.0, pop_s=0.12):
+    """A damage number's motion at age t (game time): it rises by `rise` px on out_cubic over its life (dy is
+    negative: y down), pops in with out_back over pop_s (scale overshoots 1, then settles at 1) and fades on in_cubic
+    (alpha 1 to 0). done once t >= life. reduce motion: pass rise 0 and pop_s 0 (no pop: scale 1 from the start)."""
+    u = min(max(t / life, 0.0), 1.0) if life > 0.0 else 1.0
+    scale = ease("out_back", t / pop_s) if pop_s > 0.0 else 1.0
+    return {"dy": -rise * ease("out_cubic", u), "scale": scale, "alpha": 1.0 - ease("in_cubic", u),
+            "done": t >= life}
+
+
+def _seg(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def trail_length(points):
+    """Total length of a trail's points, tail (first) to head (last)."""
+    total = 0.0   # a plain running sum, as every port adds: sum() compensates its rounding since Python 3.12
+    for i in range(len(points) - 1):
+        total += _seg(points[i], points[i + 1])
+    return total
+
+
+def _trim_to(points, keep):
+    """Drop length from the tail until the trail is `keep` long: whole segments go, the last one is cut where the
+    length runs out (the tail point slides toward the head). keep <= 0 leaves the head alone."""
+    pts = [list(p) for p in points]
+    excess = trail_length(pts) - max(keep, 0.0)
+    while excess > 1e-12 and len(pts) > 1:
+        s = _seg(pts[0], pts[1])
+        if s <= excess + 1e-12:
+            pts.pop(0)
+            excess -= s
+        else:
+            k = excess / s
+            pts[0] = [pts[0][0] + (pts[1][0] - pts[0][0]) * k, pts[0][1] + (pts[1][1] - pts[0][1]) * k]
+            excess = 0.0
+    return pts
+
+
+def trail_push(points, x, y, spacing=6.0, max_len=48.0):
+    """A tracer's point history (#164), in world space: the last point is the head and follows (x, y) every frame; a
+    new point is kept once the head is `spacing` px past the point before it, so the history is by distance, not by
+    frame (the same path at 30 and 144 fps), and a curving or homing shot leaves a curve. Longer than max_len, the
+    tail is cut. Returns a new list of [x, y], tail first."""
+    pts = [list(p) for p in points]
+    if len(pts) < 2:
+        pts.append([x, y])
+    elif _seg(pts[-2], pts[-1]) >= spacing:
+        pts.append([x, y])
+    else:
+        pts[-1] = [x, y]
+    return _trim_to(pts, max_len)
+
+
+def trail_shrink(points, amount):
+    """The tail catching up after the shot dies: remove `amount` px (speed * dt) from the tail. Down to the head
+    alone, the trail is gone: draw nothing for fewer than two points."""
+    return _trim_to(points, trail_length(points) - amount)
 
 
 # ----------------------------------------------------------------------------------------------- shell
@@ -965,6 +1047,50 @@ def build_juice():
         steps.append({"call": "request", "now": now, "expect": {"result": fl.request(now)}})
     cases.append({"type": "flash_limiter", "name": "three per second", "params": {"max_flashes": 3, "window_s": 1.0},
                   "steps": steps})
+    # feel recipes (#170): every case passes every argument, so a port's defaults are not what is tested
+    imp = dict(hitstop_min=0.03, hitstop_max=0.1, trauma_min=0.15, trauma_max=0.6, flash_at=0.5)
+    pts = []
+    for dmg, full in [(0.0, 10.0), (-3.0, 10.0), (1.0, 10.0), (4.0, 10.0), (5.0, 10.0), (10.0, 10.0), (25.0, 10.0),
+                      (3.0, 0.0), (2.5, -1.0)]:
+        r = impact(dmg, full, **imp)
+        pts.append([dmg, full, r["hitstop"], r["trauma"], r["flash"]])
+    cases.append({"type": "impact", "name": "hit confirm scaled by damage", "params": imp, "points": pts})
+    imp2 = dict(hitstop_min=0.05, hitstop_max=0.05, trauma_min=0.0, trauma_max=1.0, flash_at=1.0)
+    pts = []
+    for dmg, full in [(0.5, 2.0), (1.999, 2.0), (2.0, 2.0)]:
+        r = impact(dmg, full, **imp2)
+        pts.append([dmg, full, r["hitstop"], r["trauma"], r["flash"]])
+    cases.append({"type": "impact", "name": "flat hitstop, flash only at full", "params": imp2, "points": pts})
+    for name, params, ts in [("damage number", {"life": 0.8, "rise": 24.0, "pop_s": 0.12},
+                              [0.0, 0.03, 0.06, 0.12, 0.2, 0.4, 0.7, 0.8, 1.0, -0.1]),
+                             ("reduce motion: no rise, no pop", {"life": 0.5, "rise": 0.0, "pop_s": 0.0},
+                              [0.0, 0.25, 0.5]),
+                             ("no life", {"life": 0.0, "rise": 10.0, "pop_s": 0.1}, [0.0, 0.05])]:
+        pts = []
+        for t in ts:
+            r = float_text(t, **params)
+            pts.append([t, r["dy"], r["scale"], r["alpha"], r["done"]])
+        cases.append({"type": "float_text", "name": name, "params": params, "points": pts})
+    for name, params, script in [
+            ("straight shot by distance", {"spacing": 6.0, "max_len": 20.0},
+             [["push", x, 0.0] for x in (0.0, 2.0, 4.0, 7.0, 9.0, 15.0, 30.0, 33.0)]
+             + [["shrink", 5.0], ["shrink", 2.5], ["shrink", 100.0]]),
+            ("curving shot keeps a curve", {"spacing": 4.0, "max_len": 30.0},
+             [["push", 10.0 * math.cos(a / 4.0), 10.0 * math.sin(a / 4.0)] for a in range(10)]
+             + [["shrink", 12.0], ["push", 0.0, 0.0]]),
+            ("one point is no trail", {"spacing": 3.0, "max_len": 0.0},
+             [["push", 1.0, 1.0], ["push", 5.0, 1.0], ["shrink", 1.0]])]:
+        pts, steps = [], []
+        for op in script:
+            if op[0] == "push":
+                pts = trail_push(pts, op[1], op[2], params["spacing"], params["max_len"])
+                step = {"call": "push", "x": op[1], "y": op[2]}
+            else:
+                pts = trail_shrink(pts, op[1])
+                step = {"call": "shrink", "amount": op[1]}
+            step["expect"] = {"points": [list(p) for p in pts], "length": trail_length(pts)}
+            steps.append(step)
+        cases.append({"type": "trail", "name": name, "params": params, "steps": steps})
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
             "cases": cases}
 

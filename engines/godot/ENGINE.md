@@ -13,7 +13,7 @@
 ```
 project.godot            engine config (edit via editor or carefully by hand)
 scenes/                  .tscn scenes (main.tscn is the entry)
-scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs...), settings,
+scripts/core/            engine-agnostic helpers: log, timers, juice (shake, hitstop, springs, the feel recipe helpers...), settings,
                          bindings, saves, i18n, the Dotwork importer (dotwork_manifest.gd + dotwork_assets.gd)
                          (no gameplay knowledge; tested against data/golden/)
 scripts/shell/           the front end: Shell autoload, screens (title, menus, settings, pause...), smoke drive
@@ -82,7 +82,7 @@ tools/                   dev.py and helpers
   keep their own loop flags; `check`, `test` (109 tests) and `smoke` passed on a fresh scaffold. The same helper
   loaded a 69-bone Tripo rig with three textured clips (idle, walk, run): every clip looped, the Mixamo names mapped
   through `bone_name()`, its own chain bones kept their names, 1.8 m tall facing +Z (2026-11-11, not a kept test).
-- **Dotwork art** (`tools/art/dotwork/`, spec `ASSET_MANIFEST.md` 1.1.0; 1.0.0 packs still load, another major is
+- **Dotwork art** (`tools/art/dotwork/`, spec `ASSET_MANIFEST.md` 1.2.0; 1.0.0 and 1.1.0 packs still load, another major is
   refused): Dotwork writes Godot's own resources straight into the game (SpriteFrames, TileSets, prop scenes, map
   scenes; its README "Godot notes"), and every pack also gets `assets/dotwork/<pack>.assets.json`. The importer
   reads those manifests like every other engine's does (#307), for the packs that have no Godot resources, such as

@@ -18,6 +18,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's
 //           Apply and its keep-or-revert confirm (core::DisplayStaging, #308)
+//           2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (core::impact,
+//           core::float_text, the trail point history; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -36,6 +38,7 @@
 #include "core/CoyoteTimer.hpp"
 #include "core/DisplayStaging.hpp"
 #include "core/Ease.hpp"
+#include "core/Feel.hpp"
 #include "core/FlashLimiter.hpp"
 #include "core/FollowCamera.hpp"
 #include "core/Hitstop.hpp"
@@ -265,6 +268,39 @@ void check_flash_limiter(const json& c) {
     }
 }
 
+void check_impact(const json& c) {
+    const json& k = c.at("params");
+    for (const json& p : c.at("points")) {
+        const core::Impact r = core::impact(p[0], p[1], k.at("hitstop_min"), k.at("hitstop_max"), k.at("trauma_min"),
+                                            k.at("trauma_max"), k.at("flash_at"));
+        expect_same(json::array({p[0], p[1], r.hitstop, r.trauma, r.flash}), p, "impact" + p.dump());
+    }
+}
+
+void check_float_text(const json& c) {
+    const json& k = c.at("params");
+    for (const json& p : c.at("points")) {
+        const core::FloatText r = core::float_text(p[0], k.at("life"), k.at("rise"), k.at("pop_s"));
+        expect_same(json::array({p[0], r.dy, r.scale, r.alpha, r.done}), p, "float_text" + p.dump());
+    }
+}
+
+void check_trail(const json& c) {
+    const json& k = c.at("params");
+    core::Trail pts;
+    for (const json& step : c.at("steps")) {
+        if (step.at("call") == "push") {
+            pts = core::trail_push(pts, step.at("x"), step.at("y"), k.at("spacing"), k.at("max_len"));
+        } else if (step.at("call") == "shrink") {
+            pts = core::trail_shrink(pts, step.at("amount"));
+        } else {
+            unknown_call(step);
+            continue;
+        }
+        expect_same({{"points", pts}, {"length", core::trail_length(pts)}}, step.at("expect"), "trail" + step.dump());
+    }
+}
+
 // ---- shell.json -------------------------------------------------------------------------
 
 void check_defaults(const json& c) {
@@ -460,6 +496,7 @@ TEST_CASE("golden vectors: juice.json") {
         {"noise", check_noise}, {"shake", check_shake}, {"hitstop", check_hitstop}, {"ease", check_ease},
         {"follow", check_follow}, {"input_buffer", check_input_buffer}, {"coyote", check_coyote},
         {"spring", check_spring}, {"squash", check_squash}, {"flash_limiter", check_flash_limiter},
+        {"impact", check_impact}, {"float_text", check_float_text}, {"trail", check_trail},
     });
 }
 
