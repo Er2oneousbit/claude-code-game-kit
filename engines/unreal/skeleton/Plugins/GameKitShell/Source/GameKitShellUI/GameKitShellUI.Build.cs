@@ -14,6 +14,8 @@
 //           without a rebuild of these rules.
 // Authored: Written with Claude (Fable 5.1, claude-fable-5-1)
 // Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the readable font staged with a packaged game
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): GAMEKIT_STEAM, the optional Steam backend on the
+//           engine's Steamworks module (#84)
 // ---------------------------------------------------------------------------
 using UnrealBuildTool;
 
@@ -26,6 +28,16 @@ public class GameKitShellUI : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { "ApplicationCore", "InputCore", "UMG", "RenderCore", "RHI", "Projects", "DeveloperSettings", "EngineSettings" });
 		// The readable font and its licence, staged loose next to the packaged game (GameKitShellTheme.cpp reads it)
 		RuntimeDependencies.Add("$(PluginDir)/Resources/Fonts/...", StagedFileType.NonUFS);
+		// The platform layer's Steam backend (docs/PLATFORM.md): off by default, and the game builds and runs on the
+		// null backend. Set WithSteam to true (or GAMEKIT_STEAM=1 in the build's environment) to build it against the
+		// Steamworks SDK that ships with Unreal (the engine's Steamworks module).
+		const bool WithSteam = false;
+		bool bSteam = WithSteam || System.Environment.GetEnvironmentVariable("GAMEKIT_STEAM") == "1";
+		PublicDefinitions.Add("GAMEKIT_STEAM=" + (bSteam ? "1" : "0"));
+		if (bSteam)
+		{
+			AddEngineThirdPartyPrivateStaticDependencies(Target, "Steamworks");
+		}
 	}
 }
 

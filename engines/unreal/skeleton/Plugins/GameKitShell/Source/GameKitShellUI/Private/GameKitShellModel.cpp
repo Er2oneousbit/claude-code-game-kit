@@ -191,9 +191,10 @@ FGameKitShellModel::FGameKitShellModel(const FOptions& InOptions)
 	}
 	LastHudScale = HudScale();   // hud_scale_changed fires on a change from here (#309)
 	// data/achievements.json is optional: without it every call is "unknown" and nothing is written
-	PlatformService = MakeUnique<GameKit::FPlatformService>(Opt.DataDir,
-		GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, GameKit::AchievementsFile)),
-		GameKit::MakePlatformBackend(Opt.bAutomated));
+	const TOptional<FString> AchievementsText = GameKit::ReadTextFile(FPaths::Combine(Opt.ProjectDir, GameKit::AchievementsFile));
+	int32 DefsProblems = 0;
+	PlatformService = MakeUnique<GameKit::FPlatformService>(Opt.DataDir, AchievementsText,
+		GameKit::MakePlatformBackend(GameKit::AchievementsLoad(AchievementsText, DefsProblems), Opt.DataDir, Opt.bAutomated));
 	for (const FString& P : PlatformService->Problems)
 	{
 		UE_LOG(LogGameKitShell, Warning, TEXT("platform: %s"), *P);

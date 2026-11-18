@@ -16,6 +16,7 @@
 #include "GameKitAtomicFile.h"
 #include "GameKitJson.h"
 #include "GameKitPlatform.h"
+#include "GameKitPlatformSteam.h"
 #include "GameKitSaveStore.h"
 #include "HAL/FileManager.h"
 #include "Misc/Guid.h"
@@ -283,6 +284,49 @@ bool FGameKitPlatformServiceTest::RunTest(const FString& Parameters)
 		TestTrue(TEXT("api mode: one cloud write"), Nb.Cloud.Num() == 1 && Nb.Cloud[0] == TEXT("save_1.json"));
 		IFileManager::Get().DeleteDirectory(*Dir, false, true);
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitPlatformSteamTest, "GameKit.Platform.Steam", GameKitPlatformTests::PlatformTestFlags)
+
+bool FGameKitPlatformSteamTest::RunTest(const FString& Parameters)
+{
+	using namespace GameKitPlatformTests;
+	const FString Dir = Scratch();
+	TArray<FString> Log;
+	bool bStoreOk = true;
+	GameKit::FSteamCalls Calls;
+	Calls.SetAchievement = [&Log](const FString& Id) { Log.Add(TEXT("SetAchievement ") + Id); return true; };
+	Calls.GetAchievement = [](const FString& Id, bool& bOut) { bOut = Id == TEXT("first"); return true; };
+	Calls.SetStatInt = [&Log](const FString& Id, int32 V) { Log.Add(FString::Printf(TEXT("SetStat %s %d"), *Id, V)); return true; };
+	Calls.SetStatFloat = [&Log](const FString& Id, float) { Log.Add(TEXT("SetStatF ") + Id); return true; };
+	Calls.GetStatInt = [](const FString&, int32& Out) { Out = 4; return true; };
+	Calls.GetStatFloat = [](const FString&, float& Out) { Out = 0.0f; return true; };
+	Calls.StoreStats = [&Log, &bStoreOk] { Log.Add(TEXT("StoreStats")); return bStoreOk; };
+	Calls.RunCallbacks = [&Log] { Log.Add(TEXT("RunCallbacks")); };
+	int32 N = 0;
+	const TSharedRef<FJsonObject> Defs = GameKit::AchievementsLoad(FString(Sample), N);
+	TUniquePtr<GameKit::FSteamPlatformBackend> Backend = MakeUnique<GameKit::FSteamPlatformBackend>(Defs, Dir, Calls);
+	GameKit::FSteamPlatformBackend* Steam = Backend.Get();
+	TestEqual(TEXT("remote"), Diff(MakeObject(Steam->Remote()), Parse(TEXT("{\"unlocked\": [\"first\"], \"stats\": {\"kills\": 4}}")), 1e-9),
+	          FString());
+	{
+		GameKit::FPlatformService Ps(Dir, FString(Sample), MoveTemp(Backend));
+		TestEqual(TEXT("add"), Ps.AddStat(TEXT("kills"), 12), FString(TEXT("ok")));   // the store had 4: 16, kills_10 unlocks
+		const TArray<FString> Want{TEXT("SetStat kills 16"), TEXT("SetAchievement kills_10"), TEXT("StoreStats")};
+		TestTrue(TEXT("mapped calls: ") + FString::Join(Log, TEXT(" | ")), Log == Want);
+		Log.Reset();
+		bStoreOk = false;
+		TestEqual(TEXT("set"), Ps.SetStat(TEXT("kills"), 20), FString(TEXT("ok")));
+		TestEqual(TEXT("a refused StoreStats fails the store"), Ps.Flush(), FString(TEXT("failed")));
+		TestFalse(TEXT("offline after it"), Ps.GetRules().IsOnline());
+		Steam->OverlayChanged(true);
+		const TOptional<bool> Overlay = Ps.Update();
+		TestTrue(TEXT("the overlay reaches the shell once"), Overlay.IsSet() && Overlay.GetValue());
+		TestFalse(TEXT("only once"), Ps.Update().IsSet());
+		TestEqual(TEXT("update runs the callbacks"), Log.Last(), FString(TEXT("RunCallbacks")));
+	}
+	IFileManager::Get().DeleteDirectory(*Dir, false, true);
 	return true;
 }
 
