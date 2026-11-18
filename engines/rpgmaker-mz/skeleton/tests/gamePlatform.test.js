@@ -135,6 +135,15 @@ function mzWorld() {
     return { Scene_Map, Scene_Menu, SceneManager, DataManager, StorageManager, XMLHttpRequest, localStorage, saved, TextEncoder };
 }
 
+test("Achievements off (the default): no request for data/achievements.json (a 404 fails MZ's smoke)", () => {
+    const world = mzWorld();
+    let requested = 0;
+    world.XMLHttpRequest = class { open() { requested += 1; } overrideMimeType() {} send() {} };
+    const mz = loadPlugin("GamePlatform", world);
+    assert.equal(requested, 0);
+    assert.equal(mz.context.GamePlatform.service.active, false);
+});
+
 test("GamePlatform loads as an MZ plugin: menu, save and quit hooks, the overlay asks the map for its menu", async () => {
     const world = mzWorld();
     const mz = loadPlugin("GamePlatform", world);
@@ -164,7 +173,7 @@ test("with achievements, a save in api mode reaches saved() and MZ's menu flushe
         overrideMimeType() {}
         send() { this.status = 200; this.responseText = SAMPLE; this.onload(); }
     };
-    const mz = loadPlugin("GamePlatform", world);
+    const mz = loadPlugin("GamePlatform", world, { achievements: "true" });
     const G = mz.context.GamePlatform;
     assert.equal(G.service.active, true);
     G.service.platform.cloud = "api";

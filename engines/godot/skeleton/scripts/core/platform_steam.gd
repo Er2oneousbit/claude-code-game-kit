@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
 # platform_steam.gd
-# Purpose : The Steam backend for the platform layer (#84, docs/PLATFORM.md) through GodotSteam (MIT; the
+# Purpose : The Steam backend for the platform layer (#84, docs/PLATFORM.md) through GodotSteam (MIT, verify; the
 #           GDExtension or the precompiled editor), used only when GodotSteam is installed and Steam answers.
 #           Without it, PlatformSteam.make() returns null and the game runs the null backend exactly as before.
 # Usage   : var backend: Object = PlatformSteam.make(defs, Shell.data_dir)   # null: no GodotSteam or no Steam

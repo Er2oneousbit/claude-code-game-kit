@@ -41,9 +41,17 @@
  * data/achievements.json, rich presence, cloud-save hooks and the store
  * overlay's pause. Every game runs the null backend, which records what a
  * store would have been sent; docs/PLATFORM.md explains the Steam side.
- * Without data/achievements.json it does nothing.
- * No plugin commands and no parameters: call GamePlatform.service from a
- * Script command or your own plugin.
+ * It reads data/achievements.json only when the parameter "Achievements"
+ * is on (a probe for a missing file would be a 404, which the smoke test
+ * and the console count as an error); off, it does nothing.
+ * No plugin commands: call GamePlatform.service from a Script command or
+ * your own plugin.
+ *
+ * @param achievements
+ * @text Achievements
+ * @desc On: load data/achievements.json (create it first, docs/PLATFORM.md). Off: the layer does nothing.
+ * @type boolean
+ * @default false
  */
 
 (() => {
@@ -788,18 +796,22 @@
             return GreenworksBackend.make(gw, defs, store) ?? undefined;
         };
         GamePlatform.service = new PlatformService(store, null);
-        // data/achievements.json is optional: a missing file keeps the service that does nothing
-        const xhr = new XMLHttpRequest();
-        xhr.open("GET", GamePlatform.ACHIEVEMENTS_URL);
-        xhr.overrideMimeType("application/json");
-        xhr.onload = () => {
-            if (xhr.status < 400 && xhr.responseText) {
-                const backend = steamBackend(achievementsLoad(xhr.responseText).defs);
-                GamePlatform.service = new PlatformService(store, xhr.responseText, backend);
-            }
-        };
-        xhr.onerror = () => {};
-        xhr.send();
+        // data/achievements.json only when the plugin parameter says the game has one: probing for a missing file
+        // is an HTTP 404, a console error MZ's smoke test (and a player's F8 console) counts against the game
+        const wanted = PluginManager.parameters("GamePlatform").achievements === "true";
+        const xhr = wanted ? new XMLHttpRequest() : null;
+        if (xhr) {
+            xhr.open("GET", GamePlatform.ACHIEVEMENTS_URL);
+            xhr.overrideMimeType("application/json");
+            xhr.onload = () => {
+                if (xhr.status < 400 && xhr.responseText) {
+                    const backend = steamBackend(achievementsLoad(xhr.responseText).defs);
+                    GamePlatform.service = new PlatformService(store, xhr.responseText, backend);
+                }
+            };
+            xhr.onerror = () => {};
+            xhr.send();
+        }
 
         const updateMain = SceneManager.updateMain;
         SceneManager.updateMain = function () {
