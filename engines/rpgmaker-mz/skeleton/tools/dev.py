@@ -70,6 +70,7 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` also makes autotiles, battle backs,
 #           parallaxes and maps (data/MapNNN.json with its tileset and MapInfos entries, #286)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): GamePlatform in OWN_PLUGINS (the platform layer, #84)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -88,7 +89,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIN_NODE = (22, 12)
 GAME_DIR = "game"                          # where the MZ project lives
 OWN_PLUGINS = ("GameCore", "GameAudio", "GameJuice", "GameShell", "GameAccess",   # the game's plugins, in load
-               "GameMain")                                                     # order (setup registers them)
+               "GamePlatform", "GameMain")                                     # order (setup registers them)
 CORE_FILES = ("index.html", "js/main.js", "js/rmmz_core.js", "js/rmmz_managers.js", "js/rmmz_objects.js",
               "js/rmmz_scenes.js", "js/rmmz_sprites.js", "js/rmmz_windows.js", "data/System.json")
 DATABASE = ("Actors", "Animations", "Armors", "Classes", "CommonEvents", "Enemies", "Items", "MapInfos",

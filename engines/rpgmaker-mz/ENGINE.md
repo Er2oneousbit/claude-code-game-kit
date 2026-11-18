@@ -28,6 +28,9 @@ game/js/plugins/GameShell.js  the kit's shell rules (settings with repair, effec
 game/js/plugins/GameAccess.js MZ glue: the settings in MZ's config file, five options on MZ's Options screen (more on
                           request), MZ's Shake Screen, Flash Screen and battle animation flashes through them, window line
                           height with Text Size, the save version in MZ's save contents (verify in MZ).
+game/js/plugins/GamePlatform.js the platform layer (docs/PLATFORM.md: achievements from game/data/achievements.json,
+                          stats, presence, cloud hooks; null backend), golden-tested; its MZ glue flushes on MZ's menu,
+                          a save and quit, and asks for the menu when a store overlay opens over the map.
 game/js/plugins/GameMain.js   MZ glue: plugin commands, scene hooks, the BOOT_OK marker. Yours.
 game/js/plugins/KitShaders.js the kit's shader recipes as PIXI filters (generated: tools/shaders/; turn it on in
                           the Plugin Manager to use it)
@@ -57,7 +60,7 @@ run against a real MZ project **(verify)**.
 - **Plugin parameters and command arguments are strings:** convert with `Number(...)`, `=== "true"`, `JSON.parse(...)`.
 - **Version:** the `version` in package.json (SOP-06); show it where you like (a title-screen plugin line is enough).
 - Errors at runtime: `console.error` reaches the smoke test, which fails on it.
-- **Plugin order:** GameCore, GameAudio, GameJuice, GameShell, GameAccess, GameMain (`OWN_PLUGINS` in `tools/dev.py`;
+- **Plugin order:** GameCore, GameAudio, GameJuice, GameShell, GameAccess, GamePlatform, GameMain (`OWN_PLUGINS` in `tools/dev.py`;
   `setup` registers them, `check` holds the order). The player's settings: `GameAccess.settings()`; shake and flash
   in your own plugins: `GameJuice.Shake` with `GameShell.effectiveShake(GameAccess.settings())`, and MZ's own
   `$gameScreen.startShake` / `startFlash`, which already follow them.
