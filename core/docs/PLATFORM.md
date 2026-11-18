@@ -158,7 +158,7 @@ The adapters are in section 6. A plain browser build has no Steam and keeps the 
 Every port runs every case of data/golden/platform.json, owns one service (the rules, the backend, the cached
 state file), flushes when the pause menu opens and on quit, gets `saved()` from its save store after the atomic
 write, and opens the pause menu when the store overlay opens over play. With no data/achievements.json nothing is
-written and every call answers `unknown`. `python tools/doctor.py` says, once the file exists, where your engine's
+written and every call answers `unknown`. RPG Maker MZ reads game/data/achievements.json only once its GamePlatform plugin parameter Achievements is on (a request for a missing file would be a 404). `python tools/doctor.py` says, once the file exists, where your engine's
 adapter expects the SDK. Bindings and licences were read on 2026-11-18 (E163); recheck them before you ship
 **(verify)**.
 
