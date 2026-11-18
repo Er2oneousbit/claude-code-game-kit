@@ -116,11 +116,12 @@ the first importers left open (corners4 terrain layers, isometric placement, the
 extra kinds per engine) and every importer follows them on the golden maps. Still true: a Godot map scene painted
 before #307 keeps its old variants until its pack runs again; the Godot importer's TileSet has no terrain sets (paint
 by hand with Dotwork's own TileSet), and the Godot starter draws no Dotwork art; a corners4 terrain shape thinner than
-2 cells has no tile (the validator refuses the map; Godot's own painter improvises a one-corner tile there); RPG Maker
-MZ converts no maps. Per engine (additive
-blending in Bevy and Unreal, Unreal tile animation, Niagara and font kerning, MZ autotiles, maps and parallaxes,
-Phaser multi-page fonts, and others):
-[#286](https://github.com/Er2oneousbit/claude-code-game-kit/issues/286). The importers ran on the golden pack and the
+2 cells has no tile (the validator refuses the map; Godot's own painter improvises a one-corner tile there). Closed
+in 0.16 ([#286](https://github.com/Er2oneousbit/claude-code-game-kit/issues/286)): additive blending in Bevy and
+Unreal, Unreal tile animation (through the GameKitShell plugin) and font x offsets, MZ autotiles, maps, battle backs
+and parallaxes, Phaser fonts of several pages. Still open there: Unreal kerning pairs, Niagara from the particles
+JSON and a lit Paper2D material, MZ's sides4 and corners4 terrain as autotiles (placed as plain tiles), URP's additive
+material on Unity, and every MZ layout and the Unreal tile animation watched in the real editor or game. The importers ran on the golden pack and the
 model-free example packs, not yet on a real game's art.
 
 ### Audio (Wavesmith) follow-ups
