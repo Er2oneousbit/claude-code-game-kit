@@ -24,6 +24,8 @@
 //   service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): TakeStoreFailure and StoreFailed: a store that failed
+//           after it was accepted (Steam's UserStatsStored) goes back on the queue
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -70,6 +72,9 @@ namespace GameKit
 		virtual bool Send(const TArray<TSharedPtr<FJsonValue>>& Call) = 0;
 		/** Each frame: run the SDK's callbacks. Set to the new state when the store overlay opened or closed. */
 		virtual TOptional<bool> Update() { return {}; }
+		/** A store that failed after Send(["store_stats"]) returned true (Steam's UserStatsStored): its set_stat and
+		 *  set_achievement calls, oldest first; unset when none. */
+		virtual TOptional<TArray<TSharedPtr<FJsonValue>>> TakeStoreFailure() { return {}; }
 	};
 
 	/** The backend every game runs by default: records every call and keeps what a store would hold. */
@@ -118,6 +123,9 @@ namespace GameKit
 		FPlatformOut Connect(const TSharedPtr<FJsonObject>& Remote);
 		FPlatformOut Disconnect();
 		FPlatformOut ResetAll();
+		/** A store the backend accepted failed later: the same as a refused store_stats. The batch's stats and unlocks
+		 *  are pending again and the layer is offline until Connect(). */
+		FPlatformOut StoreFailed(const TArray<TSharedPtr<FJsonValue>>& Batch);
 
 		/** What the state file holds (and what the golden steps compare). */
 		TSharedRef<FJsonObject> State() const;
@@ -179,7 +187,8 @@ namespace GameKit
 		FString ClearPresence() { return After(Rules.ClearPresence()); }
 		FString Saved(const FString& Path) { return After(Rules.Saved(Path)); }
 		FString Overlay(bool bOverlayActive, const FString& Screen) const { return OverlayAction(bOverlayActive, Screen); }
-		TOptional<bool> Update() { return Backend->Update(); }
+		/** The backend's callbacks; a store that failed late goes back on the queue, offline. The overlay's change. */
+		TOptional<bool> Update();
 		IPlatformBackend& GetBackend() { return *Backend; }
 		FPlatformRules& GetRules() { return Rules; }
 		/** What went wrong while loading or writing (the shell logs it). */

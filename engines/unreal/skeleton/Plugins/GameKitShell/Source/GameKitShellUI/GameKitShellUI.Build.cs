@@ -29,8 +29,9 @@ public class GameKitShellUI : ModuleRules
 		// The readable font and its licence, staged loose next to the packaged game (GameKitShellTheme.cpp reads it)
 		RuntimeDependencies.Add("$(PluginDir)/Resources/Fonts/...", StagedFileType.NonUFS);
 		// The platform layer's Steam backend (docs/PLATFORM.md): off by default, and the game builds and runs on the
-		// null backend. Set WithSteam to true (or GAMEKIT_STEAM=1 in the build's environment) to build it against the
-		// Steamworks SDK that ships with Unreal (the engine's Steamworks module).
+		// null backend. Set WithSteam to true to build it against the Steamworks SDK that ships with Unreal (the
+		// engine's Steamworks module). GAMEKIT_STEAM=1 in the build's environment works too, but UnrealBuildTool only
+		// rereads this file when it changes: after switching that way, touch this file (or the build keeps the old one).
 		const bool WithSteam = false;
 		bool bSteam = WithSteam || System.Environment.GetEnvironmentVariable("GAMEKIT_STEAM") == "1";
 		PublicDefinitions.Add("GAMEKIT_STEAM=" + (bSteam ? "1" : "0"));
