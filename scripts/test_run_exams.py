@@ -24,6 +24,7 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a uv probe past its limit is a SKIP, not a hang; a
 #           forced env var survives the live-var hiding
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --coverage (#282)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the l10n row's live variable L10N_LIVE_URL (#87)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -502,7 +503,7 @@ elif args[0] == "json":
         self.assertTrue(all(r.python == "3.11" for r in rows if r.name in floor), "bpy 4.2 wheels are cp311 only")
         live = sorted(r.name for r in rows if r.live)
         self.assertEqual(live, ["bozzetto_live", "render_sprites"], "the opt-in exams")
-        self.assertEqual(sorted({v for r in rows for v in r.env}), ["ASEPRITE_BIN", "PIXELORAMA_BIN", "REAPER_BIN"])
+        self.assertEqual(sorted({v for r in rows for v in r.env}), ["ASEPRITE_BIN", "L10N_LIVE_URL", "PIXELORAMA_BIN", "REAPER_BIN"])
 
     def test_needs_text_reads_well(self):
         self.assertEqual(rx.Exam("x/test_a.py").needs_text(), "standard library")
