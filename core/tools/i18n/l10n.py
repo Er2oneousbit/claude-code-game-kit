@@ -224,17 +224,22 @@ def nothing_to_translate(text):
 
 
 def merge_pending(units, old_units):
-    """Keep drafts and review work from an older file for lines still untranslated in the table and unchanged."""
+    """Keep work from an older file that the table does not have yet: drafts and reviewed lines for untranslated
+    keys, and a translator's change to an already translated line that was not imported. Only for lines whose
+    English is unchanged (otherwise the old work translated other text)."""
     old = {u.key: u for u in old_units}
     kept = 0
     for u in units:
         o = old.get(u.key)
-        if o and not u.target and o.source == u.source and o.target:
+        if not o:
+            continue
+        u.other_notes = o.other_notes
+        if o.source != u.source or not o.target or o.target == u.target:
+            continue
+        if not u.target or o.state in ex.STATES_IMPORTED:
             u.target, u.state, u.qualifier = o.target, o.state, o.qualifier
-            u.tool_notes, u.other_notes = o.tool_notes, o.other_notes
+            u.tool_notes = o.tool_notes
             kept += 1
-        elif o:
-            u.other_notes = o.other_notes
     return kept
 
 
@@ -259,7 +264,11 @@ def line_problems(source, target, max_len):
 # ---- export ----------------------------------------------------------------------------------------------------
 def cmd_export(proj, a):
     check_locale(a.locale)
-    path = proj.exchange_path(a.locale, a.out, a.format or "xliff")
+    fmt = a.format
+    if not fmt and not a.out:     # keep the format a file already has (fr.csv stays a CSV)
+        fmt = "csv" if (proj.work / f"{a.locale}.csv").is_file() and \
+            not (proj.work / f"{a.locale}.xlf").is_file() else "xliff"
+    path = proj.exchange_path(a.locale, a.out, fmt)
     units = build_units(proj, a.locale)
     kept = 0
     if path.is_file():
@@ -511,7 +520,9 @@ def cmd_import(proj, a):
             if u.target or u.is_draft():
                 pending.append(u.key)
             continue
-        errors, warns = line_problems(want, u.target, u.max_len or proj.context.get(u.key, {}).get("max"))
+        # the game's own budget wins: a maxwidth in the translator's file can be edited
+        budget = proj.context.get(u.key, {}).get("max") or u.max_len
+        errors, warns = line_problems(want, u.target, budget)
         if errors:
             refused.append(f"{u.key}: {'; '.join(errors)}: {u.target!r}")
             continue
@@ -685,7 +696,9 @@ def parser():
                    help="lmstudio, ollama, llamacpp (OpenAI-compatible servers on this machine), openai (--url), "
                         "or command (--command)")
     p.add_argument("--url", default=None, help="an OpenAI-compatible base URL, e.g. http://127.0.0.1:1234/v1")
-    p.add_argument("--model", default=None, help="the model id (default: the first the server lists)")
+    p.add_argument("--model", default=None,
+                   help="the model id (default: the first the server lists; LM Studio lists every downloaded model, "
+                        "so name the one you loaded)")
     p.add_argument("--command", nargs="+", default=None,
                    help="a program that reads the JSON request on stdin and prints the draft (or {\"text\": ...})")
     p.add_argument("--key", action="append", default=[], help="draft only this line (repeatable)")
@@ -711,8 +724,8 @@ def parser():
                        help="every table: placeholders, plurals, lengths; the pseudo-locale; the fonts' glyphs")
     p.add_argument("--locale", action="append", default=[], help="only this table (repeatable)")
     p.add_argument("--font", action="append", default=[],
-                   help="a font to check (.ttf .otf .ttc .fnt or a Dotwork glyph file; default: every font the "
-                        "game has)")
+                   help="a font to check (.ttf .otf .ttc .fnt or a Dotwork glyph file; default: every TrueType "
+                        "and OpenType font the game has; a built .fnt only when named, many are symbols or digits)")
     p.add_argument("--skip-font", action="append", default=[], metavar="NAME",
                    help="leave out a found font by file name (a symbol or debug font)")
     p.add_argument("--no-fonts", action="store_true", help="skip the font check")

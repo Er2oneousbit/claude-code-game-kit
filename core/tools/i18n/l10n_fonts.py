@@ -14,7 +14,8 @@
 #           breaks, tabs and other controls, and format characters such as zero-width joiners, except the soft
 #           hyphen (drawn when a line breaks there): the same rule as Dotwork's fonts-check. The text is checked in
 #           its composed form (NFC). WOFF and WOFF2 are not read (they are web wrappers of these fonts).
-#           discover() skips build, cache and dependency folders by their path relative to the project.
+#           discover() finds TrueType / OpenType files only (a game's Dotwork .fnt fonts are often damage digits or
+#           symbols, so they are checked when named) and skips build, cache and dependency folders.
 #           Standard library only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
@@ -30,7 +31,7 @@ import unicodedata
 from pathlib import Path
 
 # ---- constants -------------------------------------------------------------------------------------------------
-FONT_EXTS = (".ttf", ".otf", ".ttc", ".fnt")
+FONT_EXTS = (".ttf", ".otf", ".ttc")   # found by discover(); a built .fnt is often digits or symbols: --font
 SKIP_CATEGORIES = ("Cc", "Zl", "Zp", "Cf")
 CHECKED_FORMAT = "­"   # soft hyphen
 # folders a game never ships fonts from (dependencies, engine caches, build output), relative to the project root

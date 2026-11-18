@@ -14,7 +14,9 @@
 #           Notes from="l10n.py" are the tool's own (rewritten each time); other notes (a translator's) are kept.
 #           A file with a DOCTYPE or an entity declaration is refused before parsing (a translator's file is
 #           untrusted input). CSV is written UTF-8 with a byte order mark so Excel reads the accents; its second
-#           row (key "@export") carries the record. Standard library only.
+#           row (key "@export") carries the record. In a CSV, a target typed into a row whose state is empty or
+#           needs-translation counts as translated; an edited draft row stays a draft until its state is changed to
+#           translated (or l10n.py review accepts it). Standard library only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 #
@@ -141,7 +143,7 @@ def from_xliff(text):
         root = ET.fromstring(text.encode("utf-8"))
     except ET.ParseError as e:
         raise ValueError(f"not well-formed XML ({e})")
-    q = lambda tag: f"{{{NS}}}{tag}"   # noqa: E731
+    q = lambda tag: "{" + NS + "}" + tag   # noqa: E731  (an f-string here reads as a scaffold placeholder)
     if root.tag != q("xliff"):
         raise ValueError("not an XLIFF 1.2 file (root element is not xliff in the 1.2 namespace)")
     files = root.findall(q("file"))

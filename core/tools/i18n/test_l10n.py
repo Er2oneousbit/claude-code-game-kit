@@ -361,6 +361,33 @@ class L10nExam(unittest.TestCase):
         self.assertEqual(rc, 2, out)
         self.assertIn("DOCTYPE or ENTITY", out)
 
+    def test_budget_and_reexport_keep_the_games_rules_and_the_translators_work(self):
+        self.cli("export", "fr")
+        path = self.tmp / "l10n" / "fr.xlf"
+        units, meta = ex.read(path)
+        by = {u.key: u for u in units}
+        by["menu.play"].max_len = 999                                   # the file's budget edited
+        by["menu.play"].target, by["menu.play"].state = "Commencer la partie", "translated"
+        by["language.name"].target = "Français (France)"              # a reviewed fix, not imported yet
+        ex.write(path, units, meta)
+        rc, out = self.cli("import", "fr", "--dry-run")
+        self.assertEqual(rc, 1, out)
+        self.assertIn("menu.play: 19 characters, the budget is 8", out)   # context.json's 8 wins
+        rc, out = self.cli("export", "fr")
+        self.assertIn("2 drafts or reviews kept", out)
+        self.assertEqual(self.units("fr")["language.name"].target, "Français (France)")
+        # a CSV stays a CSV when exported again without --format
+        os.remove(path)
+        self.cli("export", "de", "--format", "csv")
+        self.cli("export", "de")
+        self.assertFalse((self.tmp / "l10n" / "de.xlf").exists())
+
+    def test_no_scaffold_placeholder_in_the_tool(self):
+        # new_game.py fails a scaffold on a doubled brace pair around a capital name (an f-string once made one)
+        import re
+        for f in sorted(HERE.glob("*.py")):
+            self.assertIsNone(re.search(r"\{\{[A-Z_]+\}\}", get(f)), f.name)
+
     def test_import_keeps_target_only_keys_and_french_plurals(self):
         self.cli("export", "fr")
         path = self.tmp / "l10n" / "fr.xlf"
@@ -453,7 +480,7 @@ class L10nExam(unittest.TestCase):
             fonts.font_chars(bad)
         (self.tmp / "node_modules" / "x").mkdir(parents=True)
         (self.tmp / "node_modules" / "x" / "skip.ttf").write_bytes(make_ttf("A"))
-        self.assertEqual([p.name for p in fonts.discover(self.tmp)], ["ui.ttf", "bad.ttf", "f.fnt", "t.ttf"])   # assets/ sorts first
+        self.assertEqual([p.name for p in fonts.discover(self.tmp)], ["ui.ttf", "bad.ttf", "t.ttf"])   # assets/ first; no .fnt
 
     def test_kit_shell_fonts(self):
         atk = sorted((KIT / "engines").glob("*/skeleton/**/AtkinsonHyperlegible-Regular.ttf"))
