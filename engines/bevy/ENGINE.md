@@ -81,6 +81,7 @@ src/app.rs         plugin sets per run mode (window, headless smoke, capture, te
 src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
                    juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter, feel (the SOP-18 recipe helpers)
+                   platform (achievements, stats, presence, cloud hooks: docs/PLATFORM.md; shell.platform)
                    shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat,
                    charmap (which characters a font can draw)
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
@@ -104,6 +105,7 @@ src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, wi
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders` (cargo's name: `<slug>_shader_check`)
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
+tests/platform.rs  the platform layer against data/golden/platform.json; the cached state file and the save hook
 tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads
 tests/character.rs the golden rigged character (data/golden/character/) loads, walks and switches clips, headless
 data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand

@@ -20,6 +20,8 @@
 //   write_to(path, data): refuse when path or its .bak holds a newer save -> path is a good save? copy it to <path>.bak
 //   -> atomic write of the new envelope
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): write_then(path, data, on_saved): the platform
+//           layer's cloud hook runs with the file name after the save is on disk (#84)
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -176,6 +178,19 @@ pub fn write_to(path: &Path, data: &Value) -> Result<(), String> {
     let env = json!({"format": FORMAT, "version": SAVE_VERSION, "data": data});
     let text = serde_json::to_string_pretty(&env).map_err(|e| e.to_string())?;
     atomic_file::write(path, text.as_bytes()).map_err(|e| format!("cannot write {}: {e}", path.display()))
+}
+
+/// write_to, then on_saved(file name) once the save is on disk: Shell::save_slot hands the name to the platform
+/// layer (shell.platform.saved), so a cloud-API game can send the file (docs/PLATFORM.md).
+pub fn write_then(path: &Path, data: &Value, on_saved: impl FnOnce(&str)) -> Result<(), String> {
+    write_to(path, data)?;
+    on_saved(
+        &path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+    );
+    Ok(())
 }
 
 #[cfg(test)]
