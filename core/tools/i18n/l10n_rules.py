@@ -11,9 +11,13 @@
 # Notes   : Placeholders are {name} and the printf codes %s %d %i %f %% (the pseudo-locale keeps the same ones), so
 #           a translation must keep the same multiset of them. Lengths count the visible characters: placeholders
 #           count 0, because what they turn into is not known here. Plural categories are CLDR's cardinal ones for
-#           whole numbers; the "many" CLDR gives French, Spanish, Italian, Portuguese and Catalan for compact
-#           millions is left out (the kit's plural helper never picks it). Standard library only.
+#           whole numbers, the same table as the engines' plural() (tools/golden_vectors.py, CLDR 46): French,
+#           Spanish, Italian, Portuguese and Catalan have a "many" for whole millions, and Czech, Slovak and
+#           Lithuanian have none (their CLDR "many" is for fractions only). Standard library only.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the categories agree with the engines' CLDR plural()
+#           (fr es it pt ca gain many; cs sk lt lose it), every language here has a helper rule, a key's @clean
+#           variant (#207) belongs to its plural category
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -29,15 +33,17 @@ import re
 # any {word} counts, not only ASCII names: a model that translated {name} into {имя} must be caught
 PLACEHOLDER = re.compile(r"\{\{?[^{}\s]+\}?\}|%[sdif%]")
 CATEGORY_NAMES = ("zero", "one", "two", "few", "many", "other")
-# CLDR cardinal plural categories for whole numbers, as CLDR's plural rules chart lists them (written from CLDR 44,
-# not live-checked here: verify against unicode.org/cldr/charts/latest/supplemental/language_plural_rules.html
-# before shipping a language). A language not listed here gets a warning and the English-like pair.
+# CLDR cardinal plural categories a whole number can reach, plus "other" (the fallback form every plural set
+# needs): CLDR 46 common/supplemental/plurals.xml, swept over n = 0..2000 and the millions (2026-11-17). The same
+# languages and categories as PLURAL_FAMILIES in tools/golden_vectors.py (test_l10n.py checks they agree). A
+# language not listed here gets a warning and the English-like pair.
 CLDR = {
     ("other",): "ja zh ko vi th id ms lo my km yo ig jv su",
-    ("one", "other"): "en de nl sv da nb nn no fi et it es pt ca gl el hu tr bg eu af sq ka kk ky mn az uz ur hi bn "
-                      "fa ta te ml kn mr gu sw fil is fr hy",
-    ("one", "few", "other"): "hr sr bs ro mo",
-    ("one", "few", "many", "other"): "ru uk be pl cs sk lt",
+    ("one", "other"): "en de nl sv da nb nn no fi et gl el hu tr bg eu af sq ka kk ky mn az uz ur hi bn "
+                      "fa ta te ml kn mr gu sw fil tl is mk hy",
+    ("one", "many", "other"): "fr es it pt ca",
+    ("one", "few", "other"): "hr sr bs ro mo cs sk lt",
+    ("one", "few", "many", "other"): "ru uk be pl",
     ("zero", "one", "other"): "lv",
     ("one", "two", "other"): "he",
     ("one", "two", "few", "other"): "sl",
@@ -45,9 +51,14 @@ CLDR = {
     ("zero", "one", "two", "few", "many", "other"): "ar cy",
 }
 CATEGORIES = {lang: cats for cats, langs in CLDR.items() for lang in langs.split()}
-# Which languages the kit's plural helper (every engine's i18n code) has a rule for. Anything else runs on its
-# English-like default (one for exactly 1), so a language that needs other categories also needs a rule added.
-HELPER_RULES = {"fr", "ja", "zh", "ko"}
+# Which languages the kit's plural helper (every engine's i18n code, CLDR 46) has a rule for: every one above.
+# Anything else runs on its English-like default (one for exactly 1), so a language that needs other categories
+# also needs a rule added (tools/golden_vectors.py first, then every port).
+HELPER_RULES = set(CATEGORIES)
+# Forms only a whole million reaches (fr "1 000 000 de coups"): exported for the translator, but a table without
+# them is complete, because every engine shows the .other form when a form is missing
+RARE_CATEGORIES = {lang: ("many",) for lang in "fr es it pt ca".split()}
+CLEAN_SUFFIX = "@clean"       # a key's clean-language variant (#207): apples.one@clean is apples.one's
 # What a category means, for translators (an English note next to each plural line).
 CATEGORY_HINT = {
     "zero": "zero (0 in some languages)", "one": "one (1, and in some languages 21, 31 ...)",
@@ -107,7 +118,10 @@ def visible_len(text):
 
 # ---- plurals ---------------------------------------------------------------------------------------------------
 def split_plural(key):
-    """'demo.hits.one' -> ('demo.hits', 'one'); a key without a category suffix -> (key, None)."""
+    """'demo.hits.one' -> ('demo.hits', 'one'); 'demo.hits.one@clean' too (its clean variant); a key without a
+    category suffix -> (key, None)."""
+    if key.endswith(CLEAN_SUFFIX):
+        key = key[:-len(CLEAN_SUFFIX)]
     base, _, last = key.rpartition(".")
     if base and last in CATEGORY_NAMES:
         return base, last
@@ -118,6 +132,8 @@ def plural_groups(table):
     """{base: [categories in table order]} for every base that has an .other key and at least one more category."""
     groups = {}
     for key in table:
+        if key.endswith(CLEAN_SUFFIX):
+            continue                                   # a clean variant is not a category of its own
         base, cat = split_plural(key)
         if cat:
             groups.setdefault(base, []).append(cat)
@@ -127,6 +143,15 @@ def plural_groups(table):
 def categories(locale):
     """CLDR's categories for the locale's language, or None when the table does not know the language."""
     return CATEGORIES.get(base_language(locale))
+
+
+def required_categories(locale):
+    """The categories a finished plural group must have: categories() without the rare ones (None when unknown)."""
+    cats = categories(locale)
+    if cats is None:
+        return None
+    rare = RARE_CATEGORIES.get(base_language(locale), ())
+    return tuple(c for c in cats if c not in rare)
 
 
 def helper_gap(locale):

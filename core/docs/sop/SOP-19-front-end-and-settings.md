@@ -41,6 +41,11 @@ values in `data/golden/shell.json` that every port's tests check (K01).
   says it sets the window size. `smoke --drive display` runs the whole path headless.
 - Every setting is saved and restored (F37). Machine-specific settings (resolution, vsync) stay out of cloud sync
   (E79).
+- Content switches (`content` section, rows on the Accessibility tab): `content.blood` (on by default; the game's
+  blood effects, `blood_enabled(settings)`, SOP-18 section 3) and `content.clean_language` (off by default: text as
+  written; section 5 step 8). Both load like any other field (a file from before them gets the defaults). A game
+  with no blood or no strong language hides the row with `SHOW_BLOOD_SETTING` or `SHOW_LANGUAGE_SETTING` = false, so
+  no switch does nothing.
 
 ## 3. Saves (standard practice, proven by K01)
 1. Every save is an envelope `{"format": "save", "version": N, "data": {...}}`. The version starts at 1 on day one
@@ -70,8 +75,12 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 1. Every visible string goes through `tr(key)` from `data/i18n/<locale>.json`; the fallback chain is the locale, its
    base language, then English, then the key itself (a missing string shows, so it gets noticed).
 2. Plurals per CLDR category with one message per category, never "item(s)"; `one` does not mean only 1 (French puts
-   0 in `one`) (E86). The kit's plural helper covers English-like, French and CJK rules; add a language's rule from
-   the CLDR chart before shipping it.
+   0 in `one`) (E86). The kit's plural helper (`plural(locale, n)`, the reference's `PLURAL_FAMILIES`) has CLDR 46's
+   whole-number rules for 78 languages, Russian, Polish, Czech, Arabic and Welsh among them (K01: swept over 0 to 2000
+   and the millions against CLDR's own rules file); a language it does not list gets English's rule, so add its rule
+   to `tools/golden_vectors.py` and every port before shipping it. Each locale in the fallback chain uses its own
+   rule, and a table without the form asked for shows its `.other` (a missing French `many`, used only for whole
+   millions, is fine).
 3. Placeholders are named (`{name}`), never concatenated strings.
 4. Run the pseudo-locale before any translation: accented look-alikes, padded by 40 % of the visible characters rounded up (placeholders
    such as `{name}` and `%d` neither change nor count, so short strings grow more), wrapped in brackets (F38). The
@@ -96,6 +105,17 @@ values in `data/golden/shell.json` that every port's tests check (K01).
 7. Before you call a language done, `python tools/check_i18n.py --locale <LANG>` lists every English key the table
    lacks, still has in English, or has with other placeholders (proper names and units pass; add your own with
    `--same`). A partial table is fine while you work: missing keys fall back to English.
+8. Clean language (#207; the reference's `tr` with `clean`, `mask_words`): a line with strong language gets a
+   sibling `<key>@clean` in the same table (`guard.insult@clean`; plurals `hits.one@clean`), and `@` is reserved for
+   it. With `content.clean_language` on, each locale of the chain is asked for `@clean`, then the plain line, before
+   the next locale, so the player's language always wins. Then the filled text, player names and other placeholder
+   values included, is masked with the game's word list (`data/i18n/mature/<locale>.json`, `{"words": [...]}`, the
+   files of every locale in the chain; the kit ships an empty English list): each whole listed word, in any case,
+   becomes a same-length grawlix (`#@$%`). Limits: the mask matches whole words only, so a run of Chinese or Japanese
+   characters with no spaces is one word, and a German compound must be listed as itself; text is not normalized.
+   `check_i18n.py` lists every line that holds a listed word and has no `@clean` (a warning). Subtitles of voiced
+   lines need their own clean line and recording, chosen when the line starts (Wavesmith `dialogue`), never swapped
+   halfway.
 
 ## 6. Display and platforms
 - Pixel art: the kit's 640x360 base scales by whole numbers (2x at 720p, 3x at 1080p, 4x at 1440p); letterbox the rest

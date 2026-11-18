@@ -38,6 +38,9 @@ store description; no policy page is needed for that (verify for your stores).
 - [ ] Physical or retail releases need the regional board directly (ESRB, PEGI, USK, CERO; verify fees and process).
 - [ ] Questions to prepare for any rating: violence (and toward whom), blood, language, sexual content, gambling or loot
       boxes with real money, drugs and alcohol, user interaction (chat), shared location, in-game purchases.
+- [ ] Blood and strong language: the shell's "Blood" and "Clean language" settings (`content.blood`,
+      `content.clean_language`, SOP-18 and SOP-19) are worth having for players, parents and streamers. Do not
+      claim either one changes a rating: the questionnaire asks what the game contains (verify).
 
 ## 5. Business and money (verify each with the platform)
 - [ ] Engine revenue terms (Unreal royalty above its threshold and the Release Form; Unity plan by revenue and funding).

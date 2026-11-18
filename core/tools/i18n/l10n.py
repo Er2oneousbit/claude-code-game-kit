@@ -22,6 +22,8 @@
 #           that marks them translated). Kit tools: standard library only; check_i18n.py next door does the
 #           completeness check before a language ships.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a plural group is complete without its rare forms
+#           (French whole-million many, l10n_rules.required_categories), since every engine falls back to .other
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -565,8 +567,9 @@ def cmd_import(proj, a):
 
 
 def plural_problems(en, table, locale, extras):
-    """{base: [missing keys]} for plural groups the table has started but not finished for this language."""
-    cats = rules.categories(locale) or ("one", "other")
+    """{base: [missing keys]} for plural groups the table has started but not finished for this language (a rare
+    form such as French's whole-million many may be missing: the engines show .other then)."""
+    cats = rules.required_categories(locale) or ("one", "other")
     out = {}
     for base, have in rules.plural_groups(en).items():
         want = [f"{base}.{c}" for c in cats]

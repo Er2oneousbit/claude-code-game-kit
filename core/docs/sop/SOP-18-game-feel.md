@@ -47,6 +47,10 @@ clock or random number generator: the same inputs give the same frames, in tests
   remove or soften it first; if it stays, check a recording with a flash analysis tool (E73 lists the Harding FPA
   test) before release.
 - **Effects never hide information.** A shake or flash must not cover the HUD or a telegraph the player needs to read.
+- **Blood can be turned off.** The shell's `content.blood` setting (on by default, the "Blood" row; #171) is read
+  with `blood_enabled(settings)`. Off means no blood particles, decals or red hit splashes: draw a neutral version
+  in their place (sparks or dust in the hit surface's colour), so a hit still reads. Hit feedback never depends on
+  blood alone. The effect is the game's own; a game with no blood hides the row (`SHOW_BLOOD_SETTING = false`).
 
 ## 4. Tuning (standard practice)
 1. Put every number in the constants block or a data file (`docs/STYLE.md`); expose the important ones in a debug

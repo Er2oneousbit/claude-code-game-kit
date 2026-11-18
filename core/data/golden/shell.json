@@ -32,6 +32,10 @@
      "ui": 1.0,
      "voice": 1.0
     },
+    "content": {
+     "blood": true,
+     "clean_language": false
+    },
     "display": {
      "frame_cap": 0,
      "mode": "windowed",
@@ -115,6 +119,8 @@
    "type": "defaults"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -146,6 +152,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -233,6 +243,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -264,6 +276,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -351,6 +367,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -382,6 +400,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -469,6 +491,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -500,6 +524,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -580,13 +608,15 @@
     },
     "version": 1
    },
-   "input": "{\"version\": 1, \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"language\": \"en\", \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0, \"readable_font\": false, \"line_spacing\": 1.0, \"subtitle_hold\": false, \"timing_scale\": 1.0, \"auto_repeat\": false, \"narration\": false}, \"input\": {\"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}, \"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\"}, \"telemetry\": {\"consent\": \"unset\"}}",
+   "input": "{\"version\": 1, \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"language\": \"en\", \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0, \"readable_font\": false, \"line_spacing\": 1.0, \"subtitle_hold\": false, \"timing_scale\": 1.0, \"auto_repeat\": false, \"narration\": false}, \"input\": {\"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}, \"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\"}, \"telemetry\": {\"consent\": \"unset\"}, \"content\": {\"blood\": true, \"clean_language\": false}}",
    "name": "all defaults",
    "problems": 0,
    "telemetry_allowed": false,
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 0.0,
    "expect": {
     "access": {
@@ -618,6 +648,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -705,6 +739,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -737,6 +773,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -827,6 +867,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -858,6 +900,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -948,6 +994,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -979,6 +1027,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1066,6 +1118,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1097,6 +1151,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1184,6 +1242,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1215,6 +1275,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1302,6 +1366,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1333,6 +1399,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1420,6 +1490,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1451,6 +1523,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1538,6 +1614,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": true,
+   "clean_language": false,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1569,6 +1647,10 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1657,6 +1739,8 @@
    "type": "settings_load"
   },
   {
+   "blood_enabled": false,
+   "clean_language": true,
    "effective_shake": 1.0,
    "expect": {
     "access": {
@@ -1688,6 +1772,383 @@
      "sfx": 1.0,
      "ui": 1.0,
      "voice": 1.0
+    },
+    "content": {
+     "blood": false,
+     "clean_language": true
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"content\": {\"blood\": false, \"clean_language\": true}}",
+   "name": "content switches flipped",
+   "problems": 0,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "blood_enabled": true,
+   "clean_language": false,
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "auto_repeat": false,
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "narration": false,
+     "readable_font": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_hold": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0,
+     "timing_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false,
+     "gore": "max"
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"content\": {\"blood\": \"no\", \"clean_language\": 1, \"gore\": \"max\"}}",
+   "name": "content bad values",
+   "problems": 2,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "blood_enabled": true,
+   "clean_language": false,
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "auto_repeat": false,
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "narration": false,
+     "readable_font": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_hold": false,
+     "subtitle_size": "medium",
+     "subtitles": false,
+     "text_scale": 1.0,
+     "timing_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"content\": \"off\", \"access\": {\"subtitles\": false}}",
+   "name": "content not an object",
+   "problems": 1,
+   "telemetry_allowed": false,
+   "type": "settings_load"
+  },
+  {
+   "blood_enabled": true,
+   "clean_language": false,
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "auto_repeat": false,
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "narration": false,
+     "readable_font": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_hold": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0,
+     "timing_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "content": {
+     "blood": true,
+     "clean_language": false
     },
     "display": {
      "frame_cap": 0,
@@ -1772,6 +2233,130 @@
    "name": "consent given",
    "problems": 0,
    "telemetry_allowed": true,
+   "type": "settings_load"
+  },
+  {
+   "blood_enabled": false,
+   "clean_language": true,
+   "effective_shake": 1.0,
+   "expect": {
+    "access": {
+     "auto_repeat": false,
+     "captions_sfx": false,
+     "colorblind": "none",
+     "difficulty": "normal",
+     "flash_limit": true,
+     "game_speed": 1.0,
+     "hold_to_toggle": false,
+     "line_spacing": 1.0,
+     "narration": false,
+     "readable_font": false,
+     "reduce_motion": false,
+     "shake_scale": 1.0,
+     "speaker_names": true,
+     "subtitle_background": 0.6,
+     "subtitle_barks": false,
+     "subtitle_hold": false,
+     "subtitle_size": "medium",
+     "subtitles": true,
+     "text_scale": 1.0,
+     "timing_scale": 1.0
+    },
+    "audio": {
+     "master": 1.0,
+     "mono": false,
+     "music": 0.8,
+     "sfx": 1.0,
+     "ui": 1.0,
+     "voice": 1.0
+    },
+    "content": {
+     "blood": false,
+     "clean_language": true
+    },
+    "display": {
+     "frame_cap": 0,
+     "mode": "windowed",
+     "resolution": [
+      1920,
+      1080
+     ],
+     "ui_scale": 1.0,
+     "vsync": true
+    },
+    "input": {
+     "bindings": {
+      "attack": [
+       "key:j",
+       "pad:west"
+      ],
+      "interact": [
+       "key:e",
+       "pad:north"
+      ],
+      "jump": [
+       "key:space",
+       "pad:south"
+      ],
+      "move_down": [
+       "key:s",
+       "pad:dpad_down"
+      ],
+      "move_left": [
+       "key:a",
+       "pad:dpad_left"
+      ],
+      "move_right": [
+       "key:d",
+       "pad:dpad_right"
+      ],
+      "move_up": [
+       "key:w",
+       "pad:dpad_up"
+      ],
+      "pause": [
+       "key:escape",
+       "pad:start"
+      ],
+      "ui_accept": [
+       "key:enter",
+       "pad:south"
+      ],
+      "ui_cancel": [
+       "key:escape",
+       "pad:east"
+      ],
+      "ui_down": [
+       "key:down",
+       "pad:dpad_down"
+      ],
+      "ui_left": [
+       "key:left",
+       "pad:dpad_left"
+      ],
+      "ui_right": [
+       "key:right",
+       "pad:dpad_right"
+      ],
+      "ui_up": [
+       "key:up",
+       "pad:dpad_up"
+      ]
+     },
+     "deadzone": 0.2,
+     "glyphs": "auto",
+     "invert_y": false
+    },
+    "language": "en",
+    "telemetry": {
+     "consent": "unset"
+    },
+    "version": 1
+   },
+   "input": "{\"content\": {\"blood\": false, \"clean_language\": true}, \"version\": 1, \"language\": \"en\", \"display\": {\"mode\": \"windowed\", \"vsync\": true, \"frame_cap\": 0, \"resolution\": [1920, 1080], \"ui_scale\": 1.0}, \"audio\": {\"master\": 1.0, \"music\": 0.8, \"sfx\": 1.0, \"ui\": 1.0, \"voice\": 1.0, \"mono\": false}, \"access\": {\"text_scale\": 1.0, \"subtitles\": true, \"subtitle_size\": \"medium\", \"subtitle_background\": 0.6, \"speaker_names\": true, \"subtitle_barks\": false, \"captions_sfx\": false, \"colorblind\": \"none\", \"reduce_motion\": false, \"shake_scale\": 1.0, \"flash_limit\": true, \"hold_to_toggle\": false, \"difficulty\": \"normal\", \"game_speed\": 1.0, \"readable_font\": false, \"line_spacing\": 1.0, \"subtitle_hold\": false, \"timing_scale\": 1.0, \"auto_repeat\": false, \"narration\": false}, \"input\": {\"deadzone\": 0.2, \"invert_y\": false, \"glyphs\": \"auto\", \"bindings\": {\"ui_up\": [\"key:up\", \"pad:dpad_up\"], \"ui_down\": [\"key:down\", \"pad:dpad_down\"], \"ui_left\": [\"key:left\", \"pad:dpad_left\"], \"ui_right\": [\"key:right\", \"pad:dpad_right\"], \"ui_accept\": [\"key:enter\", \"pad:south\"], \"ui_cancel\": [\"key:escape\", \"pad:east\"], \"move_left\": [\"key:a\", \"pad:dpad_left\"], \"move_right\": [\"key:d\", \"pad:dpad_right\"], \"move_up\": [\"key:w\", \"pad:dpad_up\"], \"move_down\": [\"key:s\", \"pad:dpad_down\"], \"jump\": [\"key:space\", \"pad:south\"], \"attack\": [\"key:j\", \"pad:west\"], \"interact\": [\"key:e\", \"pad:north\"], \"pause\": [\"key:escape\", \"pad:start\"]}}, \"telemetry\": {\"consent\": \"unset\"}}",
+   "name": "content switches survive a save and a load",
+   "problems": 0,
+   "telemetry_allowed": false,
    "type": "settings_load"
   },
   {
@@ -3351,7 +3936,7 @@
     [
      "pt-BR",
      0,
-     "other",
+     "one",
      "0 apples"
     ],
     [
@@ -3397,6 +3982,2507 @@
     }
    },
    "type": "plural"
+  },
+  {
+   "key": "hits",
+   "name": "CLDR forms, each locale with its own rule, other when a form is missing",
+   "points": [
+    [
+     "ru",
+     1,
+     "one",
+     "1 удар"
+    ],
+    [
+     "ru",
+     3,
+     "few",
+     "3 удара"
+    ],
+    [
+     "ru",
+     5,
+     "many",
+     "5 ударов"
+    ],
+    [
+     "ru",
+     11,
+     "many",
+     "11 ударов"
+    ],
+    [
+     "ru",
+     21,
+     "one",
+     "21 удар"
+    ],
+    [
+     "ru",
+     22,
+     "few",
+     "22 удара"
+    ],
+    [
+     "ru",
+     25,
+     "many",
+     "25 ударов"
+    ],
+    [
+     "ru",
+     101,
+     "one",
+     "101 удар"
+    ],
+    [
+     "ru",
+     111,
+     "many",
+     "111 ударов"
+    ],
+    [
+     "uk",
+     2,
+     "few",
+     "2 удари"
+    ],
+    [
+     "uk",
+     14,
+     "many",
+     "14 ударів"
+    ],
+    [
+     "pl",
+     1,
+     "one",
+     "1 hit"
+    ],
+    [
+     "pl",
+     3,
+     "few",
+     "3 hits"
+    ],
+    [
+     "pl",
+     5,
+     "many",
+     "5 hits"
+    ],
+    [
+     "pl",
+     22,
+     "few",
+     "22 hits"
+    ],
+    [
+     "ar",
+     0,
+     "zero",
+     "لا ضربات"
+    ],
+    [
+     "ar",
+     1,
+     "one",
+     "ضربة واحدة"
+    ],
+    [
+     "ar",
+     2,
+     "two",
+     "ضربتان"
+    ],
+    [
+     "ar",
+     3,
+     "few",
+     "3 ضربات"
+    ],
+    [
+     "ar",
+     11,
+     "many",
+     "11 ضربة"
+    ],
+    [
+     "ar",
+     100,
+     "other",
+     "100 ضربة"
+    ],
+    [
+     "fr",
+     0,
+     "one",
+     "0 coup"
+    ],
+    [
+     "fr",
+     1000000,
+     "many",
+     "1000000 de coups"
+    ],
+    [
+     "cs",
+     4,
+     "few",
+     "4 zásahy"
+    ],
+    [
+     "cs",
+     5,
+     "other",
+     "5 zásahů"
+    ],
+    [
+     "de",
+     1,
+     "one",
+     "1 Treffer"
+    ],
+    [
+     "de",
+     3,
+     "other",
+     "3 Treffer"
+    ],
+    [
+     "ru-RU",
+     2,
+     "few",
+     "2 удара"
+    ],
+    [
+     "ja",
+     1,
+     "other",
+     "1ヒット"
+    ]
+   ],
+   "tables": {
+    "ar": {
+     "hits.few": "{n} ضربات",
+     "hits.many": "{n} ضربة",
+     "hits.one": "ضربة واحدة",
+     "hits.other": "{n} ضربة",
+     "hits.two": "ضربتان",
+     "hits.zero": "لا ضربات"
+    },
+    "cs": {
+     "hits.few": "{n} zásahy",
+     "hits.one": "{n} zásah",
+     "hits.other": "{n} zásahů"
+    },
+    "de": {
+     "hits.one": "{n} Treffer",
+     "hits.other": "{n} Treffer"
+    },
+    "en": {
+     "hits.one": "{n} hit",
+     "hits.other": "{n} hits"
+    },
+    "fr": {
+     "hits.many": "{n} de coups",
+     "hits.one": "{n} coup",
+     "hits.other": "{n} coups"
+    },
+    "ja": {
+     "hits.other": "{n}ヒット"
+    },
+    "ru": {
+     "hits.few": "{n} удара",
+     "hits.many": "{n} ударов",
+     "hits.one": "{n} удар",
+     "hits.other": "{n} удара"
+    },
+    "uk": {
+     "hits.few": "{n} удари",
+     "hits.one": "{n} удар",
+     "hits.other": "{n} ударів"
+    }
+   },
+   "type": "plural"
+  },
+  {
+   "categories": [
+    [
+     "en",
+     [
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "de",
+     [
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "fr",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "fr-CA",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "pt",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "pt-BR",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "pt-PT",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "pt_PT",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "es",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "it",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "ca",
+     [
+      "one",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "ru",
+     [
+      "one",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "RU",
+     [
+      "one",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "uk",
+     [
+      "one",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "be",
+     [
+      "one",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "pl",
+     [
+      "one",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "cs",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "sk",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "lt",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "hr",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "sr",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "ro",
+     [
+      "one",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "lv",
+     [
+      "zero",
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "he",
+     [
+      "one",
+      "two",
+      "other"
+     ]
+    ],
+    [
+     "sl",
+     [
+      "one",
+      "two",
+      "few",
+      "other"
+     ]
+    ],
+    [
+     "ga",
+     [
+      "one",
+      "two",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "ar",
+     [
+      "zero",
+      "one",
+      "two",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "cy",
+     [
+      "zero",
+      "one",
+      "two",
+      "few",
+      "many",
+      "other"
+     ]
+    ],
+    [
+     "is",
+     [
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "fil",
+     [
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "hi",
+     [
+      "one",
+      "other"
+     ]
+    ],
+    [
+     "ja",
+     [
+      "other"
+     ]
+    ],
+    [
+     "zh",
+     [
+      "other"
+     ]
+    ],
+    [
+     "ko",
+     [
+      "other"
+     ]
+    ],
+    [
+     "xx",
+     [
+      "one",
+      "other"
+     ]
+    ]
+   ],
+   "name": "CLDR 46 categories for 0..130",
+   "points": [
+    [
+     "en",
+     -1,
+     "one"
+    ],
+    [
+     "en",
+     -3,
+     "other"
+    ],
+    [
+     "en",
+     211,
+     "other"
+    ],
+    [
+     "en",
+     1011,
+     "other"
+    ],
+    [
+     "en",
+     1000000,
+     "other"
+    ],
+    [
+     "en",
+     2000000,
+     "other"
+    ],
+    [
+     "en",
+     1000001,
+     "other"
+    ],
+    [
+     "en",
+     3000005,
+     "other"
+    ],
+    [
+     "de",
+     -1,
+     "one"
+    ],
+    [
+     "de",
+     -3,
+     "other"
+    ],
+    [
+     "de",
+     211,
+     "other"
+    ],
+    [
+     "de",
+     1011,
+     "other"
+    ],
+    [
+     "de",
+     1000000,
+     "other"
+    ],
+    [
+     "de",
+     2000000,
+     "other"
+    ],
+    [
+     "de",
+     1000001,
+     "other"
+    ],
+    [
+     "de",
+     3000005,
+     "other"
+    ],
+    [
+     "fr",
+     -1,
+     "one"
+    ],
+    [
+     "fr",
+     -3,
+     "other"
+    ],
+    [
+     "fr",
+     211,
+     "other"
+    ],
+    [
+     "fr",
+     1011,
+     "other"
+    ],
+    [
+     "fr",
+     1000000,
+     "many"
+    ],
+    [
+     "fr",
+     2000000,
+     "many"
+    ],
+    [
+     "fr",
+     1000001,
+     "other"
+    ],
+    [
+     "fr",
+     3000005,
+     "other"
+    ],
+    [
+     "fr-CA",
+     -1,
+     "one"
+    ],
+    [
+     "fr-CA",
+     -3,
+     "other"
+    ],
+    [
+     "fr-CA",
+     211,
+     "other"
+    ],
+    [
+     "fr-CA",
+     1011,
+     "other"
+    ],
+    [
+     "fr-CA",
+     1000000,
+     "many"
+    ],
+    [
+     "fr-CA",
+     2000000,
+     "many"
+    ],
+    [
+     "fr-CA",
+     1000001,
+     "other"
+    ],
+    [
+     "fr-CA",
+     3000005,
+     "other"
+    ],
+    [
+     "pt",
+     -1,
+     "one"
+    ],
+    [
+     "pt",
+     -3,
+     "other"
+    ],
+    [
+     "pt",
+     211,
+     "other"
+    ],
+    [
+     "pt",
+     1011,
+     "other"
+    ],
+    [
+     "pt",
+     1000000,
+     "many"
+    ],
+    [
+     "pt",
+     2000000,
+     "many"
+    ],
+    [
+     "pt",
+     1000001,
+     "other"
+    ],
+    [
+     "pt",
+     3000005,
+     "other"
+    ],
+    [
+     "pt-BR",
+     -1,
+     "one"
+    ],
+    [
+     "pt-BR",
+     -3,
+     "other"
+    ],
+    [
+     "pt-BR",
+     211,
+     "other"
+    ],
+    [
+     "pt-BR",
+     1011,
+     "other"
+    ],
+    [
+     "pt-BR",
+     1000000,
+     "many"
+    ],
+    [
+     "pt-BR",
+     2000000,
+     "many"
+    ],
+    [
+     "pt-BR",
+     1000001,
+     "other"
+    ],
+    [
+     "pt-BR",
+     3000005,
+     "other"
+    ],
+    [
+     "pt-PT",
+     -1,
+     "one"
+    ],
+    [
+     "pt-PT",
+     -3,
+     "other"
+    ],
+    [
+     "pt-PT",
+     211,
+     "other"
+    ],
+    [
+     "pt-PT",
+     1011,
+     "other"
+    ],
+    [
+     "pt-PT",
+     1000000,
+     "many"
+    ],
+    [
+     "pt-PT",
+     2000000,
+     "many"
+    ],
+    [
+     "pt-PT",
+     1000001,
+     "other"
+    ],
+    [
+     "pt-PT",
+     3000005,
+     "other"
+    ],
+    [
+     "pt_PT",
+     -1,
+     "one"
+    ],
+    [
+     "pt_PT",
+     -3,
+     "other"
+    ],
+    [
+     "pt_PT",
+     211,
+     "other"
+    ],
+    [
+     "pt_PT",
+     1011,
+     "other"
+    ],
+    [
+     "pt_PT",
+     1000000,
+     "many"
+    ],
+    [
+     "pt_PT",
+     2000000,
+     "many"
+    ],
+    [
+     "pt_PT",
+     1000001,
+     "other"
+    ],
+    [
+     "pt_PT",
+     3000005,
+     "other"
+    ],
+    [
+     "es",
+     -1,
+     "one"
+    ],
+    [
+     "es",
+     -3,
+     "other"
+    ],
+    [
+     "es",
+     211,
+     "other"
+    ],
+    [
+     "es",
+     1011,
+     "other"
+    ],
+    [
+     "es",
+     1000000,
+     "many"
+    ],
+    [
+     "es",
+     2000000,
+     "many"
+    ],
+    [
+     "es",
+     1000001,
+     "other"
+    ],
+    [
+     "es",
+     3000005,
+     "other"
+    ],
+    [
+     "it",
+     -1,
+     "one"
+    ],
+    [
+     "it",
+     -3,
+     "other"
+    ],
+    [
+     "it",
+     211,
+     "other"
+    ],
+    [
+     "it",
+     1011,
+     "other"
+    ],
+    [
+     "it",
+     1000000,
+     "many"
+    ],
+    [
+     "it",
+     2000000,
+     "many"
+    ],
+    [
+     "it",
+     1000001,
+     "other"
+    ],
+    [
+     "it",
+     3000005,
+     "other"
+    ],
+    [
+     "ca",
+     -1,
+     "one"
+    ],
+    [
+     "ca",
+     -3,
+     "other"
+    ],
+    [
+     "ca",
+     211,
+     "other"
+    ],
+    [
+     "ca",
+     1011,
+     "other"
+    ],
+    [
+     "ca",
+     1000000,
+     "many"
+    ],
+    [
+     "ca",
+     2000000,
+     "many"
+    ],
+    [
+     "ca",
+     1000001,
+     "other"
+    ],
+    [
+     "ca",
+     3000005,
+     "other"
+    ],
+    [
+     "ru",
+     -1,
+     "one"
+    ],
+    [
+     "ru",
+     -3,
+     "few"
+    ],
+    [
+     "ru",
+     211,
+     "many"
+    ],
+    [
+     "ru",
+     1011,
+     "many"
+    ],
+    [
+     "ru",
+     1000000,
+     "many"
+    ],
+    [
+     "ru",
+     2000000,
+     "many"
+    ],
+    [
+     "ru",
+     1000001,
+     "one"
+    ],
+    [
+     "ru",
+     3000005,
+     "many"
+    ],
+    [
+     "RU",
+     -1,
+     "one"
+    ],
+    [
+     "RU",
+     -3,
+     "few"
+    ],
+    [
+     "RU",
+     211,
+     "many"
+    ],
+    [
+     "RU",
+     1011,
+     "many"
+    ],
+    [
+     "RU",
+     1000000,
+     "many"
+    ],
+    [
+     "RU",
+     2000000,
+     "many"
+    ],
+    [
+     "RU",
+     1000001,
+     "one"
+    ],
+    [
+     "RU",
+     3000005,
+     "many"
+    ],
+    [
+     "uk",
+     -1,
+     "one"
+    ],
+    [
+     "uk",
+     -3,
+     "few"
+    ],
+    [
+     "uk",
+     211,
+     "many"
+    ],
+    [
+     "uk",
+     1011,
+     "many"
+    ],
+    [
+     "uk",
+     1000000,
+     "many"
+    ],
+    [
+     "uk",
+     2000000,
+     "many"
+    ],
+    [
+     "uk",
+     1000001,
+     "one"
+    ],
+    [
+     "uk",
+     3000005,
+     "many"
+    ],
+    [
+     "be",
+     -1,
+     "one"
+    ],
+    [
+     "be",
+     -3,
+     "few"
+    ],
+    [
+     "be",
+     211,
+     "many"
+    ],
+    [
+     "be",
+     1011,
+     "many"
+    ],
+    [
+     "be",
+     1000000,
+     "many"
+    ],
+    [
+     "be",
+     2000000,
+     "many"
+    ],
+    [
+     "be",
+     1000001,
+     "one"
+    ],
+    [
+     "be",
+     3000005,
+     "many"
+    ],
+    [
+     "pl",
+     -1,
+     "one"
+    ],
+    [
+     "pl",
+     -3,
+     "few"
+    ],
+    [
+     "pl",
+     211,
+     "many"
+    ],
+    [
+     "pl",
+     1011,
+     "many"
+    ],
+    [
+     "pl",
+     1000000,
+     "many"
+    ],
+    [
+     "pl",
+     2000000,
+     "many"
+    ],
+    [
+     "pl",
+     1000001,
+     "many"
+    ],
+    [
+     "pl",
+     3000005,
+     "many"
+    ],
+    [
+     "cs",
+     -1,
+     "one"
+    ],
+    [
+     "cs",
+     -3,
+     "few"
+    ],
+    [
+     "cs",
+     211,
+     "other"
+    ],
+    [
+     "cs",
+     1011,
+     "other"
+    ],
+    [
+     "cs",
+     1000000,
+     "other"
+    ],
+    [
+     "cs",
+     2000000,
+     "other"
+    ],
+    [
+     "cs",
+     1000001,
+     "other"
+    ],
+    [
+     "cs",
+     3000005,
+     "other"
+    ],
+    [
+     "sk",
+     -1,
+     "one"
+    ],
+    [
+     "sk",
+     -3,
+     "few"
+    ],
+    [
+     "sk",
+     211,
+     "other"
+    ],
+    [
+     "sk",
+     1011,
+     "other"
+    ],
+    [
+     "sk",
+     1000000,
+     "other"
+    ],
+    [
+     "sk",
+     2000000,
+     "other"
+    ],
+    [
+     "sk",
+     1000001,
+     "other"
+    ],
+    [
+     "sk",
+     3000005,
+     "other"
+    ],
+    [
+     "lt",
+     -1,
+     "one"
+    ],
+    [
+     "lt",
+     -3,
+     "few"
+    ],
+    [
+     "lt",
+     211,
+     "other"
+    ],
+    [
+     "lt",
+     1011,
+     "other"
+    ],
+    [
+     "lt",
+     1000000,
+     "other"
+    ],
+    [
+     "lt",
+     2000000,
+     "other"
+    ],
+    [
+     "lt",
+     1000001,
+     "one"
+    ],
+    [
+     "lt",
+     3000005,
+     "few"
+    ],
+    [
+     "hr",
+     -1,
+     "one"
+    ],
+    [
+     "hr",
+     -3,
+     "few"
+    ],
+    [
+     "hr",
+     211,
+     "other"
+    ],
+    [
+     "hr",
+     1011,
+     "other"
+    ],
+    [
+     "hr",
+     1000000,
+     "other"
+    ],
+    [
+     "hr",
+     2000000,
+     "other"
+    ],
+    [
+     "hr",
+     1000001,
+     "one"
+    ],
+    [
+     "hr",
+     3000005,
+     "other"
+    ],
+    [
+     "sr",
+     -1,
+     "one"
+    ],
+    [
+     "sr",
+     -3,
+     "few"
+    ],
+    [
+     "sr",
+     211,
+     "other"
+    ],
+    [
+     "sr",
+     1011,
+     "other"
+    ],
+    [
+     "sr",
+     1000000,
+     "other"
+    ],
+    [
+     "sr",
+     2000000,
+     "other"
+    ],
+    [
+     "sr",
+     1000001,
+     "one"
+    ],
+    [
+     "sr",
+     3000005,
+     "other"
+    ],
+    [
+     "ro",
+     -1,
+     "one"
+    ],
+    [
+     "ro",
+     -3,
+     "few"
+    ],
+    [
+     "ro",
+     211,
+     "few"
+    ],
+    [
+     "ro",
+     1011,
+     "few"
+    ],
+    [
+     "ro",
+     1000000,
+     "other"
+    ],
+    [
+     "ro",
+     2000000,
+     "other"
+    ],
+    [
+     "ro",
+     1000001,
+     "few"
+    ],
+    [
+     "ro",
+     3000005,
+     "few"
+    ],
+    [
+     "lv",
+     -1,
+     "one"
+    ],
+    [
+     "lv",
+     -3,
+     "other"
+    ],
+    [
+     "lv",
+     211,
+     "zero"
+    ],
+    [
+     "lv",
+     1011,
+     "zero"
+    ],
+    [
+     "lv",
+     1000000,
+     "zero"
+    ],
+    [
+     "lv",
+     2000000,
+     "zero"
+    ],
+    [
+     "lv",
+     1000001,
+     "one"
+    ],
+    [
+     "lv",
+     3000005,
+     "other"
+    ],
+    [
+     "he",
+     -1,
+     "one"
+    ],
+    [
+     "he",
+     -3,
+     "other"
+    ],
+    [
+     "he",
+     211,
+     "other"
+    ],
+    [
+     "he",
+     1011,
+     "other"
+    ],
+    [
+     "he",
+     1000000,
+     "other"
+    ],
+    [
+     "he",
+     2000000,
+     "other"
+    ],
+    [
+     "he",
+     1000001,
+     "other"
+    ],
+    [
+     "he",
+     3000005,
+     "other"
+    ],
+    [
+     "sl",
+     -1,
+     "one"
+    ],
+    [
+     "sl",
+     -3,
+     "few"
+    ],
+    [
+     "sl",
+     211,
+     "other"
+    ],
+    [
+     "sl",
+     1011,
+     "other"
+    ],
+    [
+     "sl",
+     1000000,
+     "other"
+    ],
+    [
+     "sl",
+     2000000,
+     "other"
+    ],
+    [
+     "sl",
+     1000001,
+     "one"
+    ],
+    [
+     "sl",
+     3000005,
+     "other"
+    ],
+    [
+     "ga",
+     -1,
+     "one"
+    ],
+    [
+     "ga",
+     -3,
+     "few"
+    ],
+    [
+     "ga",
+     211,
+     "other"
+    ],
+    [
+     "ga",
+     1011,
+     "other"
+    ],
+    [
+     "ga",
+     1000000,
+     "other"
+    ],
+    [
+     "ga",
+     2000000,
+     "other"
+    ],
+    [
+     "ga",
+     1000001,
+     "other"
+    ],
+    [
+     "ga",
+     3000005,
+     "other"
+    ],
+    [
+     "ar",
+     -1,
+     "one"
+    ],
+    [
+     "ar",
+     -3,
+     "few"
+    ],
+    [
+     "ar",
+     211,
+     "many"
+    ],
+    [
+     "ar",
+     1011,
+     "many"
+    ],
+    [
+     "ar",
+     1000000,
+     "other"
+    ],
+    [
+     "ar",
+     2000000,
+     "other"
+    ],
+    [
+     "ar",
+     1000001,
+     "other"
+    ],
+    [
+     "ar",
+     3000005,
+     "few"
+    ],
+    [
+     "cy",
+     -1,
+     "one"
+    ],
+    [
+     "cy",
+     -3,
+     "few"
+    ],
+    [
+     "cy",
+     211,
+     "other"
+    ],
+    [
+     "cy",
+     1011,
+     "other"
+    ],
+    [
+     "cy",
+     1000000,
+     "other"
+    ],
+    [
+     "cy",
+     2000000,
+     "other"
+    ],
+    [
+     "cy",
+     1000001,
+     "other"
+    ],
+    [
+     "cy",
+     3000005,
+     "other"
+    ],
+    [
+     "is",
+     -1,
+     "one"
+    ],
+    [
+     "is",
+     -3,
+     "other"
+    ],
+    [
+     "is",
+     211,
+     "other"
+    ],
+    [
+     "is",
+     1011,
+     "other"
+    ],
+    [
+     "is",
+     1000000,
+     "other"
+    ],
+    [
+     "is",
+     2000000,
+     "other"
+    ],
+    [
+     "is",
+     1000001,
+     "one"
+    ],
+    [
+     "is",
+     3000005,
+     "other"
+    ],
+    [
+     "fil",
+     -1,
+     "one"
+    ],
+    [
+     "fil",
+     -3,
+     "one"
+    ],
+    [
+     "fil",
+     211,
+     "one"
+    ],
+    [
+     "fil",
+     1011,
+     "one"
+    ],
+    [
+     "fil",
+     1000000,
+     "one"
+    ],
+    [
+     "fil",
+     2000000,
+     "one"
+    ],
+    [
+     "fil",
+     1000001,
+     "one"
+    ],
+    [
+     "fil",
+     3000005,
+     "one"
+    ],
+    [
+     "hi",
+     -1,
+     "one"
+    ],
+    [
+     "hi",
+     -3,
+     "other"
+    ],
+    [
+     "hi",
+     211,
+     "other"
+    ],
+    [
+     "hi",
+     1011,
+     "other"
+    ],
+    [
+     "hi",
+     1000000,
+     "other"
+    ],
+    [
+     "hi",
+     2000000,
+     "other"
+    ],
+    [
+     "hi",
+     1000001,
+     "other"
+    ],
+    [
+     "hi",
+     3000005,
+     "other"
+    ],
+    [
+     "ja",
+     -1,
+     "other"
+    ],
+    [
+     "ja",
+     -3,
+     "other"
+    ],
+    [
+     "ja",
+     211,
+     "other"
+    ],
+    [
+     "ja",
+     1011,
+     "other"
+    ],
+    [
+     "ja",
+     1000000,
+     "other"
+    ],
+    [
+     "ja",
+     2000000,
+     "other"
+    ],
+    [
+     "ja",
+     1000001,
+     "other"
+    ],
+    [
+     "ja",
+     3000005,
+     "other"
+    ],
+    [
+     "zh",
+     -1,
+     "other"
+    ],
+    [
+     "zh",
+     -3,
+     "other"
+    ],
+    [
+     "zh",
+     211,
+     "other"
+    ],
+    [
+     "zh",
+     1011,
+     "other"
+    ],
+    [
+     "zh",
+     1000000,
+     "other"
+    ],
+    [
+     "zh",
+     2000000,
+     "other"
+    ],
+    [
+     "zh",
+     1000001,
+     "other"
+    ],
+    [
+     "zh",
+     3000005,
+     "other"
+    ],
+    [
+     "ko",
+     -1,
+     "other"
+    ],
+    [
+     "ko",
+     -3,
+     "other"
+    ],
+    [
+     "ko",
+     211,
+     "other"
+    ],
+    [
+     "ko",
+     1011,
+     "other"
+    ],
+    [
+     "ko",
+     1000000,
+     "other"
+    ],
+    [
+     "ko",
+     2000000,
+     "other"
+    ],
+    [
+     "ko",
+     1000001,
+     "other"
+    ],
+    [
+     "ko",
+     3000005,
+     "other"
+    ],
+    [
+     "xx",
+     -1,
+     "one"
+    ],
+    [
+     "xx",
+     -3,
+     "other"
+    ],
+    [
+     "xx",
+     211,
+     "other"
+    ],
+    [
+     "xx",
+     1011,
+     "other"
+    ],
+    [
+     "xx",
+     1000000,
+     "other"
+    ],
+    [
+     "xx",
+     2000000,
+     "other"
+    ],
+    [
+     "xx",
+     1000001,
+     "other"
+    ],
+    [
+     "xx",
+     3000005,
+     "other"
+    ]
+   ],
+   "sweep": [
+    [
+     "en",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "de",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "fr",
+     0,
+     "one one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "fr-CA",
+     0,
+     "one one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "pt",
+     0,
+     "one one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "pt-BR",
+     0,
+     "one one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "pt-PT",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "pt_PT",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "es",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "it",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ca",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ru",
+     0,
+     "many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many"
+    ],
+    [
+     "RU",
+     0,
+     "many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many"
+    ],
+    [
+     "uk",
+     0,
+     "many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many"
+    ],
+    [
+     "be",
+     0,
+     "many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many one few few few many many many many many many many many many many many many many many many many one few few few many many many many many many"
+    ],
+    [
+     "pl",
+     0,
+     "many one few few few many many many many many many many many many many many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many few few few many many many many many many many many many many many many many many many many many few few few many many many many many many"
+    ],
+    [
+     "cs",
+     0,
+     "other one few few few other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "sk",
+     0,
+     "other one few few few other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "lt",
+     0,
+     "other one few few few few few few few few other other other other other other other other other other other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other one few few few few few few few few other other other other other other other other other other other one few few few few few few few few other"
+    ],
+    [
+     "hr",
+     0,
+     "other one few few few other other other other other other other other other other other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other other other other other other other other other other other one few few few other other other other other other"
+    ],
+    [
+     "sr",
+     0,
+     "other one few few few other other other other other other other other other other other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other one few few few other other other other other other other other other other other other other other other other one few few few other other other other other other"
+    ],
+    [
+     "ro",
+     0,
+     "few one few few few few few few few few few few few few few few few few few few other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other few few few few few few few few few few few few few few few few few few few other other other other other other other other other other other"
+    ],
+    [
+     "lv",
+     0,
+     "zero one other other other other other other other other zero zero zero zero zero zero zero zero zero zero zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero one other other other other other other other other zero zero zero zero zero zero zero zero zero zero zero one other other other other other other other other zero"
+    ],
+    [
+     "he",
+     0,
+     "other one two other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "sl",
+     0,
+     "other one two few few other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other one two few few other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ga",
+     0,
+     "other one two few few few few many many many many other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ar",
+     0,
+     "zero one two few few few few few few few few many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many many other other other few few few few few few few few many many many many many many many many many many many many many many many many many many many many"
+    ],
+    [
+     "cy",
+     0,
+     "zero one two few other other many other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "is",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other one other other other other other other other other other other other other other other other other other other other one other other other other other other other other other"
+    ],
+    [
+     "fil",
+     0,
+     "one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one one one one other one other one one other one"
+    ],
+    [
+     "hi",
+     0,
+     "one one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ja",
+     0,
+     "other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "zh",
+     0,
+     "other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "ko",
+     0,
+     "other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ],
+    [
+     "xx",
+     0,
+     "other one other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other other"
+    ]
+   ],
+   "type": "plural_rules"
+  },
+  {
+   "name": "@clean variants per locale, then the word mask (#207)",
+   "points": [
+    [
+     "en",
+     "guard.insult",
+     null,
+     {
+      "name": "Ana"
+     },
+     false,
+     [],
+     "Get lost, you Ana!"
+    ],
+    [
+     "en",
+     "guard.insult",
+     null,
+     {
+      "name": "Ana"
+     },
+     true,
+     [],
+     "Get lost, you pest!"
+    ],
+    [
+     "fr",
+     "guard.insult",
+     null,
+     {
+      "name": "crétin"
+     },
+     true,
+     [
+      "CRÉTIN"
+     ],
+     "Dégage, espèce de #@$%#@ !"
+    ],
+    [
+     "fr",
+     "guard.insult",
+     null,
+     {
+      "name": "crétin"
+     },
+     false,
+     [
+      "crétin"
+     ],
+     "Dégage, espèce de crétin !"
+    ],
+    [
+     "fr",
+     "guard.bye",
+     null,
+     {},
+     true,
+     [
+      "merde"
+     ],
+     "Bon, salut."
+    ],
+    [
+     "fr",
+     "guard.bye",
+     null,
+     {},
+     false,
+     [
+      "merde"
+     ],
+     "Merde, salut."
+    ],
+    [
+     "fr-CA",
+     "guard.bye",
+     null,
+     {},
+     true,
+     [],
+     "Bon, salut."
+    ],
+    [
+     "de",
+     "guard.bye",
+     null,
+     {},
+     true,
+     [
+      "damn"
+     ],
+     "#@$%, bye."
+    ],
+    [
+     "de",
+     "shout",
+     null,
+     {},
+     true,
+     [
+      "hell",
+      "yes"
+     ],
+     "#@$% #@$"
+    ],
+    [
+     "en",
+     "missing.key",
+     null,
+     {},
+     true,
+     [
+      "missing",
+      "key"
+     ],
+     "missing.key"
+    ],
+    [
+     "en",
+     "coins",
+     1,
+     {},
+     true,
+     [
+      "damn"
+     ],
+     "1 coin"
+    ],
+    [
+     "en",
+     "coins",
+     2,
+     {},
+     true,
+     [
+      "damn"
+     ],
+     "2 #@$% coins"
+    ],
+    [
+     "en",
+     "coins",
+     2,
+     {},
+     false,
+     [
+      "damn"
+     ],
+     "2 damn coins"
+    ],
+    [
+     "fr",
+     "coins",
+     0,
+     {},
+     true,
+     [
+      "pièce"
+     ],
+     "0 #@$%#"
+    ],
+    [
+     "ru",
+     "coins",
+     3,
+     {},
+     true,
+     [
+      "damn"
+     ],
+     "3 #@$% coins"
+    ]
+   ],
+   "tables": {
+    "en": {
+     "coins.one": "{n} damn coin",
+     "coins.one@clean": "{n} coin",
+     "coins.other": "{n} damn coins",
+     "guard.bye": "Damn, bye.",
+     "guard.insult": "Get lost, you {name}!",
+     "guard.insult@clean": "Get lost, you pest!",
+     "shout": "Hell yes"
+    },
+    "fr": {
+     "coins.one": "{n} pièce",
+     "coins.other": "{n} pièces",
+     "guard.bye": "Merde, salut.",
+     "guard.bye@clean": "Bon, salut.",
+     "guard.insult": "Dégage, espèce de {name} !"
+    }
+   },
+   "type": "tr_clean"
+  },
+  {
+   "grawlix": "#@$%",
+   "name": "whole words, folded case, same-length grawlix",
+   "points": [
+    [
+     "What the hell?",
+     [
+      "hell"
+     ],
+     "What the #@$%?"
+    ],
+    [
+     "HELL, Hell, hElL!",
+     [
+      "hell"
+     ],
+     "#@$%, #@$%, #@$%!"
+    ],
+    [
+     "hello shell hell",
+     [
+      "hell"
+     ],
+     "hello shell #@$%"
+    ],
+    [
+     "ass class bass",
+     [
+      "ass",
+      "",
+      "two words",
+      "x-y"
+     ],
+     "#@$ class bass"
+    ],
+    [
+     "Scheiße! scheiße",
+     [
+      "scheiße"
+     ],
+     "#@$%#@$! #@$%#@$"
+    ],
+    [
+     "ÉCRASÉ écrasé",
+     [
+      "écrasé"
+     ],
+     "#@$%#@ #@$%#@"
+    ],
+    [
+     "Łajdak łajdak",
+     [
+      "ŁAJDAK"
+     ],
+     "#@$%#@ #@$%#@"
+    ],
+    [
+     "СУКА сука Сука",
+     [
+      "сука"
+     ],
+     "#@$% #@$% #@$%"
+    ],
+    [
+     "ΒΛΑΚΑΣ ΣΚΑΤΆ",
+     [
+      "βλακας",
+      "σκατά"
+     ],
+     "#@$%#@ #@$%#"
+    ],
+    [
+     "İSTANBUL",
+     [
+      "istanbul"
+     ],
+     "#@$%#@$%"
+    ],
+    [
+     "ÿ Ÿ",
+     [
+      "ÿ"
+     ],
+     "# #"
+    ],
+    [
+     "Ä×Ä÷ä",
+     [
+      "ä"
+     ],
+     "#×#÷#"
+    ],
+    [
+     "damn’s damn's",
+     [
+      "damn"
+     ],
+     "#@$%’s #@$%'s"
+    ],
+    [
+     "x-damn-x damn_it",
+     [
+      "damn"
+     ],
+     "x-#@$%-x #@$%_it"
+    ],
+    [
+     "crap crap",
+     [
+      "crap"
+     ],
+     "#@$% #@$%"
+    ],
+    [
+     "café café",
+     [
+      "café"
+     ],
+     "#@$% café"
+    ],
+    [
+     "𝔡𝔞𝔪𝔫 damn",
+     [
+      "𝔡𝔞𝔪𝔫"
+     ],
+     "#@$% damn"
+    ],
+    [
+     "damn😀 😀damn",
+     [
+      "damn"
+     ],
+     "#@$%😀 😀#@$%"
+    ],
+    [
+     "他妈的 他妈",
+     [
+      "他妈"
+     ],
+     "他妈的 #@"
+    ],
+    [
+     "Scheißkerl",
+     [
+      "scheiß"
+     ],
+     "Scheißkerl"
+    ],
+    [
+     "h4x0r h4x",
+     [
+      "h4x"
+     ],
+     "h4x0r #@$"
+    ],
+    [
+     "¿Àx?",
+     [
+      "àx"
+     ],
+     "¿#@?"
+    ],
+    [
+     "a⯿b aⰀb",
+     [
+      "a",
+      "b"
+     ],
+     "#⯿# aⰀb"
+    ],
+    [
+     "",
+     [
+      "x"
+     ],
+     ""
+    ],
+    [
+     "nothing listed",
+     [],
+     "nothing listed"
+    ]
+   ],
+   "type": "mask_words"
+  },
+  {
+   "name": "the word list file",
+   "points": [
+    [
+     "{\"words\": [\"damn\", 3, \"hell\"], \"_note\": \"the game's own list\"}",
+     [
+      "damn",
+      "hell"
+     ]
+    ],
+    [
+     "{\"words\": []}",
+     []
+    ],
+    [
+     "[]",
+     []
+    ],
+    [
+     "not json",
+     []
+    ],
+    [
+     "{\"words\": \"damn\"}",
+     []
+    ],
+    [
+     null,
+     []
+    ]
+   ],
+   "type": "mature_words"
   },
   {
    "name": "what a focused control says",
