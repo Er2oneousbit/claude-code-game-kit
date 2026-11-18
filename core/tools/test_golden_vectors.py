@@ -345,7 +345,7 @@ class Platform(unittest.TestCase):
         self.assertEqual(data, json.loads(gv.render(gv.build_platform())))
         types = {c["type"] for c in data["cases"]}
         self.assertEqual(types, {"platform_format", "achievements_load", "cloud_partition", "overlay",
-                                 "platform_script", "platform_state_load"})
+                                 "platform_script", "platform_state_load", "null_backend"})
         ops = {s["op"][0] for c in data["cases"] if c["type"] == "platform_script" for s in c["steps"]}
         self.assertEqual(ops, {"unlock", "set_stat", "add_stat", "flush", "set_presence", "clear_presence",
                                "saved", "connect", "disconnect", "fail_store", "overlay", "reset_all"})
@@ -497,6 +497,25 @@ class Platform(unittest.TestCase):
         self.assertEqual((p.unlocked, p.stats["gold"]), ([], 0))
         p.disconnect()
         self.assertEqual(p.reset_all(), ("offline", []))
+
+    def test_the_null_backend_holds_what_was_stored_so_a_reconnect_sends_nothing(self):
+        nb = gv.NullBackend()
+        p = self.fresh()
+        for call in p.add_stat("kills", 3)[1] + p.set_presence("status", "Menu")[1]:
+            self.assertTrue(nb.send(call))
+        self.assertEqual(nb.remote(), {"unlocked": ["k3"], "stats": {"kills": 3}})
+        self.assertEqual(nb.presence, {"status": "Menu"})
+        p.disconnect()
+        self.assertEqual(p.connect(nb.remote())[1], [["set_presence", "status", "Menu"]])   # only the session's map
+        other = self.fresh(online=False)                                  # a second machine
+        self.assertEqual(other.connect(nb.remote()), ("online", []))
+        self.assertEqual((other.unlocked, other.stats["kills"]), (["k3"], 3))
+        nb.send(["set_stat", "gold", 4])
+        nb.fail_stores = 1
+        self.assertFalse(nb.send(["store_stats"]))                        # a failed store lands nothing
+        self.assertEqual(nb.remote()["stats"], {"kills": 3})
+        self.assertTrue(nb.send(["store_stats"]))
+        self.assertEqual(nb.remote()["stats"], {"kills": 3, "gold": 4})
 
     def test_the_state_file_round_trips_and_drops_what_does_not_fit(self):
         p = self.fresh(online=False, cloud="api")

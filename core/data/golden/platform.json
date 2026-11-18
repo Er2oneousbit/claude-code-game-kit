@@ -371,6 +371,18 @@
     [
      "notes/settings.json",
      "local"
+    ],
+    [
+     "LOGS/A.TXT",
+     "local"
+    ],
+    [
+     "Ärger/save.json",
+     "cloud"
+    ],
+    [
+     "SpeicherstÄnde/GAME.LOG",
+     "local"
     ]
    ],
    "type": "cloud_partition"
@@ -8361,6 +8373,387 @@
     ]
    ],
    "type": "platform_state_load"
+  },
+  {
+   "calls": [
+    [
+     "set_stat",
+     "coins",
+     5
+    ],
+    [
+     "set_achievement",
+     "first_win"
+    ],
+    [
+     "store_stats"
+    ],
+    [
+     "set_stat",
+     "coins",
+     9
+    ],
+    [
+     "set_achievement",
+     "defeat_1"
+    ],
+    [
+     "store_stats"
+    ],
+    [
+     "set_stat",
+     "enemies_defeated",
+     3
+    ],
+    [
+     "store_stats"
+    ],
+    [
+     "set_presence",
+     "status",
+     "Menu"
+    ],
+    [
+     "set_presence",
+     "level",
+     "2"
+    ],
+    [
+     "set_presence",
+     "status",
+     ""
+    ],
+    [
+     "cloud_write",
+     "save_1.json"
+    ],
+    [
+     "cloud_write",
+     "save_1.json"
+    ],
+    [
+     "reset_all_stats",
+     true
+    ],
+    [
+     "clear_presence"
+    ]
+   ],
+   "name": "the null backend keeps what a store would hold",
+   "sends": [
+    [
+     [
+      "set_stat",
+      "coins",
+      5
+     ],
+     true,
+     {
+      "stats": {},
+      "unlocked": []
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "set_achievement",
+      "first_win"
+     ],
+     true,
+     {
+      "stats": {},
+      "unlocked": []
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "store_stats"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "set_stat",
+      "coins",
+      9
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "set_achievement",
+      "defeat_1"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "fail_next_store"
+     ],
+     null,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "store_stats"
+     ],
+     false,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "set_stat",
+      "enemies_defeated",
+      3
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 5
+      },
+      "unlocked": [
+       "first_win"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "store_stats"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [],
+     []
+    ],
+    [
+     [
+      "set_presence",
+      "status",
+      "Menu"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [
+      [
+       "status",
+       "Menu"
+      ]
+     ],
+     []
+    ],
+    [
+     [
+      "set_presence",
+      "level",
+      "2"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [
+      [
+       "level",
+       "2"
+      ],
+      [
+       "status",
+       "Menu"
+      ]
+     ],
+     []
+    ],
+    [
+     [
+      "set_presence",
+      "status",
+      ""
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [
+      [
+       "level",
+       "2"
+      ]
+     ],
+     []
+    ],
+    [
+     [
+      "cloud_write",
+      "save_1.json"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [
+      [
+       "level",
+       "2"
+      ]
+     ],
+     [
+      "save_1.json"
+     ]
+    ],
+    [
+     [
+      "cloud_write",
+      "save_1.json"
+     ],
+     true,
+     {
+      "stats": {
+       "coins": 9,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ]
+     },
+     [
+      [
+       "level",
+       "2"
+      ]
+     ],
+     [
+      "save_1.json"
+     ]
+    ],
+    [
+     [
+      "reset_all_stats",
+      true
+     ],
+     true,
+     {
+      "stats": {},
+      "unlocked": []
+     },
+     [
+      [
+       "level",
+       "2"
+      ]
+     ],
+     [
+      "save_1.json"
+     ]
+    ],
+    [
+     [
+      "clear_presence"
+     ],
+     true,
+     {
+      "stats": {},
+      "unlocked": []
+     },
+     [],
+     [
+      "save_1.json"
+     ]
+    ]
+   ],
+   "type": "null_backend"
   }
  ],
  "generator": "tools/golden_vectors.py",

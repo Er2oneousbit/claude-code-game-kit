@@ -27,7 +27,7 @@
 #           keep-or-revert confirm, and shell.json's display_staging cases (#308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the platform services layer (#84 phase 1):
 #           achievements_load, Platform (unlock once, stat rules, offline queue and replay, presence, cloud hooks),
-#           cloud_partition, overlay_action, platform_state_load, and platform.json's cases
+#           NullBackend, cloud_partition, overlay_action, platform_state_load, and platform.json's cases
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -1286,7 +1286,8 @@ def cloud_partition(path):
     ('/' or '\\'), compared without case. Local: settings.json (the display settings belong to this machine, E79), the
     platform layer's own state, telemetry and logs, half-written *.tmp, and a first folder named logs, crashes or
     captures. Everything else (the save slots and their .bak) is "cloud"."""
-    parts = [p for p in path.replace("\\", "/").lower().split("/") if p not in ("", ".")]
+    folded = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in path)   # ASCII only, in every port
+    parts = [p for p in folded.replace("\\", "/").split("/") if p not in ("", ".")]
     if not parts:
         return "local"
     name = parts[-1]
@@ -1506,6 +1507,53 @@ class Platform:
         return "reset", [["reset_all_stats", True]]
 
 
+class NullBackend:
+    """The backend every game runs by default (#84): it accepts every call, keeps them in order in `calls` (what
+    would have been sent), and keeps what a store would hold, so remote() can be handed to Platform.connect.
+    set_stat and set_achievement are staged and land in the stored copy only at store_stats (E78: SetAchievement,
+    then StoreStats); fail_stores makes the next N store_stats fail, and a failed store lands nothing. send()
+    returns whether the call succeeded (only store_stats can fail)."""
+
+    def __init__(self):
+        self.calls = []
+        self.unlocked, self.stats = [], {}
+        self.staged_unlocks, self.staged_stats = [], {}
+        self.presence, self.cloud = {}, []
+        self.fail_stores = 0
+
+    def send(self, call):
+        self.calls.append(list(call))
+        name, args = call[0], call[1:]
+        if name == "set_achievement":
+            if args[0] not in self.staged_unlocks:
+                self.staged_unlocks.append(args[0])
+        elif name == "set_stat":
+            self.staged_stats[args[0]] = args[1]
+        elif name == "store_stats":
+            if self.fail_stores > 0:
+                self.fail_stores -= 1
+                return False
+            self.unlocked += [a for a in self.staged_unlocks if a not in self.unlocked]
+            self.stats.update(self.staged_stats)
+            self.staged_unlocks, self.staged_stats = [], {}
+        elif name == "reset_all_stats":
+            self.unlocked, self.stats, self.staged_unlocks, self.staged_stats = [], {}, [], {}
+        elif name == "set_presence":
+            if args[1] == "":
+                self.presence.pop(args[0], None)
+            else:
+                self.presence[args[0]] = args[1]
+        elif name == "clear_presence":
+            self.presence = {}
+        elif name == "cloud_write" and args[0] not in self.cloud:
+            self.cloud.append(args[0])
+        return True
+
+    def remote(self):
+        """What connect() gets: the stored unlocks (in the order stored) and stats."""
+        return {"unlocked": list(self.unlocked), "stats": dict(self.stats)}
+
+
 def platform_state_load(defs, text):
     """platform_state.json -> (state, problems). No file: the initial state, no problems. Not JSON, not an object,
     another format or another version: the initial state and 1 problem (the store's own copy is the truth; the
@@ -1637,7 +1685,8 @@ def build_platform():
         [path, cloud_partition(path)] for path in [
             "save_1.json", "save_1.json.bak", "save_1.json.tmp", "slots/2.save", "settings.json", "Settings.JSON",
             "platform_state.json", "telemetry.csv", "log_tail.txt", "game.log", "logs/today.txt", "crashes/1.txt",
-            "captures/a.png", "sub/logs/x.txt", "saves\\slot_3.json", "./save_2.json", "", "notes/settings.json"]]})
+            "captures/a.png", "sub/logs/x.txt", "saves\\slot_3.json", "./save_2.json", "", "notes/settings.json",
+            "LOGS/A.TXT", "Ärger/save.json", "SpeicherstÄnde/GAME.LOG"]]})
     cases.append({"type": "overlay", "name": "the overlay's pause hook", "points": [
         [active, screen, overlay_action(active, screen)]
         for active in (True, False) for screen in ("play", "pause", "menu", "title", "settings")]})
@@ -1718,6 +1767,21 @@ def build_platform():
     ]
     cases.append({"type": "platform_state_load", "name": "platform_state.json as every port reads it",
                   "defs": defs, "points": [[name, text, *platform_state_load(defs, text)] for name, text in states]})
+    nb = NullBackend()
+    sends = []
+    for call in [["set_stat", "coins", 5], ["set_achievement", "first_win"], ["store_stats"],
+                 ["set_stat", "coins", 9], ["set_achievement", "defeat_1"], ["fail_next_store"], ["store_stats"],
+                 ["set_stat", "enemies_defeated", 3], ["store_stats"], ["set_presence", "status", "Menu"],
+                 ["set_presence", "level", "2"], ["set_presence", "status", ""], ["cloud_write", "save_1.json"],
+                 ["cloud_write", "save_1.json"], ["reset_all_stats", True], ["clear_presence"]]:
+        if call == ["fail_next_store"]:          # the test hook, not a call: ok is null and calls skip it
+            nb.fail_stores += 1
+            ok = None
+        else:
+            ok = nb.send(call)
+        sends.append([call, ok, nb.remote(), [[k, nb.presence[k]] for k in sorted(nb.presence)], list(nb.cloud)])
+    cases.append({"type": "null_backend", "name": "the null backend keeps what a store would hold",
+                  "sends": sends, "calls": nb.calls})
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
             "cases": cases}
 

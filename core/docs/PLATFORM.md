@@ -64,8 +64,9 @@ SetAchievement, then StoreStats).
   `increment_only` stat (the value stays); `same` when nothing changes (nothing becomes pending);
 - `ok`, or `clamped` when the value was moved into `[min, max]`. The change is pending until a flush.
 - Then every achievement bound to that stat whose threshold the new value reaches unlocks, **in definition order**.
-  Online, a bound achievement whose `progress_every` step the value just crossed (and whose threshold it did not
-  reach) sends `indicate_progress` at once (E78's IndicateAchievementProgress). Offline, no progress popups: they would
+  Online, a bound achievement that is still locked after that, with `progress_every` set and
+  `floor(new / progress_every) > floor(old / progress_every)`, sends `["indicate_progress", id, new, threshold]` at
+  once (E78's IndicateAchievementProgress), before the flush an unlock makes. Offline, no progress popups: they would
   be stale later.
 - Stats wait for `flush()`; call it at checkpoints (level end, pause, quit). An unlock flushes everything pending.
 
@@ -98,8 +99,8 @@ returns `pause`, and the game opens its pause menu, as on focus loss (`SOP-19` s
 **Cloud saves.** `cloud_partition(path)` says which user-data files sync: `local` for `settings.json` (the display
 settings belong to the machine, E79), `<user-data>/platform_state.json`, `telemetry.csv`,
 `<user-data>/log_tail.txt`, any `*.tmp` or `*.log` (by file name, in any folder), and anything under a first
-folder named `logs`, `crashes` or `captures`; `cloud` for the rest (the save slots and their `.bak`). Compared without
-case, `\` read as `/`. `saved(path)` is the hook the save code calls after its atomic write succeeded: it returns the
+folder named `logs`, `crashes` or `captures`; `cloud` for the rest (the save slots and their `.bak`). Compared after
+lower-casing A to Z only (ASCII), with `\` read as `/` and empty and `.` segments dropped; an empty path is `local`. `saved(path)` is the hook the save code calls after its atomic write succeeded: it returns the
 partition and, in `api` cloud mode, sends `cloud_write` for a cloud file now (online) or queues it once (offline). In
 `auto` mode it sends nothing.
 - **Steam Auto-Cloud** (`auto`, no code): set the root to the user-data folder on Steamworks and include the cloud
@@ -122,14 +123,17 @@ clamped, not counted.
 | Call | Null backend | Steam adapter |
 |---|---|---|
 | `available()` | true | the SDK initialised (Steam running, the app owned) |
-| `remote()` | what it recorded | the user's achievements and stats once they arrive |
-| `set_achievement`, `set_stat`, `store_stats` | records; `store_stats` true (a test hook fails the next N) | ISteamUserStats (E78); `store_stats` false or its callback failing is a failed store |
+| `remote()` | what was stored: the unlocks in the order stored, the stats | the user's achievements and stats once they arrive |
+| `set_achievement`, `set_stat`, `store_stats` | records; the first two are staged and land at `store_stats`, which succeeds unless a test hook fails the next N (a failed store lands nothing) | ISteamUserStats (E78); `store_stats` false or its callback failing is a failed store |
 | `indicate_progress`, `reset_all_stats` | records | ISteamUserStats |
 | `set_presence`, `clear_presence` | records | ISteamFriends rich presence **(verify)** |
 | `cloud_write(path)` | records | ISteamRemoteStorage, `api` mode only |
 | each frame | nothing | run the SDK's callbacks; overlay open or closed calls `overlay_action` **(verify)** |
 
-The null backend keeps every call in order, so tests and a debug overlay can show "what would have been sent"; with
+The reference is `NullBackend` in `tools/golden_vectors.py`, and the `null_backend` case pins it: after a flush,
+`connect(backend.remote())` sends nothing but the presence map, and a second machine's layer picks up every unlock
+and stat without a call. It keeps every call in order, so tests and a debug overlay can show "what would have been
+sent"; with
 `--debug` a port may also write them, one JSON array per line, to `<user-data>/platform_calls.jsonl`.
 
 Candidate adapters, all **(verify)** for version and licence before use: GodotSteam (Godot), Steamworks.NET or
