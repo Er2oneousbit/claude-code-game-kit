@@ -11,6 +11,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plural families, the .other fallback per
 //           locale, @clean lookups, mask_words and mature_words (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words, mask_word_set, WordCache (#207)
 // ---------------------------------------------------------------------------
 #include "core/I18n.hpp"
 
@@ -124,9 +125,9 @@ const std::string* pick(const StringTables& tables, const std::string& loc, cons
     return entry != table->second.end() ? &entry->second : nullptr;
 }
 
-std::string finish(const std::string& text, const TrArgs& args, bool clean, const WordList& words) {
+std::string finish(const std::string& text, const TrArgs& args, bool clean, const WordSet& words) {
     std::string out = fill(text, args);
-    return clean && !words.empty() ? mask_words(out, words) : out;
+    return clean && !words.empty() ? mask_word_set(out, words) : out;
 }
 
 // CLDR 46 whole-number plural rules: family -> languages (the reference's PLURAL_LANGUAGES)
@@ -168,6 +169,11 @@ std::string plural_family(const std::string& locale) {
 
 std::string tr(const StringTables& tables, const std::string& locale, const std::string& key, const TrArgs& args,
                bool clean, const WordList& words) {
+    return tr(tables, locale, key, args, clean, clean ? compile_words(words) : WordSet{});
+}
+
+std::string tr(const StringTables& tables, const std::string& locale, const std::string& key, const TrArgs& args,
+               bool clean, const WordSet& words) {
     for (const std::string& loc : locale_chain(locale)) {
         if (const std::string* text = pick(tables, loc, key, clean)) {
             return finish(*text, args, clean, words);
@@ -237,6 +243,11 @@ std::string plural(const std::string& locale, long long count) {
 
 std::string tr_plural(const StringTables& tables, const std::string& locale, const std::string& key, long long n,
                       const TrArgs& args, bool clean, const WordList& words) {
+    return tr_plural(tables, locale, key, n, args, clean, clean ? compile_words(words) : WordSet{});
+}
+
+std::string tr_plural(const StringTables& tables, const std::string& locale, const std::string& key, long long n,
+                      const TrArgs& args, bool clean, const WordSet& words) {
     TrArgs a = args;
     a["n"] = std::to_string(n);
     for (const std::string& loc : locale_chain(locale)) {
@@ -344,14 +355,44 @@ std::vector<Word> scan(const std::string& text) {
 
 }  // namespace
 
-std::string mask_words(const std::string& text, const WordList& words) {
-    std::set<std::vector<std::uint32_t>> wanted;
+WordSet compile_words(const WordList& words) {
+    WordSet wanted;
     for (const std::string& w : words) {
         const std::vector<Word> parts = scan(w);
         if (parts.size() == 1 && !parts[0].folded.empty()) {
             wanted.insert(parts[0].folded);
         }
     }
+    return wanted;
+}
+
+std::string mask_words(const std::string& text, const WordList& words) {
+    return mask_word_set(text, compile_words(words));
+}
+
+void WordCache::set_lists(std::map<std::string, WordList> lists) {
+    lists_ = std::move(lists);
+    valid_ = false;
+}
+
+const WordSet& WordCache::get(const std::string& locale) {
+    if (!valid_ || locale != locale_) {
+        WordList words;
+        for (const std::string& loc : locale_chain(locale)) {
+            const auto list = lists_.find(loc);
+            if (list != lists_.end()) {
+                words.insert(words.end(), list->second.begin(), list->second.end());
+            }
+        }
+        set_ = compile_words(words);
+        locale_ = locale;
+        valid_ = true;
+        ++folds_;
+    }
+    return set_;
+}
+
+std::string mask_word_set(const std::string& text, const WordSet& wanted) {
     if (wanted.empty()) {
         return text;
     }

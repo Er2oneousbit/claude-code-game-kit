@@ -52,6 +52,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): T() honours content.clean_language with the word lists
 //           of data/i18n/mature/ (MatureWords), BloodEnabled(), and the Blood and Clean language rows (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in an FGameKitWordCache, folded once
+//           per locale, not on every T() (#207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform() (docs/PLATFORM.md, #84), SaveSlot() with the
 //           cloud hook, OnOverlay() for the store overlay's pause; the pause screen and quit flush
 // ---------------------------------------------------------------------------
@@ -383,7 +385,7 @@ private:
 	FOptions Opt;
 	TArray<FGameKitScreen> Stack;
 	FGameKitStringTables Tables;
-	TMap<FString, TArray<FString>> Mature;   // locale -> words (#207)
+	mutable FGameKitWordCache WordCache;   // data/i18n/mature: locale -> words, and the chain's fold (#207)
 	TSharedPtr<FJsonObject> Colours;
 	FString CaptureAction;
 	int32 CaptureSlotIndex = -1;

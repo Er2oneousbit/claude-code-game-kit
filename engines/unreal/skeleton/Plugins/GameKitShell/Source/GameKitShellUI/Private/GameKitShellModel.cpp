@@ -23,6 +23,7 @@
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists load with the tables, T() takes
 //           content.clean_language and the chain's words; Blood and Clean language close the Accessibility tab
 //           (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): T() masks with the cached fold (FGameKitWordCache)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): PlatformService built with the
 //           model, SaveSlot(), OnOverlay(); the pause screen and quit flush it, Update() runs its backend
 // ---------------------------------------------------------------------------
@@ -265,6 +266,7 @@ void FGameKitShellModel::LoadTables()
 void FGameKitShellModel::LoadMature()
 {
 	TArray<FString> Files;
+	TMap<FString, TArray<FString>> Mature;
 	const FString Dir = FPaths::Combine(Opt.ProjectDir, I18nDir, TEXT("mature"));
 	IFileManager::Get().FindFiles(Files, *FPaths::Combine(Dir, TEXT("*.json")), /*Files*/ true, /*Directories*/ false);
 	for (const FString& File : Files)
@@ -273,6 +275,7 @@ void FGameKitShellModel::LoadMature()
 		const TSharedPtr<FJsonValue> Root = Text.IsSet() ? Parse(Text.GetValue()) : nullptr;
 		Mature.Add(FPaths::GetBaseFilename(File), GameKit::MatureWords(Is(Root, EJson::Object) ? Root->AsObject() : nullptr));
 	}
+	WordCache.SetLists(MoveTemp(Mature));
 }
 
 TArray<FString> FGameKitShellModel::MatureWords() const
@@ -280,7 +283,7 @@ TArray<FString> FGameKitShellModel::MatureWords() const
 	TArray<FString> Words;
 	for (const FString& Loc : GameKit::LocaleChain(IsPseudo() ? FString(GameKit::FallbackLocale) : Locale()))
 	{
-		if (const TArray<FString>* List = Mature.Find(Loc))
+		if (const TArray<FString>* List = WordCache.GetLists().Find(Loc))
 		{
 			Words.Append(*List);
 		}
@@ -409,7 +412,8 @@ FString FGameKitShellModel::T(const FString& Key, const FGameKitTrArgs& Args) co
 		One.Add(PseudoLocale).Add(Key, GameKit::Pseudo(*Text));
 		return GameKit::Tr(One, PseudoLocale, Key, Args);
 	}
-	return GameKit::Tr(Tables, Locale(), Key, Args, bClean, MatureWords());
+	static const FGameKitWordSet NoWords;
+	return GameKit::TrSet(Tables, Locale(), Key, Args, bClean, bClean ? WordCache.Get(Locale()) : NoWords);
 }
 
 FString FGameKitShellModel::Content(const FString& Text) const

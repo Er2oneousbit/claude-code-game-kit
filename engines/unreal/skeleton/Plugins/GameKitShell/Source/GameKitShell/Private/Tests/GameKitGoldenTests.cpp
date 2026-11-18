@@ -22,6 +22,8 @@
 //           and its keep-or-revert confirm (FGameKitDisplayStaging, #308); Coverage wants at least five of them
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
 //           mask_words and mature_words (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): FGameKitWordCache folds once and follows new lists and
+//           locales, and its cost against folding per call (#207)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (GameKitFeel.h: impact,
 //           float_text, trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
@@ -1140,6 +1142,48 @@ bool FGameKitGoldenCoverageTest::RunTest(const FString&)
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AudioFile, GameKitGoldenTests::AudioTypes);
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::MusicFile, GameKitGoldenTests::MusicTypes);
 	GameKitGoldenTests::CheckCoverage(*this, GameKitGoldenTests::AccessFile, GameKitGoldenTests::AccessTypes);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitWordCacheTest, "GameKit.Golden.WordCache", GameKitGoldenTests::GoldenTestFlags)
+bool FGameKitWordCacheTest::RunTest(const FString& Parameters)
+{
+	FGameKitWordCache Cache;
+	Cache.SetLists({{TEXT("en"), {TEXT("damn")}}});
+	TestEqual(TEXT("masked"), GameKit::MaskWordSet(TEXT("Damn, bob"), Cache.Get(TEXT("en"))), FString(TEXT("#@$%, bob")));
+	TestEqual(TEXT("masked again"), GameKit::MaskWordSet(TEXT("Damn, bob"), Cache.Get(TEXT("en"))), FString(TEXT("#@$%, bob")));
+	TestEqual(TEXT("the second Get reused the fold"), Cache.Folds(), 1);
+	Cache.SetLists({{TEXT("en"), {TEXT("bob")}}, {TEXT("fr"), {TEXT("merde")}}});
+	TestEqual(TEXT("a new list drops the old fold"), GameKit::MaskWordSet(TEXT("Damn, bob"), Cache.Get(TEXT("en"))),
+	          FString(TEXT("Damn, #@$")));
+	TestEqual(TEXT("a new chain: fr's words join"), GameKit::MaskWordSet(TEXT("Merde, bob"), Cache.Get(TEXT("fr"))),
+	          FString(TEXT("#@$%#, #@$")));
+	// the cost: 100 labels with 3000 words, folded per call against the cache
+	TArray<FString> List;
+	for (int32 K = 0; K < 3000; ++K)
+	{
+		List.Add(FString::Printf(TEXT("word%d"), K));
+	}
+	FGameKitStringTables Tables;
+	Tables.Add(TEXT("en")).Add(TEXT("label"), TEXT("A settings label with {name} in it"));
+	FGameKitTrArgs Args;
+	Args.Add(TEXT("name"), TEXT("x"));
+	FGameKitWordCache Long;
+	Long.SetLists({{TEXT("en"), List}});
+	double T0 = FPlatformTime::Seconds();
+	for (int32 K = 0; K < 100; ++K)
+	{
+		GameKit::Tr(Tables, TEXT("en"), TEXT("label"), Args, true, List);
+	}
+	const double Uncached = FPlatformTime::Seconds() - T0;
+	T0 = FPlatformTime::Seconds();
+	for (int32 K = 0; K < 100; ++K)
+	{
+		GameKit::TrSet(Tables, TEXT("en"), TEXT("label"), Args, true, Long.Get(TEXT("en")));
+	}
+	const double Cached = FPlatformTime::Seconds() - T0;
+	AddInfo(FString::Printf(TEXT("T_COST 100 labels, 3000 words: uncached %.1f ms, cached %.1f ms"), Uncached * 1000.0, Cached * 1000.0));
+	TestTrue(TEXT("the folded set is built once, not per label"), Cached < Uncached / 10.0);
 	return true;
 }
 

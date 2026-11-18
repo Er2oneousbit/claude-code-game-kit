@@ -21,6 +21,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plurals with the .other fallback per
 //           locale, tr_clean and tr_plural_clean (@clean variants), mask_words and mature_words (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words, mask_word_set and the _set forms of
+//           tr_clean and tr_plural_clean, so the shell folds its word list once, not on every t() (#207)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeMap;
 
@@ -158,14 +160,17 @@ fn pick<'a>(tables: &'a Tables, loc: &str, key: &str, clean: bool) -> Option<&'a
     table.get(key)
 }
 
-fn finish(text: &str, args: &[(&str, &str)], clean: bool, words: &[String]) -> String {
+fn finish(text: &str, args: &[(&str, &str)], clean: bool, words: &WordSet) -> String {
     let out = fill(text, args);
     if clean && !words.is_empty() {
-        mask_words(&out, words)
+        mask_word_set(&out, words)
     } else {
         out
     }
 }
+
+/// A word list folded once (compile_words): what the mask matches against.
+pub type WordSet = std::collections::BTreeSet<Vec<u32>>;
 
 /// tr with the clean-language switch (#207): per locale of the chain key@clean, then key; with clean on the filled
 /// text is masked with words (placeholder values included).
@@ -176,6 +181,19 @@ pub fn tr_clean(
     args: &[(&str, &str)],
     clean: bool,
     words: &[String],
+) -> String {
+    let set = if clean { compile_words(words) } else { WordSet::new() };
+    tr_clean_set(tables, locale, key, args, clean, &set)
+}
+
+/// tr_clean with the words compiled already (the shell's cache).
+pub fn tr_clean_set(
+    tables: &Tables,
+    locale: &str,
+    key: &str,
+    args: &[(&str, &str)],
+    clean: bool,
+    words: &WordSet,
 ) -> String {
     for loc in locale_chain(locale) {
         if let Some(text) = pick(tables, &loc, key, clean) {
@@ -350,6 +368,20 @@ pub fn tr_plural_clean(
     clean: bool,
     words: &[String],
 ) -> String {
+    let set = if clean { compile_words(words) } else { WordSet::new() };
+    tr_plural_clean_set(tables, locale, key, n, args, clean, &set)
+}
+
+/// tr_plural_clean with the words compiled already (the shell's cache).
+pub fn tr_plural_clean_set(
+    tables: &Tables,
+    locale: &str,
+    key: &str,
+    n: i64,
+    args: &[(&str, &str)],
+    clean: bool,
+    words: &WordSet,
+) -> String {
     let n_text = n.to_string();
     let mut all: Vec<(&str, &str)> = args.iter().copied().filter(|(name, _)| *name != "n").collect();
     all.push(("n", &n_text));
@@ -398,14 +430,27 @@ pub fn fold_char(cp: u32) -> u32 {
     }
 }
 
-/// text with every whole word that is in words (case folded) replaced by a same-length grawlix.
-pub fn mask_words(text: &str, words: &[String]) -> String {
-    let fold = |s: &str| -> Vec<u32> { s.chars().map(|c| fold_char(c as u32)).collect() };
-    let wanted: std::collections::BTreeSet<Vec<u32>> = words
+fn fold_word(s: &str) -> Vec<u32> {
+    s.chars().map(|c| fold_char(c as u32)).collect()
+}
+
+/// The folded set the mask matches against: build it once per word list (t() runs for every label every frame).
+pub fn compile_words(words: &[String]) -> WordSet {
+    words
         .iter()
         .filter(|w| !w.is_empty() && w.chars().all(|c| is_word_char(c as u32)))
-        .map(|w| fold(w))
-        .collect();
+        .map(|w| fold_word(w))
+        .collect()
+}
+
+/// text with every whole word that is in words (case folded) replaced by a same-length grawlix.
+pub fn mask_words(text: &str, words: &[String]) -> String {
+    mask_word_set(text, &compile_words(words))
+}
+
+/// mask_words with the list compiled already (compile_words).
+pub fn mask_word_set(text: &str, wanted: &WordSet) -> String {
+    let fold = fold_word;
     if wanted.is_empty() {
         return text.to_string();
     }

@@ -11,6 +11,8 @@
 #           is checked by LabelAudit once it is shown; a problem prints PSEUDO_FAIL and exits 1.
 #           --drive <scenario> adds a SmokeDrive (scripts/shell/smoke_drive.gd).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): rebuild_all lets only the top screen take the focus back (a language or
+#           clean-language change sent the settings screen's focus to its tab, #207)
 # Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): pause and quit flush it,
 #           the store overlay opening over play pauses (PlatformLayer.overlay_action)
 # ---------------------------------------------------------------------------
@@ -116,7 +118,7 @@ func back() -> void:
 
 func rebuild_all() -> void:
 	for s: ShellScreen in stack:
-		s.rebuild()
+		s.rebuild(s == top()) # only the top screen takes the focus back: a screen below must not steal it
 	if world_node != null and world_node.has_method("relabel"):
 		world_node.relabel()
 

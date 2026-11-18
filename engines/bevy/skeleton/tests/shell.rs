@@ -23,6 +23,8 @@
 //           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an Apply that waits for Keep is not saved, Keep saves it; Back's
 //           warning outlasts a settings message
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Shell::t_args and tn honour clean language (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the folded word cache follows new lists and the locale,
+//           and t_args with 3000 words costs a tenth of folding per call or less (#207)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -39,7 +41,7 @@ use {{GAME_SLUG}}::app::{shell_test_app, tick};
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
 use {{GAME_SLUG}}::logic::audio_access::ARROWS;
 use {{GAME_SLUG}}::logic::charmap::CharMap;
-use {{GAME_SLUG}}::logic::i18n::{parse_tables, pseudo};
+use {{GAME_SLUG}}::logic::i18n::{parse_tables, pseudo, tr_clean};
 use {{GAME_SLUG}}::shell::display::FrameLimit;
 use {{GAME_SLUG}}::shell::juice::{JUICE_LAYER, JuiceCamera, JuiceStagePlugin};
 use {{GAME_SLUG}}::shell::view::{DEFAULT_FONT, READABLE_FONT, ShellInputPlugin};
@@ -111,7 +113,7 @@ fn shell_text_honours_clean_language() {
     let dir = TempDir::new("clean");
     let mut s = Shell::new(&cfg(&dir));
     assert_eq!(
-        s.mature.get("en").map(Vec::len),
+        s.mature().get("en").map(Vec::len),
         Some(0),
         "the kit's word list ships empty"
     );
@@ -121,8 +123,13 @@ fn shell_text_honours_clean_language() {
             "fr": {"bye": "Merde, salut {name}."}}"#,
     )
     .expect("tables");
-    s.mature.insert("fr".into(), vec!["merde".into()]);
-    s.mature.insert("en".into(), vec!["damn".into()]);
+    s.set_mature(
+        [
+            ("fr".to_string(), vec!["merde".to_string()]),
+            ("en".to_string(), vec!["damn".to_string()]),
+        ]
+        .into(),
+    );
     s.locale_override = Some("fr".into());
     assert_eq!(
         s.t_args("bye", &[("name", "Ana")]),
@@ -140,6 +147,46 @@ fn shell_text_honours_clean_language() {
     assert_eq!(s.tn("hits", 1), "1 hit");
     s.locale_override = Some("pseudo".into());
     assert_eq!(s.t_args("bye", &[("name", "Ana")]), pseudo("Bye Ana."));
+}
+
+/// #207: the folded words follow a new list and a new locale, and folding once is what makes t_args cheap.
+#[test]
+fn the_word_cache_follows_the_list_and_the_locale() {
+    let dir = TempDir::new("wordcache");
+    let mut s = Shell::new(&cfg(&dir));
+    s.tables =
+        parse_tables(r#"{"en": {"bye": "Damn, bye {name}."}, "fr": {"bye": "Merde, salut {name}."}}"#).expect("tables");
+    s.settings["content"]["clean_language"] = json!(true);
+    s.locale_override = Some("en".into());
+    s.set_mature([("en".to_string(), vec!["damn".to_string()])].into());
+    assert_eq!(s.t_args("bye", &[("name", "Bob")]), "#@$%, bye Bob.");
+    s.set_mature([("en".to_string(), vec!["bob".to_string()])].into()); // the cache must not keep "damn"
+    assert_eq!(s.t_args("bye", &[("name", "Bob")]), "Damn, bye #@$.");
+    s.set_mature(
+        [
+            ("en".to_string(), vec!["bob".to_string()]),
+            ("fr".to_string(), vec!["merde".to_string()]),
+        ]
+        .into(),
+    );
+    s.locale_override = Some("fr".into()); // a new chain: fr's words join
+    assert_eq!(s.t_args("bye", &[("name", "Bob")]), "#@$%#, salut #@$.");
+    let words: Vec<String> = (0..3000).map(|k| format!("word{k}")).collect();
+    s.tables = parse_tables(r#"{"en": {"label": "A settings label with {name} in it"}}"#).expect("tables");
+    s.locale_override = Some("en".into());
+    s.set_mature([("en".to_string(), words.clone())].into());
+    let t0 = std::time::Instant::now();
+    for _ in 0..100 {
+        let _ = tr_clean(&s.tables, "en", "label", &[("name", "x")], true, &words);
+    }
+    let uncached = t0.elapsed();
+    let t0 = std::time::Instant::now();
+    for _ in 0..100 {
+        let _ = s.t_args("label", &[("name", "x")]);
+    }
+    let cached = t0.elapsed();
+    println!("T_COST 100 labels, 3000 words: uncached {uncached:?}, cached {cached:?}");
+    assert!(cached < uncached / 10, "the folded set is built once, not per label");
 }
 
 /// Boots to the main menu (answers the consent question with Later).

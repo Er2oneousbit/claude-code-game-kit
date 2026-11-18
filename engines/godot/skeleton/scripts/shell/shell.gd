@@ -32,6 +32,8 @@
 #           text and menu size (UiTheme.hud_font_size, #309)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(), and t() / tn() honour the
 #           clean-language switch with the word lists of data/i18n/mature/ (#171, #207); CLDR plurals per locale
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the chain's words are folded once per locale and list
+#           (word_set(); setting mature or the locale drops it), not on every t() (#207)
 # Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): `platform` (docs/PLATFORM.md, #84): the null backend,
 #           or GodotSteam's (platform_steam.gd) when installed; saves call its saved(); overlay_changed for the pause hook
 # ---------------------------------------------------------------------------
@@ -76,7 +78,13 @@ var settings: Dictionary = GameSettings.defaults()
 var settings_problems: PackedStringArray = []
 var settings_source: String = "none" # load_settings(): "file", "backup" or "tmp" (recovered), "none" (defaults)
 var tables: Dictionary = {}
-var mature: Dictionary = {} # data/i18n/mature/<locale>.json: the word lists for clean language (#207)
+## data/i18n/mature/<locale>.json: the word lists for clean language (#207); setting it drops the folded cache
+var mature: Dictionary = {}:
+	set(lists):
+		mature = lists
+		_word_set_locale = ""
+var _word_set: Dictionary = {}
+var _word_set_locale: String = "" # the locale _word_set was folded for; "" = stale
 var locale: String = "en"
 var locale_override: String = ""
 var last_device: String = "keyboard"
@@ -352,6 +360,14 @@ func clean_language() -> bool:
 	return GameSettings.clean_language(settings)
 
 
+## The chain's words folded once per locale and list (I18n.compile_words), what t() masks with.
+func word_set() -> Dictionary:
+	if _word_set_locale != locale or _word_set_locale == "":
+		_word_set = I18n.compile_words(mature_words())
+		_word_set_locale = locale
+	return _word_set
+
+
 ## The word lists of every locale in the current chain (a fallback line can come from any of them).
 func mature_words() -> PackedStringArray:
 	var out: PackedStringArray = []
@@ -406,10 +422,10 @@ func t(key: String, args: Dictionary = {}, fallback: String = "") -> String:
 	var found: Variant = I18n.lookup(tables, locale, key, clean)
 	if typeof(found) == TYPE_NIL:
 		if fallback != "":
-			return I18n.finish(fallback, args, clean, mature_words())
+			return I18n.finish(fallback, args, clean, word_set() if clean else {})
 		_missing(key)
 		return key
-	return I18n.finish(str(found), args, clean, mature_words())
+	return I18n.finish(str(found), args, clean, word_set() if clean else {})
 
 
 func tn(key: String, n: float, args: Dictionary = {}) -> String:
@@ -425,7 +441,7 @@ func tn(key: String, n: float, args: Dictionary = {}) -> String:
 		return missing
 	if pseudo_run:
 		return I18n.fill(I18n.pseudo(str(found)), a)
-	return I18n.finish(str(found), a, clean, mature_words())
+	return I18n.finish(str(found), a, clean, word_set() if clean else {})
 
 
 func content(text: String) -> String:

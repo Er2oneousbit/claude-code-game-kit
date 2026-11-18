@@ -26,6 +26,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plural rules, the .other fallback per
 #           locale, @clean variants, mask_words, mature_words and load_mature (#207, #87)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words and mask_word_set, so Shell folds its word
+#           list once per locale and list (#207)
 # ---------------------------------------------------------------------------
 class_name I18n
 extends RefCounted
@@ -85,9 +87,14 @@ static func lookup(tables: Dictionary, locale: String, key: String, clean: bool 
 	return null
 
 
-static func finish(text: String, args: Dictionary, clean: bool, words: PackedStringArray) -> String:
+static func finish(text: String, args: Dictionary, clean: bool, words: Variant) -> String:
+	# words: a PackedStringArray, or a set compile_words built already (the shell's cache)
 	var out: String = fill(text, args)
-	return mask_words(out, words) if clean and not words.is_empty() else out
+	if not clean:
+		return out
+	if typeof(words) == TYPE_DICTIONARY:
+		return mask_word_set(out, words)
+	return mask_words(out, PackedStringArray(words))
 
 
 static func translate(tables: Dictionary, locale: String, key: String, args: Dictionary = {},
@@ -259,8 +266,8 @@ static func _fold_key(text: String, from: int, to: int) -> String:
 	return ",".join(parts)
 
 
-static func mask_words(text: String, words: PackedStringArray) -> String:
-	# text with every whole word that is in words (case folded) replaced by a same-length grawlix
+static func compile_words(words: PackedStringArray) -> Dictionary:
+	# The folded set the mask matches against: build it once per word list (t() runs for every label every frame)
 	var wanted: Dictionary = {}
 	for w: String in words:
 		var ok: bool = w.length() > 0
@@ -268,6 +275,16 @@ static func mask_words(text: String, words: PackedStringArray) -> String:
 			ok = ok and is_word_char(w.unicode_at(i))
 		if ok:
 			wanted[_fold_key(w, 0, w.length())] = true
+	return wanted
+
+
+static func mask_words(text: String, words: PackedStringArray) -> String:
+	# text with every whole word that is in words (case folded) replaced by a same-length grawlix
+	return mask_word_set(text, compile_words(words))
+
+
+static func mask_word_set(text: String, wanted: Dictionary) -> String:
+	# mask_words with the list compiled already (compile_words)
 	if wanted.is_empty():
 		return text
 	var out: String = ""

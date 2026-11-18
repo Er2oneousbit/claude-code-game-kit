@@ -33,6 +33,8 @@
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
 //           tables; T and Tn honour content.clean_language, each locale with its own CLDR plural rule;
 //           BloodEnabled (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in an I18n.WordCache, folded once
+//           per locale and list, not on every T() (#207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform (docs/PLATFORM.md, #84) and Saves (save slots
 //           whose writes reach Platform.Saved); OverlayChanged for the store overlay's pause
 // ---------------------------------------------------------------------------
@@ -62,8 +64,14 @@ namespace {{GAME_SLUG}}.Shell
         public Dictionary<string, object> Settings = GameSettings.Defaults();
         public List<string> SettingsProblems = new List<string>();
         public Dictionary<string, Dictionary<string, string>> Tables = new Dictionary<string, Dictionary<string, string>>();
-        /// <summary>data/i18n/mature/&lt;locale&gt;.json: the clean-language word lists (#207).</summary>
-        public Dictionary<string, List<string>> Mature = new Dictionary<string, List<string>>();
+        /// <summary>data/i18n/mature/&lt;locale&gt;.json: the clean-language word lists (#207); setting it drops the
+        /// folded cache.</summary>
+        public Dictionary<string, List<string>> Mature
+        {
+            get => _words.Lists;
+            set => _words.Lists = value;
+        }
+        private readonly I18n.WordCache _words = new I18n.WordCache();
         public string Locale = "en";
         public string LocaleOverride = "";
         public bool Smoke;
@@ -398,12 +406,18 @@ namespace {{GAME_SLUG}}.Shell
             {
                 if (fallback != null)
                 {
-                    return I18n.Finish(fallback, args, clean, MatureWords());
+                    return I18n.Finish(fallback, args, clean, clean ? WordSet() : null);
                 }
                 Missing(key);
                 return key;
             }
-            return I18n.Finish(found, args, clean, MatureWords());
+            return I18n.Finish(found, args, clean, clean ? WordSet() : null);
+        }
+
+        /// <summary>The chain's words folded once per locale and list: what T and Tn mask with.</summary>
+        public HashSet<string> WordSet()
+        {
+            return _words.Get(Locale == PSEUDO_LOCALE ? I18n.FALLBACK_LOCALE : Locale);
         }
 
         /// <summary>The word lists of every locale in the current chain (a fallback line can come from any of them).</summary>
@@ -448,7 +462,7 @@ namespace {{GAME_SLUG}}.Shell
                 Missing(missing);
                 return missing;
             }
-            return pseudo ? I18n.Fill(I18n.Pseudo(found), all) : I18n.Finish(found, all, clean, MatureWords());
+            return pseudo ? I18n.Fill(I18n.Pseudo(found), all) : I18n.Finish(found, all, clean, clean ? WordSet() : null);
         }
 
         /// <summary>Text from data files (dialogue, credits): as written, pseudo-localized in the "pseudo" locale.</summary>

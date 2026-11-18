@@ -24,6 +24,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plurals with the .other fallback per
 //           locale, @clean variants, MaskWords and MatureWords (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): CompileWords, MaskWordSet and WordCache, so the shell
+//           folds its word list once per locale and list, not on every T() (#207)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -120,6 +122,51 @@ namespace {{GAME_SLUG}}.Core
         {
             string output = Fill(text, args);
             return clean && words != null && words.Count > 0 ? MaskWords(output, words) : output;
+        }
+
+        /// <summary>Finish with the words compiled already (CompileWords, the shell's cache).</summary>
+        public static string Finish(string text, IDictionary<string, object> args, bool clean, HashSet<string> wordSet)
+        {
+            string output = Fill(text, args);
+            return clean && wordSet != null && wordSet.Count > 0 ? MaskWordSet(output, wordSet) : output;
+        }
+
+        /// <summary>The word lists per locale and the chain's folded set: Get folds once per locale; setting Lists
+        /// drops the fold.</summary>
+        public sealed class WordCache
+        {
+            private Dictionary<string, List<string>> _lists = new Dictionary<string, List<string>>();
+            private string _locale;
+            private HashSet<string> _set;
+
+            /// <summary>How many times Get folded (tests).</summary>
+            public int Folds { get; private set; }
+
+            public Dictionary<string, List<string>> Lists
+            {
+                get => _lists;
+                set { _lists = value ?? new Dictionary<string, List<string>>(); _set = null; }
+            }
+
+            /// <summary>The words of every locale in locale's chain, folded (a fallback line can come from any).</summary>
+            public HashSet<string> Get(string locale)
+            {
+                if (_set == null || _locale != locale)
+                {
+                    var words = new List<string>();
+                    foreach (string loc in LocaleChain(locale))
+                    {
+                        if (_lists.TryGetValue(loc, out List<string> list))
+                        {
+                            words.AddRange(list);
+                        }
+                    }
+                    _set = CompileWords(words);
+                    _locale = locale;
+                    Folds++;
+                }
+                return _set;
+            }
         }
 
         /// <summary>A string through the fallback chain with placeholders filled; a missing key returns the key.
@@ -312,8 +359,9 @@ namespace {{GAME_SLUG}}.Core
             return parts;
         }
 
-        /// <summary>text with every whole word that is in words (case folded) replaced by a same-length grawlix.</summary>
-        public static string MaskWords(string text, IList<string> words)
+        /// <summary>The folded set the mask matches against: build it once per word list (T runs for every label
+        /// every frame).</summary>
+        public static HashSet<string> CompileWords(IList<string> words)
         {
             var wanted = new HashSet<string>();
             foreach (string w in words ?? (IList<string>)Array.Empty<string>())
@@ -324,6 +372,18 @@ namespace {{GAME_SLUG}}.Core
                     wanted.Add(parts[0].key);
                 }
             }
+            return wanted;
+        }
+
+        /// <summary>text with every whole word that is in words (case folded) replaced by a same-length grawlix.</summary>
+        public static string MaskWords(string text, IList<string> words)
+        {
+            return MaskWordSet(text, CompileWords(words));
+        }
+
+        /// <summary>MaskWords with the list compiled already (CompileWords).</summary>
+        public static string MaskWordSet(string text, HashSet<string> wanted)
+        {
             if (wanted.Count == 0)
             {
                 return text;

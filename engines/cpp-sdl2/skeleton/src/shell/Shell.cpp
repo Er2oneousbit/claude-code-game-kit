@@ -25,6 +25,7 @@
 //           back the window that was on screen (#308, seen on a real window)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
 //           tables, t() takes content.clean_language and the chain's words, blood_enabled() (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): t() masks with the cached fold (core::WordCache)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): start_platform(), save_slot(),
 //           on_overlay(); the pause screen and quit flush it, update() runs its backend
 // ---------------------------------------------------------------------------
@@ -209,12 +210,13 @@ void Shell::load_tables() {
         names += (names.empty() ? "" : ", ") + table.first;
     }
     LOG_INFO("shell", "string tables " << names << " from " << core::path_to_utf8(fs::absolute(dir, ec)));
-    mature_.clear();
+    std::map<std::string, core::WordList> mature;
     for (const auto& entry : fs::directory_iterator(dir / "mature", ec)) {
         if (entry.is_regular_file() && entry.path().extension() == ".json") {
-            mature_[core::path_to_utf8(entry.path().stem())] = core::mature_words(load_json(entry.path(), "i18n"));
+            mature[core::path_to_utf8(entry.path().stem())] = core::mature_words(load_json(entry.path(), "i18n"));
         }
     }
+    words_.set_lists(std::move(mature));
 }
 
 void Shell::load_dialogue() {
@@ -365,14 +367,8 @@ std::string Shell::t(const std::string& key, const core::TrArgs& args) const {
     if (locale_ == core::kPseudoLocale) {
         return core::tr_pseudo(tables_, key, args, clean);   // the ASCII pseudo form: the 8x8 font has no accents
     }
-    core::WordList words;   // every locale of the chain: a fallback line can come from any of them
-    for (const std::string& loc : core::locale_chain(locale_)) {
-        const auto list = mature_.find(loc);
-        if (list != mature_.end()) {
-            words.insert(words.end(), list->second.begin(), list->second.end());
-        }
-    }
-    return core::tr(tables_, locale_, key, args, clean, words);
+    static const core::WordSet kNoWords;
+    return core::tr(tables_, locale_, key, args, clean, clean ? words_.get(locale_) : kNoWords);
 }
 
 bool Shell::blood_enabled() const {

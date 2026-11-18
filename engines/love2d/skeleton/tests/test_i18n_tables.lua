@@ -9,6 +9,8 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the translator the shell uses honours clean language
 --           in t, tp and the pseudo-locale, and the shipped word list loads apart from the tables (#207)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the folded word cache follows a new list and the
+--           locale, and t() with 3000 words costs a tenth of folding per call or less
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Json = require("src.core.json")
@@ -95,6 +97,34 @@ function T.test_the_shell_translator_honours_clean_language()
   A.eq(i18n:tp("hits", 1), "1 hit")
   i18n:set_locale("pseudo")
   A.eq(i18n:t("bye", { name = "Ana" }), "[Býé Ana.~~]")
+end
+
+function T.test_the_word_cache_follows_the_list_and_the_locale()
+  local i18n = I18n.new({ en = { bye = "Damn, bye {name}." }, fr = { bye = "Merde, salut {name}." } }, "en")
+  i18n.clean = true
+  i18n.mature = { en = { "damn" } }
+  A.eq(i18n:t("bye", { name = "Bob" }), "#@$%, bye Bob.")
+  i18n.mature = { en = { "bob" } }                       -- a new list: the cache must not keep "damn"
+  A.eq(i18n:t("bye", { name = "Bob" }), "Damn, bye #@$.")
+  i18n.mature = { en = { "bob" }, fr = { "merde" } }
+  i18n:set_locale("fr")                                  -- a new chain: fr's words join
+  A.eq(i18n:t("bye", { name = "Bob" }), "#@$%#, salut #@$.")
+  -- the cost: 100 labels with 3000 words, folded per call (the old path) against the cache
+  local words = {}
+  for k = 1, 3000 do words[k] = "word" .. k end
+  local tables = { en = { label = "A settings label with {name} in it" } }
+  local t = I18n.new(tables, "en")
+  t.clean = true
+  t.mature = { en = words }
+  local clock = love and love.timer and love.timer.getTime or os.clock
+  local t0 = clock()
+  for _ = 1, 100 do I18n.tr(tables, "en", "label", { name = "x" }, true, words) end
+  local uncached = clock() - t0
+  t0 = clock()
+  for _ = 1, 100 do t:t("label", { name = "x" }) end
+  local cached = clock() - t0
+  print(string.format("T_COST 100 labels, 3000 words: uncached %.1f ms, cached %.1f ms", uncached * 1000, cached * 1000))
+  A.truthy(cached < uncached / 10, "the folded set is built once, not per label")
 end
 
 function T.test_code_points_not_bytes()

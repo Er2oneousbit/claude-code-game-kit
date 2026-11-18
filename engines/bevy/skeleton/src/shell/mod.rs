@@ -33,6 +33,8 @@
 //           Back's unapplied warning stays up while the next Back discards (it timed out after MESSAGE_S)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists load with the tables, t_args() and
 //           tn() honour content.clean_language, blood_enabled() (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit behind set_mature(), and t_args() and
+//           tn() mask with the chain's words folded once per locale and list (word_set) (#207)
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): shell.platform (docs/PLATFORM.md, #84): save_slot()
 //           calls its saved(), the pause screen and quit flush it, on_overlay() opens the pause menu over play
 // ---------------------------------------------------------------------------
@@ -209,8 +211,10 @@ pub struct Shell {
     pub store: Store,
     pub settings: Value,
     pub tables: Tables,
-    /// data/i18n/mature/<locale>.json: the clean-language word lists (#207).
-    pub mature: BTreeMap<String, Vec<String>>,
+    /// data/i18n/mature/<locale>.json: the clean-language word lists (#207); set_mature() changes them.
+    mature: BTreeMap<String, Vec<String>>,
+    /// The chain's words folded once: (locale, the fold); set_mature() empties it.
+    word_cache: std::sync::Mutex<Option<(String, std::sync::Arc<i18n::WordSet>)>>,
     /// --locale: beats the settings until the player picks a language.
     pub locale_override: Option<String>,
     pub presets: Value,
@@ -324,6 +328,7 @@ impl Shell {
         let mut shell = Shell {
             tables: load_tables(&store),
             mature: load_mature(&store),
+            word_cache: std::sync::Mutex::new(None),
             presets: serde_json::from_str(store::BUILTIN_PRESETS).unwrap_or(Value::Null),
             colours: serde_json::from_str(store::BUILTIN_COLOURS).unwrap_or(Value::Null),
             store,
@@ -406,7 +411,10 @@ impl Shell {
         if lang == "pseudo" {
             return i18n::pseudo(&i18n::tr_clean(&self.tables, "en", key, args, clean, &[]));
         }
-        i18n::tr_clean(&self.tables, &lang, key, args, clean, &self.words())
+        if !clean {
+            return i18n::tr_clean_set(&self.tables, &lang, key, args, false, &i18n::WordSet::new());
+        }
+        i18n::tr_clean_set(&self.tables, &lang, key, args, true, &self.word_set())
     }
 
     /// key.<CLDR category of n> in the current language, each locale of the chain with its own rule.
@@ -416,7 +424,35 @@ impl Shell {
         if lang == "pseudo" {
             return i18n::pseudo(&i18n::tr_plural_clean(&self.tables, "en", key, n, &[], clean, &[]));
         }
-        i18n::tr_plural_clean(&self.tables, &lang, key, n, &[], clean, &self.words())
+        if !clean {
+            return i18n::tr_plural_clean_set(&self.tables, &lang, key, n, &[], false, &i18n::WordSet::new());
+        }
+        i18n::tr_plural_clean_set(&self.tables, &lang, key, n, &[], true, &self.word_set())
+    }
+
+    /// The word lists per locale (data/i18n/mature/<locale>.json).
+    pub fn mature(&self) -> &BTreeMap<String, Vec<String>> {
+        &self.mature
+    }
+
+    /// New word lists; the folded cache goes with the old ones.
+    pub fn set_mature(&mut self, lists: BTreeMap<String, Vec<String>>) {
+        self.mature = lists;
+        *self.word_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// The chain's words folded once per locale and list (what t_args and tn mask with).
+    pub fn word_set(&self) -> std::sync::Arc<i18n::WordSet> {
+        let lang = self.language();
+        let mut cache = self.word_cache.lock().unwrap_or_else(|e| e.into_inner());
+        match cache.as_ref() {
+            Some((loc, set)) if *loc == lang => set.clone(),
+            _ => {
+                let set = std::sync::Arc::new(i18n::compile_words(&self.words()));
+                *cache = Some((lang, set.clone()));
+                set
+            }
+        }
     }
 
     /// The word lists of every locale in the current chain (a fallback line can come from any of them).

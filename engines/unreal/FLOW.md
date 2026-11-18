@@ -341,3 +341,11 @@ place on the editor's Python path (kit_shaders/shader_check.py under `Content/Py
 
 ## Field notes (reported, unverified)
 **One-prompt AAA-style FPS (E27).** A creator reports Claude building a one-mission tactical FPS in Unreal Engine 5 with Blender assets from a single big prompt in about 4 hours, with graphics, menus and settings that worked, and weak spots in the surrounding level and enemy tuning. He says it located Unreal and Blender itself without an MCP. Treat as "possible", not a recipe. For real work, start with one feature, keep the `dev.py` command contract, and read `docs/sop/SOP-09` for the interaction smoke checklist. Needs a strong GPU and about 50 GB of install.
+
+## Content switches
+- Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `FGameKitShellModel::bShowBloodSetting` / `bShowLanguageSetting` hide them in a game without
+  blood or strong language. The game reads `GetModel()->BloodEnabled()` (off: a neutral hit effect, SOP-18
+  step 4); with `GameKit::CleanLanguage(settings)` on, the model's `T()` picks `<key>@clean` lines and masks the
+  words of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot captures/content.png`
+  pictures both rows.
