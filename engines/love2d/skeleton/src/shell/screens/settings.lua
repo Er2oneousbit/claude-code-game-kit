@@ -21,6 +21,8 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab waits for Apply, with a keep-or-revert
 --           confirm for mode and resolution and a hint line (#308)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+--           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
 -- ---------------------------------------------------------------------------
 local Style = require("src.shell.style")
 local Widgets = require("src.shell.widgets")
@@ -33,6 +35,8 @@ local SettingsScreen = {}
 
 -- ---- Tunables ----------------------------------------------------------------
 local PRESETS_FILE = "data/input/presets.json"   -- the one-handed layouts (#166)
+local SHOW_BLOOD_SETTING = true      -- false: a game with no blood hides the Blood row (SOP-18)
+local SHOW_LANGUAGE_SETTING = true   -- false: a game with no strong language hides Clean language (SOP-19)
 local PRESET_NAMES = { "one_hand_left", "one_hand_right" }
 SettingsScreen.TABS = { "display", "audio", "controls", "access", "language" }
 local RESOLUTIONS = { { 1280, 720 }, { 1600, 900 }, { 1920, 1080 }, { 2560, 1440 }, { 3840, 2160 } }
@@ -317,7 +321,7 @@ end
 
 function SettingsScreen:access_rows()
   local f = function(...) return self:field("access", ...) end
-  return {
+  local rows = {
     f("text_scale", "slider", 0.75, 2.0, 0.25),
     f("subtitles", "toggle"),
     f("subtitle_size", "choice", Settings.SUB_SIZES),
@@ -338,8 +342,12 @@ function SettingsScreen:access_rows()
     f("timing_scale", "slider", 1.0, 3.0, 0.5),        -- #166: motor access
     f("auto_repeat", "toggle"),
     f("narration", "toggle"),                          -- #165: menu narration
-    self:back_row(),
   }
+  -- #171 and #207: what the game shows (content.*); labels are drawn through app:t, so a switch shows at once
+  if SHOW_BLOOD_SETTING then rows[#rows + 1] = self:field("content", "blood", "toggle") end
+  if SHOW_LANGUAGE_SETTING then rows[#rows + 1] = self:field("content", "clean_language", "toggle") end
+  rows[#rows + 1] = self:back_row()
+  return rows
 end
 
 function SettingsScreen:language_rows()

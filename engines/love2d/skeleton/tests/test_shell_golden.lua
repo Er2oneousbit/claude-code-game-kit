@@ -6,6 +6,8 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (the Display tab's Apply
 --           and its keep-or-revert confirm, #308), every step's result and state
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+--           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 -- ---------------------------------------------------------------------------
 local Golden = require("tests.helpers.golden")
 local Settings = require("src.core.settings")
@@ -31,7 +33,9 @@ function handlers.settings_load(case, tol, where)
   Golden.expect(#problems, case.problems, tol, where .. " problem count (" .. table.concat(problems, ", ") .. ")")
   Golden.expect(Settings.effective_shake(s), case.effective_shake, tol, where .. " effective_shake")
   Golden.expect(Settings.telemetry_allowed(s), case.telemetry_allowed, tol, where .. " telemetry_allowed")
-  return 4
+  Golden.expect(Settings.blood_enabled(s), case.blood_enabled, tol, where .. " blood_enabled")
+  Golden.expect(Settings.clean_language(s), case.clean_language, tol, where .. " clean_language")
+  return 6
 end
 
 function handlers.rebind(case, tol, where)
@@ -80,10 +84,57 @@ end
 function handlers.plural(case, tol, where)
   for i, p in ipairs(case.points) do
     Golden.expect(I18n.plural(p[1], p[2]), p[3], tol, where .. " plural " .. p[1] .. " " .. p[2] .. " (" .. i .. ")")
-    Golden.expect(I18n.tr_plural(case.tables, p[1], "apples", p[2]), p[4], tol,
+    Golden.expect(I18n.tr_plural(case.tables, p[1], case.key, p[2]), p[4], tol,
                   where .. " text " .. p[1] .. " " .. p[2] .. " (" .. i .. ")")
   end
   return #case.points * 2
+end
+
+function handlers.plural_rules(case, tol, where)
+  local n = 0
+  for _, s in ipairs(case.sweep) do
+    local k = 0
+    for cat in s[3]:gmatch("%S+") do
+      Golden.expect(I18n.plural(s[1], s[2] + k), cat, tol, where .. " " .. s[1] .. " n=" .. (s[2] + k))
+      k = k + 1
+      n = n + 1
+    end
+  end
+  for i, p in ipairs(case.points) do
+    Golden.expect(I18n.plural(p[1], p[2]), p[3], tol, where .. " " .. p[1] .. " " .. p[2] .. " (" .. i .. ")")
+    n = n + 1
+  end
+  return n
+end
+
+function handlers.tr_clean(case, tol, where)
+  for i, p in ipairs(case.points) do
+    local n = Golden.opt(p[3])
+    local got
+    if n == nil then
+      got = I18n.tr(case.tables, p[1], p[2], p[4], p[5], p[6])
+    else
+      got = I18n.tr_plural(case.tables, p[1], p[2], n, p[4], p[5], p[6])
+    end
+    Golden.expect(got, p[7], tol, where .. " " .. p[1] .. "/" .. p[2] .. " (" .. i .. ")")
+  end
+  return #case.points
+end
+
+function handlers.mask_words(case, tol, where)
+  Golden.expect(I18n.GRAWLIX, case.grawlix, tol, where .. " grawlix")
+  for i, p in ipairs(case.points) do
+    Golden.expect(I18n.mask_words(p[1], p[2]), p[3], tol, where .. " (" .. i .. ") " .. p[1])
+  end
+  return #case.points + 1
+end
+
+function handlers.mature_words(case, tol, where)
+  for i, p in ipairs(case.points) do
+    Golden.expect(Json.array(I18n.mature_words(Golden.opt(p[1]), Json.try_decode)), p[2], tol,
+                  where .. " (" .. i .. ")")
+  end
+  return #case.points
 end
 
 function handlers.narration(case, tol, where)

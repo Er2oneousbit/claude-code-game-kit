@@ -8,6 +8,7 @@
 --           local s, problems = Settings.load(text)         -- text may be nil (no file yet)
 --           Settings.effective_shake(s)   -> 0 with reduce motion, else access.shake_scale
 --           Settings.telemetry_allowed(s) -> only after an explicit yes
+--           Settings.blood_enabled(s), Settings.clean_language(s) -> the content switches (#171, #207)
 --           local text = Settings.encode(s)                 -- write it with src/core/atomic_file.lua
 --           Settings.load_from(store) / Settings.save_to(store, s)   -- settings.json in the user-data folder
 -- Notes   : No love.* calls. The schema below is the contract every engine of the kit shares (SOP-19): add a
@@ -20,6 +21,8 @@
 --   per schema section: not an object -> problem, {}; per field: missing -> default, bad -> fixed + problem
 --   input.bindings: per action a list of strings (non-strings dropped, a non-list keeps the default) + problems
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+--           blood_enabled() and clean_language() (#171, #207)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local Bindings = require("src.core.bindings")
@@ -52,11 +55,12 @@ local function defaults_table()
                            subtitle_hold = false, timing_scale = 1.0, auto_repeat = false, narration = false }),
     input = Json.object({ bindings = Bindings.defaults(), deadzone = 0.2, invert_y = false, glyphs = "auto" }),
     telemetry = Json.object({ consent = "unset" }),
+    content = Json.object({ blood = true, clean_language = false }),
   })
 end
 
 -- section -> field -> rule; the order of SECTIONS is only for readable problem lists
-Settings.SECTIONS = { "display", "audio", "access", "input", "telemetry" }
+Settings.SECTIONS = { "display", "audio", "access", "input", "telemetry", "content" }
 Settings.SCHEMA = {
   display = { mode = { "enum", Settings.DISPLAY_MODES }, vsync = { "bool" }, frame_cap = { "enum", Settings.FRAME_CAPS },
               resolution = { "res" }, ui_scale = { "num", 0.75, 2.0 } },
@@ -71,6 +75,7 @@ Settings.SCHEMA = {
              timing_scale = { "num", 1.0, 3.0 }, auto_repeat = { "bool" }, narration = { "bool" } },
   input = { deadzone = { "num", 0, 0.9 }, invert_y = { "bool" }, glyphs = { "enum", Bindings.GLYPH_SETS } },
   telemetry = { consent = { "enum", Settings.CONSENT } },
+  content = { blood = { "bool" }, clean_language = { "bool" } },
 }
 
 function Settings.defaults() return defaults_table() end
@@ -196,6 +201,16 @@ end
 
 function Settings.telemetry_allowed(s)
   return s.telemetry.consent == "yes"
+end
+
+-- #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18)
+function Settings.blood_enabled(s)
+  return s.content.blood
+end
+
+-- #207: the translator picks @clean lines and masks the game's word list (SOP-19)
+function Settings.clean_language(s)
+  return s.content.clean_language
 end
 
 function Settings.encode(s)

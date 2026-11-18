@@ -7,6 +7,8 @@
 -- Notes   : The key scan finds literal keys in calls like app:t("menu.play"); keys built at runtime
 --           ("settings." .. section .. "." .. name) are covered by the pseudo smoke run instead.
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the translator the shell uses honours clean language
+--           in t, tp and the pseudo-locale, and the shipped word list loads apart from the tables (#207)
 -- ---------------------------------------------------------------------------
 local A = require("tests.assert")
 local Json = require("src.core.json")
@@ -75,6 +77,24 @@ function T.test_every_english_string_survives_pseudo()
     A.eq(p:sub(-1), "]", key)
     A.truthy(I18n.length(p) >= I18n.length(text), key)
   end
+end
+
+function T.test_the_shell_translator_honours_clean_language()
+  local words = I18n.mature_words(love.filesystem.read(DIR .. "mature/en.json"), Json.try_decode)
+  A.eq(#words, 0, "the kit's word list ships empty")
+  local i18n = I18n.new({
+    en = { bye = "Damn, bye {name}.", ["bye@clean"] = "Bye {name}.", ["hits.one"] = "{n} damn hit",
+           ["hits.one@clean"] = "{n} hit", ["hits.other"] = "{n} hits" },
+    fr = { bye = "Merde, salut {name}." } }, "fr")
+  i18n.mature = { fr = { "merde" }, en = { "damn" } }
+  A.eq(i18n:t("bye", { name = "Ana" }), "Merde, salut Ana.", "off: as written")
+  i18n.clean = true
+  A.eq(i18n:t("bye", { name = "Damn" }), "#@$%#, salut #@$%.", "fr stays fr; masked with both lists")
+  i18n:set_locale("en")
+  A.eq(i18n:t("bye", { name = "Ana" }), "Bye Ana.")
+  A.eq(i18n:tp("hits", 1), "1 hit")
+  i18n:set_locale("pseudo")
+  A.eq(i18n:t("bye", { name = "Ana" }), "[Býé Ana.~~]")
 end
 
 function T.test_code_points_not_bytes()
