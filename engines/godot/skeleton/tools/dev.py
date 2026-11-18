@@ -80,6 +80,8 @@
 #           would not load) and a crashed headless import run again, up to 3 runs: both crash now and then on Godot
 #           4.7.2, most on a project's first run (#264)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os

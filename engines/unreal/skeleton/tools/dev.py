@@ -110,6 +110,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): test and smoke build first when a C++ source is newer
 #           than its built module (they ran the old binaries and passed on code that was never compiled)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import json
