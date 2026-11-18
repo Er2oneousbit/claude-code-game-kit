@@ -168,6 +168,8 @@
   "controls.preset.one_hand_right": "Une main (droite)",
   "controls.preset_done": "Disposition à une main choisie. Tout reste modifiable.",
   "settings.access.narration": "Lire les menus à voix haute",
+  "settings.content.blood": "Sang",
+  "settings.content.clean_language": "Langage filtré",
   "narrate.button": "bouton",
   "narrate.toggle": "interrupteur",
   "narrate.slider": "curseur",

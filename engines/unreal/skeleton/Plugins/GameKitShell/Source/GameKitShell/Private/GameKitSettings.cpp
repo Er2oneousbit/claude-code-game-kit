@@ -7,6 +7,8 @@
 //           reference, tools/golden_vectors.py, when the kit itself changes). Enum values compare
 //           case-sensitively, like the reference: "Fullscreen" is a problem, not "fullscreen".
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+//           BloodEnabled() and CleanLanguage() (#171, #207)
 // ---------------------------------------------------------------------------
 #include "GameKitSettings.h"
 
@@ -150,6 +152,10 @@ namespace GameKit
 				}});
 				S.Add({TEXT("telemetry"), {
 					SchemaOneOf(TEXT("consent"), TEXT("unset"), ConsentValues),
+				}});
+				S.Add({TEXT("content"), {   // #171, #207: what the game shows
+					SchemaFlag(TEXT("blood"), true),
+					SchemaFlag(TEXT("clean_language"), false),
 				}});
 				return S;
 			}();
@@ -404,6 +410,16 @@ namespace GameKit
 	{
 		const TSharedPtr<FJsonObject> Telemetry = SettingsSection(Settings, TEXT("telemetry"));
 		return Json::GetString(Telemetry, TEXT("consent"), FString()).Equals(TEXT("yes"), ESearchCase::CaseSensitive);
+	}
+
+	bool BloodEnabled(const FJsonObject& Settings)
+	{
+		return Json::GetBool(SettingsSection(Settings, TEXT("content")), TEXT("blood"), true);
+	}
+
+	bool CleanLanguage(const FJsonObject& Settings)
+	{
+		return Json::GetBool(SettingsSection(Settings, TEXT("content")), TEXT("clean_language"), false);
 	}
 
 	double SettingNumber(const FJsonObject& Settings, const FString& Section, const FString& Field)

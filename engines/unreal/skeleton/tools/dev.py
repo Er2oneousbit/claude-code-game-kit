@@ -1456,7 +1456,7 @@ def build_parser():
                         "display (the Display tab's Apply: stage, warn, apply, the 15 s confirm reverts in real time, "
                         "discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, main_menu, settings, pause, help, history, credits, loading, subtitle, "
+                        "show:<screen> (title, main_menu, settings, content, pause, help, history, credits, loading, subtitle, "
                         "juice, apply, confirm; add --screenshot)")
     p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
                                                    "project; the editor draws it off-screen, a GPU)")
