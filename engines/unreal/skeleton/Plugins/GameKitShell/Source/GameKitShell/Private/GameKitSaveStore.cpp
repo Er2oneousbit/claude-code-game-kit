@@ -190,7 +190,15 @@ bool FGameKitSaveStore::Save(const TSharedRef<FJsonObject>& Data, FString* OutEr
 		FPlatformFileManager::Get().GetPlatformFile().DeleteFile(*TempPathFor(File));
 		return false;
 	}
-	return CommitTemp(File, OutError);
+	if (!CommitTemp(File, OutError))
+	{
+		return false;
+	}
+	if (OnSaved)
+	{
+		OnSaved(FPaths::GetCleanFilename(File));
+	}
+	return true;
 }
 
 // {{FOOTER}}

@@ -52,6 +52,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): T() honours content.clean_language with the word lists
 //           of data/i18n/mature/ (MatureWords), BloodEnabled(), and the Blood and Clean language rows (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform() (docs/PLATFORM.md, #84), SaveSlot() with the
+//           cloud hook, OnOverlay() for the store overlay's pause; the pause screen and quit flush
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -60,6 +62,8 @@
 #include "GameKitBindings.h"
 #include "GameKitDisplayStaging.h"
 #include "GameKitI18n.h"
+#include "GameKitPlatform.h"
+#include "GameKitSaveStore.h"
 
 struct FGameKitJuiceDemo;
 
@@ -360,6 +364,15 @@ public:
 	                                                  // "display_applied", "display_kept" (#308), "hud_scale_changed" (#309)
 	bool bQuitRequested = false;
 	bool bConsentAsked = false;
+
+	// ---- Platform services (#84, docs/PLATFORM.md) ----
+	/** Achievements, stats, presence and cloud hooks: the null backend unless the game's Build.cs turns GAMEKIT_STEAM on
+	 *  and Steam answered. */
+	GameKit::FPlatformService& Platform() { return *PlatformService; }
+	/** A save slot in DataDir ("save_1.json") whose saves reach Platform().Saved (the cloud hook). */
+	FGameKitSaveStore SaveSlot(const FString& FileName);
+	/** A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes. */
+	void OnOverlay(bool bActive);
 	/** A drive presses for this model (FGameKitShellDrive sets it, #276): a widget showing it takes no real keyboard,
 	 *  mouse or pad input, so a stray key or a virtual pad cannot break the tour. KeyPressed() and Dispatch() still
 	 *  work: they are what the drive calls. */
@@ -383,6 +396,7 @@ private:
 	bool bHeld = false;
 	TArray<FGameKitSaidLine> SaidLines;
 	FGameKitDisplayStaging Staging;                    // the Display tab's pending changes (#308)
+	TUniquePtr<GameKit::FPlatformService> PlatformService;
 	double LastRealTime = -1.0;                        // FPlatformTime::Seconds() at the last Update: the confirm's clock
 	int32 LastConfirmSecs = -1;                        // the countdown redraws when its whole second changes
 	double LastHudScale = 1.0;                         // hud_scale_changed fires when HudScale() leaves it (#309)

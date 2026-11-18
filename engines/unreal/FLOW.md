@@ -102,6 +102,7 @@ widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does
 | `GameKitFeel.h` | the SOP-18 recipe helpers: `Impact` (a hit confirm scaled by damage), `FloatText` (a damage number's rise, pop and fade), `TrailPush` / `TrailShrink` / `TrailLength` (a tracer's path, by distance) |
 | `GameKitSettings.h`, `GameKitBindings.h` | settings defaults and validated loading (bad fields fixed and listed), rebinding with swaps, button-glyph names |
 | `GameKitSaveStore.h`, `GameKitAtomicFile.h` | versioned saves with migrations, a `.bak` of the last good save, crash-safe writes (`.tmp`, flush, rename) |
+| `GameKitPlatform.h` | the platform layer (docs/PLATFORM.md): achievements, stats, rich presence, the overlay's pause hook, cloud-save hooks, the null backend; the shell model owns one (`Model->Platform()`, `SaveSlot()`) |
 | `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
 | `GameKitAudioDirector.h`, `GameKitMusicDirector.h`, `GameKitAudioAccess.h` | Wavesmith's audio rules (tools/audio/wavesmith): which take of a sound event plays at what pitch and volume, voice caps, cooldowns and dialogue ducking; music transition plans on the exact sample (beat, bar, phrase, loop end, fades, stingers, synced entry; start sounds on them with a Quartz clock); settings sliders per bus, never twice down one branch, and the arrow for a caption whose sound is off screen |
 
