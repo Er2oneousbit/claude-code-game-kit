@@ -41,6 +41,7 @@
 #   dotwork: node tools/dotwork_mz.mjs --game <the MZ project> [options]; check also runs its --check once an
 #          export record exists
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --drive menus|access|crash (tools/mz_drives.js, #280)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): GameAudio.js (the kit's audio rules) is one of the
@@ -94,6 +95,8 @@ NOT_SHIPPED = {"save"}                     # build leaves these out
 NOT_SHIPPED_SUFFIX = (".rmmzproject",)
 SHIPPED_AT_ROOT = ("index.html", "package.json", "js", "data", "img", "audio", "effects", "fonts", "css", "icon")
 SMOKE_FRAMES = 120
+DRIVES = ("menus", "access", "crash")     # smoke --drive: tools/mz_drives.js (#280)
+DRIVE_FAILS_ON_PURPOSE = {"crash": "DRIVE_CRASH"}   # drive -> the marker that proves the planted failure
 BOOT_MARKER = "BOOT_OK"                    # logged by game/js/plugins/GameMain.js
 SMOKE_TIMEOUT_S = 240                      # MZ loads its whole database before the title: software WebGL is slow
 SMOKE_MIN_FPS = 20
@@ -775,13 +778,21 @@ def cmd_smoke(args):
            "--marker", BOOT_MARKER, "--timeout-ms", str(args.timeout * 1000)] + (["--verbose"] if DEBUG else [])
     for flag, value in (("--query", args.query), ("--until", args.until), ("--fail-on", args.fail_on),
                         ("--screenshot", args.screenshot), ("--record", args.record),
-                        ("--record-every", str(args.record_every) if args.record else "")):
+                        ("--record-every", str(args.record_every) if args.record else ""), ("--drive", getattr(args, "drive", ""))):
         if value:
             cmd += [flag, value]
     cmd += ["--headed"] if args.headed else []
     limit = SMOKE_TIMEOUT_S + args.timeout + args.frames // SMOKE_MIN_FPS
     rc, out = run(cmd, capture=True, timeout=limit)
     print(out.rstrip())
+    drive = getattr(args, "drive", "")
+    if drive in DRIVE_FAILS_ON_PURPOSE and rc != 2 and rc not in NO_EXEC:
+        # a drive that must fail: the proof is the planted marker; either way the exit is 1 (#280)
+        marker = DRIVE_FAILS_ON_PURPOSE[drive]
+        print(f"[info] --drive {drive} fails on purpose: {marker} in the output is the proof")
+        if marker not in out:
+            print(f"[FAIL] --drive {drive} did not fail with its planted error (a smoke that cannot fail proves nothing)")
+        return 1
     if rc == 124:
         print(f"[FAIL] smoke did not finish within {limit} s")
         return 1
@@ -1111,6 +1122,10 @@ def build_parser():
     p.add_argument("--screenshot", default="", help="save a PNG of the final frame (path relative to the project)")
     p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
+    p.add_argument("--drive", default="", choices=DRIVES,
+                   help="a scripted run of MZ's own screens (tools/mz_drives.js): menus (every screen opens), access (every "
+                        "kit row on the Options screen turns and is saved), crash (fails on purpose). Not yet run "
+                        "against a real MZ project (verify)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU)")
     p.add_argument("--shaders", action="store_true",
                    help="also render every kit shader recipe as a PIXI filter and compare it with its golden image "

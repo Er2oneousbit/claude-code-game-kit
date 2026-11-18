@@ -83,9 +83,13 @@ and a clear spec for the Blueprint child.
   `u_canvas` the size pixel parameters (`u_light_pos`) are given in. Import pixel art as linear, Nearest, no mips
   (`kit_materials.import_texture` does it). `check` compiles the recipes as materials and `smoke --shaders` draws each
   into a render target and compares it with its golden image, both in the full editor off-screen (a GPU; about a
-  minute each). Those runs draw opaque check variants built from the same graph; the translucent `M_Kit_` assets and
-  post effects in a Post Process material (PostProcessInput0 in place of `MainTex`) are **(verify)** in your game.
-  Python needs the PythonScriptPlugin enabled in the `.uproject`.
+  minute each). They draw opaque check variants built from the same graph, and also the translucent `M_Kit_` materials
+  as a game uses them (drawn over black and over white, which gives their straight RGBA back) and each post recipe as a
+  Post Process material (`M_KitPost_<name>`, PostProcessInput0 in place of `MainTex`, applied after tonemapping through a
+  SceneCapture2D), every one compared with the same golden image. A Post Process material in a SceneCapture2D needs
+  `always_persist_rendering_state` on (UE 5.8 drops the blendable without the capture's view state); in your own
+  game put `M_KitPost_<name>` in a Post Process Volume's blendables. Python needs the PythonScriptPlugin enabled in
+  the `.uproject`.
 - **Dotwork art (Paper2D):** Dotwork runs with `--engine none` in an Unreal game by default (from `.game-kit.json`;
   its `assets_dir` stays "assets", which keeps the PNGs out of `Content/`, where the open editor would auto-import
   them), then `python tools/dev.py exec

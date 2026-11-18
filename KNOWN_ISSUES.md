@@ -53,8 +53,8 @@ examples were built and tested on one Windows 11 machine.
 
 ### 0.14 follow-ups (shaders, C++ on SDL3, cloud deploy)
 - **Shader recipes** match their golden images in all nine engines on one Windows machine; not checked: C++ on Metal
-  and Linux, Unreal's translucent `M_Kit_*` assets and a Post Process variant, KitShaders.js inside a real RPG Maker MZ
-  game, Unity HDRP, other GPUs, web exports of Godot and Bevy:
+  and Linux, KitShaders.js inside a real RPG Maker MZ game, other GPUs, web exports of Godot and Bevy (Unreal's
+  translucent and Post Process materials and Unity HDRP are checked since 0.16):
   [#260](https://github.com/Er2oneousbit/claude-code-game-kit/issues/260).
 - **Cloud deploy** (`dev.py ship`, OpenTofu modules for AWS, Azure, GCP, Linode, DigitalOcean): validated offline
   only, never applied to a real account; Linode and DigitalOcean have no budget API (set an alert by hand); the

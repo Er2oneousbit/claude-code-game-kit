@@ -10,6 +10,7 @@
 # Notes   : Standard library only. Rendering the ports is each engine's `dev.py smoke --shaders` (real toolchains);
 #           this exam checks what can be checked without them.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): Unreal's Post Process variant (#260)
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -56,6 +57,31 @@ class ShaderPortsExam(unittest.TestCase):
                     ns = {}
                     exec(compile(text, rel, "exec"), ns)
                     self.assertEqual(sorted(ns["RECIPES"]), sorted(r["name"] for r in recipes))
+
+    def test_unreal_post_recipes_read_the_scene_once(self):
+        # #260: kit_materials.build_post swaps the one scene sample for the Post Process material's scene colour; a
+        # post recipe that samples MainTex another way would raise in the editor (a check that never reached the GPU)
+        unreal = KIT / "engines" / "unreal" / "skeleton" / "Content" / "Python" / "kit_shaders"
+        sample = re.search(r'^SCENE_SAMPLE = "(.+?)"', (unreal / "kit_materials.py").read_text(encoding="utf-8"), re.M)
+        self.assertIsNotNone(sample, "kit_materials.py has no SCENE_SAMPLE")
+        ns = {}
+        exec(compile((unreal / "kit_recipes.py").read_text(encoding="utf-8"), "kit_recipes.py", "exec"), ns)
+        posts = {n: r for n, r in ns["RECIPES"].items() if r["group"] == "post"}
+        self.assertTrue(posts)
+        for name, recipe in posts.items():
+            with self.subTest(recipe=name):
+                self.assertEqual(recipe["code"].count(sample.group(1)), 1)
+                self.assertNotIn("MainTex", recipe["code"].replace(sample.group(1), ""))
+
+    def test_unreal_check_writes_the_folders_dev_py_compares(self):
+        # #260: shader_check.py writes <out>/translucent and <out>/post; dev.py's SHADER_VARIANTS compares the same
+        engine = KIT / "engines" / "unreal" / "skeleton"
+        check = (engine / "Content" / "Python" / "kit_shaders" / "shader_check.py").read_text(encoding="utf-8")
+        dev = (engine / "tools" / "dev.py").read_text(encoding="utf-8")
+        variants = re.search(r"^SHADER_VARIANTS = \((.+)\)\s+#", dev, re.M)
+        self.assertIsNotNone(variants, "dev.py has no SHADER_VARIANTS")
+        for folder in re.findall(r'\("(\w+)", \(', variants.group(1)):
+            self.assertIn(f'write_variant("{folder}"', check)
 
     def test_translations(self):
         self.assertEqual(sg.to_hlsl("vec3 a = vec3(1.0);"), "float3 a = ((float3)(1.0));")
