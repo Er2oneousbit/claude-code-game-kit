@@ -10,6 +10,8 @@
 //           runs into a temporary folder, never into game/. MZ itself is not here: these prove the files have MZ's
 //           shapes and the right pixels, not that MZ draws them as intended (verify in the editor).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): maps and backgrounds are converted now (#286; their
+//           tests are in dotworkMzMaps.test.js), the duo font skipped like tiny
 // ---------------------------------------------------------------------------
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -21,8 +23,8 @@ const { expectClose } = require("./support/golden.js");
 const GOLDEN = path.resolve(__dirname, "..", "data", "golden", "dotwork");
 const MANIFEST = path.join(GOLDEN, "assets", "dotwork", "golden.assets.json");
 const TOL = 1e-6;               // ASSET_MANIFEST.md: numbers rounded to 6 decimals, compared within 1e-6
-const MZ_KINDS = ["animated_sprite", "sprite", "icon", "portrait", "tileset", "ui_kit"];
-const SKIPPED = ["map/yard", "font/tiny", "background/hills", "particles/vfx_embers_particles",
+const MZ_KINDS = ["animated_sprite", "sprite", "icon", "portrait", "tileset", "ui_kit", "map"];   // maps: square ones
+const SKIPPED = ["font/tiny", "font/duo", "particles/vfx_embers_particles",
     "transition/transition_wipe", "normal_map/spr_crate_n", "image/logo_golden"];
 
 let mz, png, expected, golden, tmp;
@@ -57,7 +59,7 @@ function sameRegion(a, x, y, b, where) {
 // ---- the manifest, as every engine's importer reads it ------------------------------------------------------
 test("golden: every kind MZ uses loads to expected.json's numbers", () => {
     const got = mz.expectedOf(golden.doc);
-    const keys = Object.keys(expected).filter((k) => MZ_KINDS.includes(k.split("/")[0]));
+    const keys = Object.keys(expected).filter((k) => MZ_KINDS.includes(k.split("/")[0]) && !(k.startsWith("map/") && expected[k].shape !== "square"));
     assert.ok(keys.length >= 10, "the golden pack should hold every MZ kind");
     for (const k of keys) expectClose(got[k], expected[k], TOL, k);
     assert.deepEqual(Object.keys(got).sort(), keys.sort(), "no other kinds are loaded");
@@ -118,19 +120,20 @@ test("icon pick: the size that fits MZ's 32 px cell", () => {
     assert.equal(mz.iconPick({ sizes: [{ size: 24, image: "a" }] }), null);
 });
 
-test("tileset plan: plain tiles on B (tile 0 left empty), stamps kept whole, terrain left for later", () => {
+test("tileset plan: tiles on B (tile 0 left empty), stamps kept whole, autotiled terrain left to A1 / A2", () => {
     const ts = assetOf("tileset", "ground_yard");
     const want = expected["tileset/ground_yard"];
-    const plan = mz.tilesetPlan(ts, 6, 48);
-    const terrain = ts.atlases.flatMap((a) => a.tiles).filter((t) => "terrain" in t).length;
-    assert.equal(Object.keys(plan.tiles).length, want.tiles - terrain, "every tile without a terrain");
+    assert.equal(Object.keys(mz.tilesetPlan(ts, 6, 48).tiles).length, want.tiles, "no autotiles: every tile on B");
+    const autotiled = new Map([["0/1", new Set(["1,0,0"])]]);   // the path's lone tile drawn by an autotile
+    const plan = mz.tilesetPlan(ts, 6, 48, autotiled);
+    assert.equal(Object.keys(plan.tiles).length, want.tiles - 1, "every tile an autotile does not draw");
+    assert.equal(plan.tiles["1,0,0"], undefined);
     assert.deepEqual(Object.keys(plan.sheets), ["B"]);
     assert.equal(plan.sheets.B[0], "empty");
     // the 1 x 2 door stamp: one above the other in the editor's 8-wide palette
     assert.equal(plan.tiles["4,1,0"].id - plan.tiles["4,0,0"].id, 8);
     assert.equal(plan.tiles["4,0,0"].passable, false);
     assert.equal(plan.tiles["0,0,0"].passable, true);
-    assert.ok(plan.notes.some((n) => /terrain tile.*A1 to A4/.test(n)), plan.notes.join("; "));
     assert.deepEqual(mz.tileSlot(0), { col: 0, row: 0 });
     assert.deepEqual(mz.tileSlot(9), { col: 1, row: 1 });
     assert.deepEqual(mz.tileSlot(128), { col: 8, row: 0 });
@@ -220,7 +223,10 @@ test("export: kinds MZ has no place for are skipped with a note each", () => {
     }
     assert.ok(res.notes.some((n) => /iso_isle: isometric/.test(n)));
     assert.ok(res.notes.some((n) => /fx_spark/.test(n)));
-    assert.equal(res.written, 7);
+    // characters, objects, faces, B sheets of 4 tilesets, A1 + A2 of the yard, Window, IconSet, 2 battle backs
+    // (no MZ database in this folder: the maps get a note instead)
+    assert.equal(res.written, 13);
+    assert.ok(res.notes.some((n) => /maps: no MZ database/.test(n)));
 });
 
 test("export: a re-run writes nothing; files Dotwork did not write are kept unless --replace", () => {
@@ -297,7 +303,8 @@ test("check: the record against the files and MZ's shapes", () => {
 
 test("command line: options are checked before anything runs", () => {
     assert.throws(() => mz.parseArgs(["--scale", "1.5"]), /whole number/);
-    assert.throws(() => mz.parseArgs(["--only", "maps"]), /unknown maps/);
+    assert.throws(() => mz.parseArgs(["--only", "mapz"]), /unknown mapz/);
+    assert.deepEqual(mz.parseArgs(["--only", "maps,backgrounds"]).only, ["maps", "backgrounds"]);
     assert.throws(() => mz.parseArgs(["--sheet", "../x"]), /plain file name/);
     assert.throws(() => mz.parseArgs(["--bogus"]), /unknown option/);
     assert.deepEqual(mz.parseArgs(["--only", "faces,icons", "--replace"]).only, ["faces", "icons"]);

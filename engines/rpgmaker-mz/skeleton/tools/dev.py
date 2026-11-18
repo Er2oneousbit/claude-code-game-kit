@@ -18,8 +18,9 @@
 #             clean    remove build/ (--deep also removes node_modules/)
 #             doctor   verify the local environment
 #             dotwork  turn Dotwork's art (asset manifests) into MZ's image layouts in game/img: character,
-#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, B to E
-#                      tilesets (tools/dotwork_mz.mjs; dotwork -h for its options)
+#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, A1 / A2
+#                      autotiles and B to E tilesets, battle backs and parallaxes, and the maps into game/data
+#                      (tools/dotwork_mz.mjs; dotwork -h for its options)
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
 #                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
@@ -64,6 +65,8 @@
 #           reason, exit 2) instead of "no tests ran" (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` also makes autotiles, battle backs,
+#           parallaxes and maps (data/MapNNN.json with its tileset and MapInfos entries, #286)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -1125,10 +1128,12 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="accepted on every engine; this clean never asks")
     p.set_defaults(fn=cmd_clean)
     p = sub.add_parser("dotwork", help="Dotwork's art into MZ's image layouts in game/img (characters, faces, "
-                                       "battlers, Window.png, IconSet.png, B to E tilesets)",
+                                       "battlers, Window.png, IconSet.png, autotiles and tilesets, battle backs, "
+                                       "parallaxes) and its maps into game/data",
                        description="Convert Dotwork's asset manifests (<assets_dir>/dotwork/*.assets.json) into RPG "
-                                   "Maker MZ's image layouts in game/img, and record the icon, face and tile ids for "
-                                   "the database in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
+                                   "Maker MZ's image layouts in game/img and its maps into game/data (MapNNN.json, "
+                                   "with Tilesets.json and MapInfos.json entries), and record the icon, face, tile "
+                                   "and map ids in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
                                    "not write unless --replace. docs/ENGINE_FLOW.md 'Dotwork art in MZ'.")
     p.add_argument("--manifest", action="append", metavar="FILE",
                    help="a manifest to convert (repeatable; default: every *.assets.json in Dotwork's assets folder)")
@@ -1137,7 +1142,8 @@ def build_parser():
     p.add_argument("--sheet", default="", metavar="NAME",
                    help="put characters on normal sheets NAME, NAME_2 ... (8 each) instead of one $ file each")
     p.add_argument("--only", default="", metavar="KINDS",
-                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets")
+                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets, maps, "
+                        "backgrounds")
     p.add_argument("--stand", choices=("walk", "idle"), default="",
                    help="the standing frame (MZ's middle column): walk's first (default) or idle's")
     p.add_argument("--side-view", action="store_true", help="make side-view battlers even in a front-view game")
