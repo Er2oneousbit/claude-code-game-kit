@@ -25,13 +25,17 @@
 //               cell gets its image's top-left in map pixels: the cell centre (square rows, or the diamond-down
 //               isometric layout) less the tile's origin (ASSET_MANIFEST.md "Placing tiles")
 //             font: Phaser's BitmapFont data built from `chars` (Phaser parses BMFont XML; Dotwork writes the text
-//               format, so the data is built here instead of parsing either file)
+//               format, so the data is built here instead of parsing either file); BitmapText draws from one
+//               texture, so a font of several pages gets them stacked into one (fontAtlas) and every glyph moved
+//               down by its page's top
 //             extra kinds: background, particles, transition, normal_map and image are planned and exposed by name
 //               (a normal map rides on its target's texture); unknown kinds are skipped with one warning each
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 keys, the variant
 //           pick, stamps layers, cell centres and placement, the extra kinds loaded
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): fonts of several pages (#286): fontAtlas stacks them
+//           into one texture, bitmapFontData keeps every glyph (page 1 and later were dropped)
 // ---------------------------------------------------------------------------
 
 export const FORMAT = "dotwork-assets";
@@ -743,8 +747,8 @@ class Planner {
     if (!pages.length) throw new DotworkError(`${where}: no pages`);
     const chars = (Array.isArray(a.chars) ? a.chars : []).map((c) => nums(c, 9, `${where} chars`));
     const kerning = (Array.isArray(a.kerning) ? a.kerning : []).map((k) => nums(k, 3, `${where} kerning`));
-    const off = chars.filter((c) => c[8] !== 0).length;
-    if (off) this.plan.warnings.push(`${where}: ${off} glyph(s) on page 1 or later are left out (Phaser's BitmapText draws from one texture)`);
+    const bad = chars.filter((c) => c[8] < 0 || c[8] >= pages.length).length;
+    if (bad) this.plan.errors.push(`${where}: ${bad} glyph(s) name a page the font does not have`);
     this.plan.fonts.set(name, {
       name, key: `${this.plan.pack}/${name}`, file: this.file(a.file, where), texture: pages[0], pages,
       lineHeight: num(a, "line_height", where), base: num(a, "base", where), scale: num(a, "scale", where, 1), tint: a.tint !== false, chars, kerning,
@@ -807,15 +811,30 @@ export function planManifest(doc: unknown, url: string): DotworkPlan {
 }
 
 // ---- Phaser data built from the plan (still engine-free: plain objects) -----------------------------------
+/** Where each page of a font sits in the one texture Phaser's BitmapText draws from: the pages stacked top to
+ *  bottom, page 0 first, left-aligned (#286; a one-page font is its page). sizes: each page's [w, h] in pixels. */
+export function fontAtlas(sizes: ReadonlyArray<readonly [number, number]>): { width: number; height: number; tops: number[] } {
+  const tops: number[] = [];
+  let height = 0;
+  for (const [, h] of sizes) {
+    tops.push(height);
+    height += h;
+  }
+  return { width: Math.max(0, ...sizes.map(([w]) => w)), height, tops };
+}
+
 /** Phaser's BitmapText data from the manifest's `chars`, the same shape ParseXMLBitmapFont makes from BMFont XML
- *  (Phaser 4: v runs bottom-up, so v0 = 1 - y / height). pageW/pageH: page 0's size in pixels. */
-export function bitmapFontData(f: PlanFont, pageW: number, pageH: number): BitmapFontData {
+ *  (Phaser 4: v runs bottom-up, so v0 = 1 - y / height). sizes: each page's [w, h] in pixels; a glyph's x, y and
+ *  uv are in the stacked texture fontAtlas lays out (page p's glyphs moved down by tops[p]). */
+export function bitmapFontData(f: PlanFont, sizes: ReadonlyArray<readonly [number, number]>): BitmapFontData {
+  const { width: W, height: H, tops } = fontAtlas(sizes);
   const chars: Record<number, BitmapGlyph> = {};
-  for (const [id, x, y, w, h, xo, yo, xa, page] of f.chars) {
-    if (page !== 0) continue;
+  for (const [id, x, py, w, h, xo, yo, xa, page] of f.chars) {
+    if (page < 0 || page >= tops.length) continue;
+    const y = py + tops[page];
     chars[id] = {
       x, y, width: w, height: h, centerX: Math.floor(w / 2), centerY: Math.floor(h / 2), xOffset: xo, yOffset: yo, xAdvance: xa,
-      data: {}, kerning: {}, u0: x / pageW, v0: 1 - y / pageH, u1: (x + w) / pageW, v1: 1 - (y + h) / pageH,
+      data: {}, kerning: {}, u0: x / W, v0: 1 - y / H, u1: (x + w) / W, v1: 1 - (y + h) / H,
     };
   }
   for (const [first, second, amount] of f.kerning) if (chars[second]) chars[second].kerning[first] = amount;
@@ -929,11 +948,13 @@ export function loadedResult(plan: DotworkPlan): Record<string, unknown> {
     out[`map/${m.name}`] = { size: m.size, shape: m.shape, tile_size: m.tileSize, layers, terrain, placed, centres, objects: m.objects.map((o) => [o.asset, o.x, o.y]) };
   }
   for (const f of plan.fonts.values()) {
-    // read the glyph back out of the data Phaser gets (a page-0 glyph), the manifest row otherwise
-    const data = bitmapFontData(f, 1, 1);
+    // read the glyph back out of the data Phaser gets (1 x 1 stand-in pages: the page's top is its index), so a
+    // glyph left out of that data has no sample
+    const tops = f.pages.map((_, i) => i);
+    const data = bitmapFontData(f, f.pages.map(() => [1, 1] as const));
     const row = f.chars.find((c) => c[0] === 65) ?? f.chars[0] ?? null;
     const g = row ? data.chars[row[0]] : undefined;
-    const sample = row && g ? [row[0], g.x, g.y, g.width, g.height, g.xOffset, g.yOffset, g.xAdvance, row[8]] : row;
+    const sample = row && g ? [row[0], g.x, g.y - tops[row[8]], g.width, g.height, g.xOffset, g.yOffset, g.xAdvance, row[8]] : null;
     out[`font/${f.name}`] = { line_height: data.lineHeight, base: f.base, chars: f.chars.length, pages: f.pages.length, sample };
   }
   for (const k of plan.uiKits.values()) {

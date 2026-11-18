@@ -24,6 +24,8 @@
 #           the corners4 and isometric maps
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the atlas_order tileset and map: atlases listed out of
 #           id order, so a port that sorts them by id picks other variants
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the duo font (#286): two pages, the sampled glyph on
+#           page 1 with an xoffset and a yoffset, and a kerning pair
 # ---------------------------------------------------------------------------
 import argparse
 import hashlib
@@ -425,6 +427,7 @@ def _font_ui(g):
     g.png(f"{out}/font_tiny.png", page, "font_page", font="font_tiny.fnt", scale=1, effect="none")
     g.text(f"{out}/font_tiny.fnt", "\n".join(lines) + "\n", "font", format="AngelCode BMFont text", glyphs=2,
            line_height=7, scale=1)
+    _font_duo(g, out)
     ui = "assets/art/ui/windows"
     win = Canvas(12, 12, INK).rect(1, 1, 10, 10, (40, 50, 110, 255)).rect(2, 2, 8, 8, (60, 75, 150, 255))
     g.png(f"{ui}/ui_window_plain.png", win, "ui_window", style="plain", scale=1,
@@ -436,6 +439,34 @@ def _font_ui(g):
     for i in range(6):
         cur.rect(0, i, i + 1, 1, (250, 250, 250, 255))
     g.png(f"{ui}/cursor_pointer.png", cur, "ui_cursor", scale=1, hotspot=[0, 0])
+
+
+DUO_PAGES = {0: [(66, 1, 0, 0, 4)], 1: [(65, 1, 1, 1, 5)]}   # page: [(id, x, xoffset, yoffset, xadvance)]
+
+
+def _font_duo(g, out):
+    """duo: a two-page font (#286). Glyph 65, the one every importer samples, sits on page 1 with an xoffset and a
+    yoffset, so an importer that draws from one texture (Phaser's BitmapText) or drops the offsets (an Unreal
+    offline Font) shows it; plus a kerning pair the other way round from tiny's."""
+    lines = ['info face="duo" size=5 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=0 '
+             'padding=0,0,0,0 spacing=1,1', "common lineHeight=8 base=6 scaleW=8 scaleH=8 pages=2 packed=0",
+             'page id=0 file="font_duo_0.png"', 'page id=1 file="font_duo_1.png"', "chars count=3",
+             "char id=32 x=0 y=0 width=0 height=0 xoffset=0 yoffset=0 xadvance=3 page=0 chnl=15"]
+    chars = []
+    for pg, glyphs in sorted(DUO_PAGES.items()):
+        page = Canvas(8, 8)
+        for cid, x0, xo, yo, adv in glyphs:
+            for y, row in enumerate(GLYPHS[cid]):
+                for x, bit in enumerate(row):
+                    if bit == "1":
+                        page.rect(x0 + x, 1 + y, 1, 1, (255, 255, 255, 255))
+            chars.append((cid, f"char id={cid} x={x0} y=1 width=3 height=5 xoffset={xo} yoffset={yo} "
+                               f"xadvance={adv} page={pg} chnl=15"))
+        g.png(f"{out}/font_duo_{pg}.png", page, "font_page", font="font_duo.fnt", scale=1, effect="none")
+    lines += [c for _, c in sorted(chars)]
+    lines += ["kernings count=1", "kerning first=66 second=65 amount=-2"]
+    g.text(f"{out}/font_duo.fnt", "\n".join(lines) + "\n", "font", format="AngelCode BMFont text", glyphs=2,
+           line_height=8, scale=1)
 
 
 def _extras(g):
