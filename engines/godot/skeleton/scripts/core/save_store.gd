@@ -17,6 +17,8 @@
 #     migrated step by step up to SAVE_VERSION; none -> null, source "none"
 #   write_slot: primary or .bak on disk is "newer" -> refuse; old primary readable -> keep it as .bak; atomic write
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): on_saved, called after a slot's atomic write
+#           succeeded (the platform layer's cloud hook, #84)
 # ---------------------------------------------------------------------------
 class_name SaveStore
 extends RefCounted
@@ -24,6 +26,10 @@ extends RefCounted
 const SAVE_VERSION: int = 3
 const FORMAT: String = "save"
 const FILE_PATTERN: String = "save_%s.json"
+
+## Called with the file name (relative to the data folder) after a slot was written; the shell points it at
+## Shell.platform.saved (docs/PLATFORM.md, cloud saves).
+static var on_saved: Callable = Callable()
 
 
 static func parse(text: Variant) -> Dictionary:
@@ -84,7 +90,10 @@ static func write_slot(dir: String, slot: Variant, data: Dictionary) -> Error:
 	var env: Dictionary = {"format": FORMAT, "version": SAVE_VERSION, "data": data}
 	# Only a readable save becomes the backup: a corrupt primary must not replace a good .bak
 	var keep_backup: bool = typeof(current["envelope"]) != TYPE_NIL
-	return AtomicFile.write_text(path, JSON.stringify(env, "\t") + "\n", keep_backup)
+	var err: Error = AtomicFile.write_text(path, JSON.stringify(env, "\t") + "\n", keep_backup)
+	if err == OK and on_saved.is_valid():
+		on_saved.call(path.get_file())
+	return err
 
 
 static func _migrate(from_version: int, data: Dictionary) -> Dictionary:

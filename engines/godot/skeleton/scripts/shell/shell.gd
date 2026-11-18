@@ -32,6 +32,8 @@
 #           text and menu size (UiTheme.hud_font_size, #309)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(), and t() / tn() honour the
 #           clean-language switch with the word lists of data/i18n/mature/ (#171, #207); CLDR plurals per locale
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): `platform` (docs/PLATFORM.md, #84): the null backend,
+#           saves call its saved(); overlay_changed for the pause hook
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -39,6 +41,8 @@ signal settings_changed(section: String, key: String)
 signal locale_changed
 signal device_changed(device: String)
 signal focus_lost
+## The store overlay opened (true) or closed (false); the front end pauses play on it (PlatformLayer.overlay_action).
+signal overlay_changed(active: bool)
 ## A setting that changes how text looks (LOOK_KEYS) changed: a game HUD sets its font sizes again (#309).
 signal look_changed
 
@@ -66,6 +70,8 @@ const WINDOW_MODES: Dictionary = {"windowed": DisplayServer.WINDOW_MODE_WINDOWED
 		"borderless": DisplayServer.WINDOW_MODE_FULLSCREEN}
 
 var data_dir: String = ""
+## Achievements, stats, presence and cloud hooks (docs/PLATFORM.md). Null in tool runs (tests, the editor).
+var platform: PlatformLayer.Service = null
 var settings: Dictionary = GameSettings.defaults()
 var settings_problems: PackedStringArray = []
 var settings_source: String = "none" # load_settings(): "file", "backup" or "tmp" (recovered), "none" (defaults)
@@ -115,6 +121,7 @@ func _ready() -> void:
 	Log.open_file(path(LOG_FILE), _log_header())
 	CrashHook.install()
 	load_settings()
+	_start_platform()
 	colours = AccessColours.load_data()
 	_color_filter = ColorFilter.new()
 	add_child(_color_filter)
@@ -134,6 +141,8 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	if platform != null:
+		platform.update()
 	var errors: Array[Dictionary] = CrashHook.take()
 	if errors.is_empty() or _crash_file != "":
 		return # one crash file per launch: later errors are in the log
@@ -161,6 +170,18 @@ func _notification(what: int) -> void:
 
 
 # ---- data folder and files ----------------------------------------------------
+
+func _start_platform() -> void:
+	var text: Variant = null
+	if FileAccess.file_exists(PlatformLayer.ACHIEVEMENTS_FILE):
+		text = FileAccess.get_file_as_string(PlatformLayer.ACHIEVEMENTS_FILE)
+	var backend: Object = null # the null backend
+	platform = PlatformLayer.Service.new(data_dir, text, backend)
+	if backend != null and backend.has_signal("overlay_toggled"):
+		backend.connect("overlay_toggled", func(on: bool) -> void: overlay_changed.emit(on))
+	SaveStore.on_saved = platform.saved
+	Log.info("shell", "platform backend: %s" % str(platform.backend.get("name")))
+
 
 func path(relative: String) -> String:
 	return data_dir.path_join(relative)

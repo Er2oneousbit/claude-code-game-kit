@@ -11,6 +11,8 @@
 #           is checked by LabelAudit once it is shown; a problem prints PSEUDO_FAIL and exits 1.
 #           --drive <scenario> adds a SmokeDrive (scripts/shell/smoke_drive.gd).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): pause and quit flush it,
+#           the store overlay opening over play pauses (PlatformLayer.overlay_action)
 # ---------------------------------------------------------------------------
 class_name FrontEnd
 extends Node
@@ -54,6 +56,7 @@ func _ready() -> void:
 	Shell.settings_changed.connect(_on_settings_changed)
 	Shell.locale_changed.connect(rebuild_all)
 	Shell.focus_lost.connect(_on_focus_lost)
+	Shell.overlay_changed.connect(_on_overlay)
 	screen_shown.connect(_on_screen_shown)
 	show_title()
 	add_child(Narrator.new(self)) # menu narration (#165): every focus change and screen says a line
@@ -171,6 +174,8 @@ func pause() -> void:
 		return
 	get_tree().paused = true
 	push(PauseMenu.new(self))
+	if Shell.platform != null:
+		Shell.platform.flush() # a checkpoint (docs/PLATFORM.md)
 
 
 func resume() -> void:
@@ -189,6 +194,8 @@ func quit_to_title() -> void:
 
 func quit_game() -> void:
 	Log.info("shell", "quit")
+	if Shell.platform != null:
+		Shell.platform.flush()
 	get_tree().quit()
 
 
@@ -241,6 +248,12 @@ func _clear_world() -> void:
 
 func _on_focus_lost() -> void:
 	pause()
+
+
+func _on_overlay(on: bool) -> void:
+	var screen: String = world_name if world_node != null and stack.is_empty() else "menu"
+	if Shell.platform != null and Shell.platform.overlay(on, screen) == "pause":
+		pause()
 
 
 func _on_settings_changed(_section: String, key: String) -> void:
