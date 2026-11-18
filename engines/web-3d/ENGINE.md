@@ -17,7 +17,7 @@
 index.html          full-window page, loads src/main.ts
 src/main.ts         renderer, the worlds, hands the host to the shell after the first rendered frame
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow camera, follow spring, buffer, coyote,
-                    spring, flash limiter, hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue,
+                    spring, flash limiter, feel recipes, hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue,
                     audio director, music director, audio access, analog (stick deadzone and trigger shaping for
                     navigator.getGamepads values), display staging (the Display tab's Apply and its keep-or-revert
                     confirm), hud font size (ui_scale and text_scale for text the renderer draws). No three import.
