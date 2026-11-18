@@ -31,6 +31,8 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (#171 blood, #207 clean language),
 #           CLDR 46 plural() for whole numbers with an .other fallback per locale, @clean lookups in tr and
 #           tr_plural, mask_words and mature_words, and shell.json's plural_rules, tr_clean, mask_words cases
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words and mask_word_set, so a shell folds its
+#           word list once, not on every t() (#207)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the feel recipe helpers SOP-18's table builds on
 #           (#170, #164): impact (hit confirm scaled by damage), float_text (a damage number's ease), trail_push,
 #           trail_shrink and trail_length (a tracer's point history by distance), and their juice.json cases
@@ -934,13 +936,24 @@ def _fold(cps):
     return tuple(fold_char(c) for c in cps)
 
 
-def mask_words(text, words):
-    """text with every whole word that is in words (case folded) replaced by a same-length grawlix."""
+def compile_words(words):
+    """The folded set mask_word_set matches against. Build it once per word list and locale (the shells cache it:
+    t() runs for every label every frame, and folding a few thousand words each time is the cost, not the scan)."""
     wanted = set()
     for w in words or ():
         cps = [ord(c) for c in w]
         if cps and all(is_word_char(c) for c in cps):
             wanted.add(_fold(cps))
+    return frozenset(wanted)
+
+
+def mask_words(text, words):
+    """text with every whole word that is in words (case folded) replaced by a same-length grawlix."""
+    return mask_word_set(text, compile_words(words))
+
+
+def mask_word_set(text, wanted):
+    """mask_words with the word list compiled already (compile_words)."""
     if not wanted:
         return text
     cps = [ord(c) for c in text]
