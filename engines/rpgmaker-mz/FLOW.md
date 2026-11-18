@@ -96,7 +96,11 @@ python tools/dev.py dotwork --replace      # also replace those (the originals g
 | enemies | `img/enemies/` (front view) or `img/sv_enemies/` | the picture at the game's scale, feet on the bottom centre; the contact shadow is left out |
 | a ui_kit window part (+ a hover or focus button) | Window.png in `img/system/` | background, frame and cursor from the parts, taken 1:1 (a ui_kit is already drawn at its scale); the arrows, pause sign and text colours stay as the existing skin has them |
 | icons | IconSet.png in `img/system/` | appended below the icons already there (a 32 px size, or one that divides 32, scaled up); a re-run replaces only its own rows |
-| plain tiles (no terrain) of square tilesets | `img/tilesets/<pack>_<tileset>_B.png` (C, D, E when full) | at MZ's tile size; multi-tile stamps stay whole; B's tile 0 is MZ's empty tile |
+| blob47 terrain of a square tileset | `img/tilesets/<pack>_<tileset>_A2.png` (an animated one, such as water: `_A1.png`) | an MZ autotile per terrain, its 2 x 3 tile block built from Dotwork's quarter tiles; kept only when all 47 of Dotwork's tiles come back pixel for pixel from the block (art drawn across the quarter lines does not: it goes on B instead). A1 water plays MZ's frames 0, 1, 2, 1 at MZ's own rate |
+| every other tile of a square tileset (plain tiles, sides4 and corners4 terrain, a terrain's variants) | `img/tilesets/<pack>_<tileset>_B.png` (C, D, E when full) | at MZ's tile size; multi-tile stamps stay whole; B's tile 0 is MZ's empty tile |
+| a map of a square tileset | MapNNN.json in `game/data`, a row in its MapInfos.json, a tileset entry in its Tilesets.json | every layer resolved as the spec says (terrain keys, the variant roll, stamps), each cell's tiles stacked into MZ's four tile layers in the manifest's order: an autotile id where the autotile draws the cell's tile, else its B to E id; props as events showing their object sheet; collision tiles impassable in the tileset's flags. Needs MZ's own database (`setup --from` first) |
+| a battle background | `img/battlebacks1/<name>.png` (the first layer), `img/battlebacks2/<name>.png` (the others over each other) | one whole factor that makes the first layer cover the screen; repeating layers tiled across it; MZ's battle backs stand still |
+| any other background (scenes, parallax, weather) | `img/parallaxes/<name>[_<layer>].png` | a file per layer at its scale times the game's; the record gives MZ's loop flags and scroll speed (`sx`, `sy`) for the map's parallax settings **(verify the sign)** |
 
 **The scale** is one whole number for the whole game: MZ's tile size (`tileSize` in the project's System.json, 48 when
 absent) over the art's tile size, so 16 px Dotwork tiles become 3x. Art whose tile size does not divide MZ's is not
@@ -105,22 +109,25 @@ shrunk or blurred: set MZ's tile size to a multiple (Database > System 2, verify
 **What it records:** `<src_dir>/dotwork/mz_export.json` (Dotwork's source folder, assets_src unless its config
 says otherwise; commit it) lists every file written with its hash and the
 numbers MZ's database wants: each character's file and index, each expression's face file and index, each icon's
-index, each tile's B to E tile id and whether it collides (set those tiles to impassable in Database > Tilesets).
+index, each tile's B to E tile id and whether it collides, each autotile's kind and first tile id, each map's id and
+tileset id. Database entries the converter owns carry `<dotwork>` in their note: remove it and the entry is yours (the
+next run makes a new one); a map changed in the editor is left alone without `--replace`, like an image.
 A file whose hash no longer matches (you edited it in MZ or a paint program) is left alone without `--replace`.
 `python tools/dev.py check` checks the export: the files exist and have MZ's shapes.
 
-**Not converted yet** (each prints a note): terrain tiles (MZ's A1 to A4 autotiles are cut from quarter tiles in
-MZ's own arrangement, not from Dotwork's 47 blob or 16 corner tiles: a later step, so paint ground with B to E tiles
-or MZ's own autotiles for now), maps (they need those autotiles; the spec's map rules of 1.1.0, the corners rule, the
-variant pick, stamps layers and isometric placement, wait with them), isometric tilesets, effects and spells (MZ's battle
-animations are Effekseer files), particles, rule-image transitions, normal maps, bitmap fonts (MZ draws TrueType or
-WOFF fonts), battle backgrounds and parallaxes, and other pictures (copy them to `img/pictures` by hand). Lost on the
-way: Dotwork's frame timing (MZ times walks by move speed and plays three frames), frames past the three MZ uses, tile
-animation (B to E tiles do not animate) and collision boxes (MZ's passability is per tile, in the database).
+**Not converted** (each prints a note): isometric tilesets and their maps (MZ's maps are square), effects and
+spells (MZ's battle animations are Effekseer files), particles, rule-image transitions, normal maps, bitmap fonts (MZ
+draws TrueType or WOFF fonts), and other pictures (copy them to `img/pictures` by hand). Lost on the way: Dotwork's
+frame timing (MZ times walks by move speed and plays three frames), frames past the three MZ uses, the animation of
+tiles that are not an A1 autotile (B to E tiles do not animate), flipped map cells (MZ tiles do not flip), a cell's
+fifth layer and up, and collision boxes (MZ's passability is per tile, in the database). sides4 and corners4 terrain
+is not autotiled (MZ's autotiles are blob-shaped): its maps place the tiles cell by cell, so they look right but
+repainting them in the editor does not join them up.
 
 **Verify in MZ:** every layout above comes from MZ's documented formats and has been checked only against stand-ins
-(sizes, the right frames in the right cells, Chromium decoding the files). Open a converted character, face and
-tileset in the editor once before relying on it.
+(sizes, the right frames in the right cells, Chromium decoding the files); the autotile table, tile ids and map
+drawing are RPG Maker MV's corescript (Tilemap.js), and the tests draw each converted map that way and compare it with
+Dotwork's, pixel for pixel. Open a converted character, face, tileset and map in the editor once before relying on it.
 
 ## Profiling
 Real numbers come from the editor's Playtest or a real browser (F12 > Performance), not headless smoke (software WebGL).

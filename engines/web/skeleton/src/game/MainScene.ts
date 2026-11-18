@@ -16,6 +16,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork showcase (#55)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): where HUD text gets ui_scale and text_scale (#309)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the label takes glyphs from every page of the font (#286)
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import { shell } from "../shell/app";
@@ -110,7 +111,7 @@ export class MainScene extends Phaser.Scene {
     const boxY = height - UI_PAD * 2 - boxH;
     if (kit && part) addNineSlice(this, kit[0], kit[1].name, part.name, UI_PAD * 2, boxY, Math.min(width - UI_PAD * 4, UI_BOX_W), boxH);
     if (font) {
-      const glyphs = font[1].chars.filter((c) => c[0] > 32 && c[3] > 0 && c[8] === 0).slice(0, LABEL_GLYPHS);
+      const glyphs = font[1].chars.filter((c) => c[0] > 32 && c[3] > 0).slice(0, LABEL_GLYPHS);
       addText(this, font[0], font[1].name, UI_PAD * 2 + l, boxY + t, glyphs.map((c) => String.fromCodePoint(c[0])).join(""));
     }
     const ui = this.children.list.filter((o) => !world.includes(o));

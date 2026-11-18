@@ -19,6 +19,8 @@
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): shake_camera applies ScreenShake
 //           2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): palette colours; input moved to the shell
 //           2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork showcase (#59)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the showcase adds an additive effect when the pack
+//           has one (#286)
 // ---------------------------------------------------------------------------
 use bevy::prelude::*;
 
@@ -93,6 +95,12 @@ fn show_dotwork(mut commands: Commands, mut dw: Dotwork) {
         .find_map(|p| p.maps.values().next())
         .map(|m| m.name.clone());
     let prop = packs.iter().find_map(|p| p.sprites.keys().next().cloned());
+    // an additive effect (blend "add": sparks, fire), looping beside the prop
+    let effect = packs
+        .iter()
+        .flat_map(|p| p.animated.values())
+        .find(|a| a.additive && !a.clips.is_empty())
+        .map(|a| (a.name.clone(), a.clips[0].name.clone()));
     let font = packs.iter().find_map(|p| p.fonts.keys().next().cloned());
     if walker.is_none() && map.is_none() && prop.is_none() && font.is_none() {
         return;
@@ -137,6 +145,14 @@ fn show_dotwork(mut commands: Commands, mut dw: Dotwork) {
         commands
             .entity(e)
             .insert((Transform::from_xyz(x + 8.0, -32.0, 0.5), ChildOf(root)));
+        x += 24.0;
+    }
+    if let Some((name, clip)) = effect
+        && let Some(e) = dw.spawn_clip(&mut commands, &name, &clip)
+    {
+        commands
+            .entity(e)
+            .insert((Transform::from_xyz(x + 8.0, -40.0, 0.6), ChildOf(root)));
     }
     if let Some(name) = font
         && let Some(e) = dw.spawn_text(&mut commands, &name, TITLE, Color::WHITE)

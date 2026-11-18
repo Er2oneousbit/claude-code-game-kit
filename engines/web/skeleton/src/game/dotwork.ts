@@ -29,22 +29,26 @@
 //             putTileAt never recomputes them (only the Tile constructor and setSize do).
 //           - a texture loaded as load.image(key, [url, normal]) carries its normal map; setLighting(true) on an
 //             object drawn with it lights it (scene.lights.enable() and a light in the scene).
-//           - BitmapText reads font data in ParseXMLBitmapFont's shape; it is built from `chars` (one page).
+//           - BitmapText reads font data in ParseXMLBitmapFont's shape; it is built from `chars`. It draws from one
+//             texture, so a font of several pages gets a canvas texture with the pages stacked (fontAtlas, #286).
 //           Textures are game-wide: a second scene reuses them (queueDotwork loads nothing twice).
 //           Animation keys: <pack>/<asset>/<clip>; fonts: <pack>/<font> (names are unique per pack only).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): tiles placed where the plan
 //           says (isometric and origins), normal maps loaded with their targets, addBackground, addParticles, addImage
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): fonts of several pages drawn from one stacked canvas
+//           texture (#286; glyphs on page 1 and later were dropped)
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import manifestFiles from "virtual:dotwork-manifests";
 import { Log } from "../core/log";
 import {
-  bitmapFontData, directionClip, DotworkError, planManifest, rectToWorld, tileAnimations, tileTransform,
+  bitmapFontData, directionClip, fontAtlas, DotworkError, planManifest, rectToWorld, tileAnimations, tileTransform,
   type DotworkPlan, type PlanClip, type Rect,
 } from "./dotworkPlan";
 
 const CHANNEL = "dotwork";
+const FONT_PAGES_PREFIX = "dotwork-font-pages:"; // the canvas texture a font of several pages is stacked into
 /** Every manifest of the game, as URLs relative to the page ("assets/dotwork/town.assets.json"). */
 export const DOTWORK_MANIFESTS: readonly string[] = manifestFiles;
 
@@ -144,9 +148,25 @@ export function buildDotwork(scene: Phaser.Scene, plan: DotworkPlan): string[] {
     }
   }
   for (const f of plan.fonts.values()) {
-    if (scene.cache.bitmapFont.exists(f.key) || !scene.textures.exists(f.texture)) continue;
-    const img = scene.textures.get(f.texture).getSourceImage() as { width: number; height: number };
-    scene.cache.bitmapFont.add(f.key, { data: bitmapFontData(f, img.width, img.height), texture: f.texture, frame: null });
+    if (scene.cache.bitmapFont.exists(f.key) || !f.pages.every((p) => scene.textures.exists(p))) continue;
+    const imgs = f.pages.map((p) => scene.textures.get(p).getSourceImage() as HTMLImageElement);
+    const sizes = imgs.map((i) => [i.width, i.height] as const);
+    let texture = f.texture;
+    if (f.pages.length > 1) {
+      // BitmapText draws from one texture: the pages stacked into a canvas, laid out as fontAtlas says (#286)
+      texture = `${FONT_PAGES_PREFIX}${f.key}`;
+      if (!scene.textures.exists(texture)) {
+        const { width, height, tops } = fontAtlas(sizes);
+        const canvas = scene.textures.createCanvas(texture, width, height);
+        if (!canvas) {
+          fail(`font ${f.name}: no canvas for its ${f.pages.length} pages`);
+          continue;
+        }
+        imgs.forEach((img, i) => canvas.draw(0, tops[i], img));
+        canvas.setFilter(Phaser.Textures.FilterMode.NEAREST);
+      }
+    }
+    scene.cache.bitmapFont.add(f.key, { data: bitmapFontData(f, sizes), texture, frame: null });
   }
   return out;
 }

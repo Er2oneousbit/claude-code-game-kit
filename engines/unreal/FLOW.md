@@ -150,6 +150,14 @@ same rule on every engine). Keep `data/golden/` in the repo.
   then restart); in a Blueprint-only project run `check` before opening the editor, or it reports the module as
   missing **(verify)**.
 
+**Dotwork tile animation (GameKitDotwork, #286).** The plugin's third module plays the animated tiles of tile maps the
+Dotwork importer made (Paper2D has no tile animation): each animated tile's user data says `anim=<frames>@<fps>`,
+and `UDotworkTileAnimatorSubsystem` (a world subsystem, game and PIE worlds) finds every `PaperTileMapComponent`
+at BeginPlay and plays those cells on a copy of its map, so the asset stays as imported. A tile map spawned later:
+`GetWorld()->GetSubsystem<UDotworkTileAnimatorSubsystem>()->Register(Component)`. It depends on Paper2D (an engine
+plugin, on by default). `GameKit.Dotwork.*` tests check the user data, the frame clock and, once the golden pack is
+imported, the golden yard's water switching frames. In the editor viewport tiles show their first frame.
+
 ## Shell screens (GameKitShellUI)
 The plugin's second module draws the shell's screens over your game, the same set as the Godot, LÖVE and web
 overlays (SOP-19, SOP-20): title with the telemetry question, main menu, settings with the tabs Display, Audio,

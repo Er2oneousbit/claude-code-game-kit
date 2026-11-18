@@ -361,7 +361,9 @@ path cells of which one rolls the variant tile, a door placed through a `stamps`
 `meadow_patch` (a corners4 patch on the square pair set) and `isle` (an isometric map: placed floors, a corners4 pond
 on the transitions, a raised block with its own origin), plus `atlas_order_check` on the hand-written tileset
 `atlas_order`, whose atlases are listed id 1 first: a port that sorts atlases by `id` picks the other variant on four
-of its six cells.
+of its six cells. Its two fonts: `tiny` (one page) and `duo` (#286: two pages, with the sampled glyph `A` on page 1,
+drawn 1 px right of the pen and 1 px down, and a kerning pair), so an importer that draws a font from one texture or
+drops the x offset fails on `duo`'s sample.
 
 | In `expected.json` | What an importer compares |
 |---|---|
@@ -371,7 +373,7 @@ of its six cells.
 | `icon`, `portrait` | sizes; expression names and the talking animation |
 | `tileset/<name>` | tile size, shape, tile count, tiles with collision, animated tiles, terrain names, the masks (or corners) per terrain |
 | `map/<name>` | size, shape, tile size, cells drawn per layer (`layers`: a stamps layer counts its expanded tiles), every terrain cell as `[x, y, key, [atlas, col, row]]` (`terrain`: the key is the mask or the corner bits, the tile is the pick's), every drawn cell of every layer as `[x, y, atlas, col, row, left, top]` (`placed`: the image's top-left in map pixels), every cell's centre as `[x, y, cx, cy]` (`centres`), objects as `[asset, x, y]` |
-| `font/<name>` | line height, base, char count, page count, the glyph of `A` |
+| `font/<name>` | line height, base, char count, page count, the glyph of `A` (its full row, page and offsets included) |
 | `ui_kit/<name>` | each part's size, margins and hotspot |
 | `background/<name>` | each layer as `[w, h, vx, vy, repeat]` |
 
@@ -435,7 +437,7 @@ the transition kind, the lit target); the engine object that uses it stays the g
 | Bevy | loaded (`Handle<Image>` + layer data; repeat through the image sampler's address mode) | loaded (image + JSON) | loaded (image) | loaded (image handle; Bevy 2D sprites have no normal-map lighting) | loaded |
 | C++ / SDL3 | loaded (`SDL_Texture` + layer data) | loaded (texture + JSON) | loaded (texture) | loaded (texture only) | loaded |
 | LÖVE | loaded (`Image` with `setWrap("repeat")` on the `repeat` axes + layer data) | loaded (texture + JSON; a `ParticleSystem` from it when the engine agent finds it trivial) | loaded (Image) | loaded (Image) | loaded |
-| RPG Maker MZ | skipped with a note (battle backgrounds and parallaxes: #286) | skipped with a note | skipped with a note | skipped with a note | skipped with a note (MZ has no slot for a loose PNG) |
+| RPG Maker MZ | a `battle` background becomes `img/battlebacks1` (its first layer) and `img/battlebacks2` (the others over each other) at one whole factor that covers the screen; any other role a parallax per layer in `img/parallaxes`, with MZ's loop flags and scroll speed in the record (#286) | skipped with a note | skipped with a note | skipped with a note | skipped with a note (MZ has no slot for a loose PNG) |
 
 Per-engine notes. Every overlay now has its importer (#55 to #62); the notes say how each one does it and what it
 settled about its engine (versions as the overlays pin them). **(verify)** marks what is still not checked against the
@@ -463,7 +465,9 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   through the scene loader; every clip's frames become named frames (`<pack>/<asset>/<clip>/<i>`) with the pivot as
   their origin (`px / w`, `py / h`, y down, no flip), and `anims.create` gets each frame's own `duration`. In Phaser
   4.2.1 a frame's `duration` replaces the clip's base rate (Phaser 3 added it to the rate, so tutorials disagree).
-  Fonts become Phaser bitmap-font data built from `chars` (one texture: glyphs on a second page are left out); tile
+  Fonts become Phaser bitmap-font data built from `chars`; BitmapText draws from one texture, so a font of several
+  pages gets its pages stacked into one canvas texture and every glyph moved down by its page's top (`fontAtlas`,
+  #286); tile
   maps are a blank tilemap filled per cell after the terrain layers are resolved; collision rects become static
   Arcade bodies; 9-slice parts use Phaser's NineSlice with the four margins. Fonts and UI parts draw at 1 on a camera
   without zoom. Since 1.1.0: the plan resolves all three terrain modes with the key and the roll, expands stamps
@@ -513,13 +517,22 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   draws tile layer 0 on top, so manifest layers go in reversed. The Python API reaches per-tile collision
   (`per_tile_data`; box shapes are filled with `SpriteGeometryShape.import_text`, their fields are read-only) but
   not a layer's name (the layers come from Paper2D's own Tiled importer) nor an offline `Font`'s page textures (set
-  with the `set` console command, which only the pythonscript commandlet runs). An offline Font keeps one advance
-  per glyph plus one font-wide kerning: xoffset and kerning pairs are lost; UMG text wants a runtime font from a
-  TTF/OTF **(verify)**. Not in Paper2D: tile animation, additive blend (variants are resolved at import, so they do
-  apply). Dotwork's output stays
+  with the `set` console command, which only the pythonscript commandlet runs). An offline Font draws a glyph's
+  USize pixels at the pen and advances by USize plus one font-wide Kerning, with no x offset: the importer lays the
+  pages out again (`dotwork_spec.font_layout`, a plain-Python PNG codec) with every glyph in a cell `xadvance -
+  kerning` wide and its `xoffset` drawn into the cell, so each glyph and advance lands where the BMFont says (a
+  negative offset starts at the pen); kerning pairs are lost; UMG text wants a runtime font from a TTF/OTF
+  **(verify)**. What Paper2D lacks (#286): additive blend (a `blend: add` clip's flipbooks and frames use
+  `MI_DotworkAdditive`, Paper2D's translucent unlit sprite material with the blend mode overridden to Additive) and
+  tile animation (each animated tile's user data says `anim=<frames>@<fps>` after its surface; the GameKitShell
+  plugin's `GameKitDotwork` module plays every tile map in a game or PIE world through
+  `UDotworkTileAnimatorSubsystem`; without the plugin a tile shows its first frame). A re-import deletes the assets
+  an earlier run made (tagged `dotwork.import`) that the pack no longer has. Dotwork's output stays
   in `assets/`, outside `Content/` (the open editor would auto-import the PNGs). Tests: `dev.py test` runs the golden
   check and every game manifest through the commandlet, and as `Editor.Python.<Game>.kit_dotwork.*` automation tests
-  with the PythonAutomationTest plugin.
+  with the PythonAutomationTest plugin; the golden check reads the blend mode, the tiles' animation data and the
+  `duo` glyph's offset and advance back from the engine objects and re-imports a cut-down pack to see the dropped
+  asset go; `GameKit.Dotwork.*` tests (with the plugin) play the imported golden yard's water.
 - **Bevy 0.20 (#59, `src/dotwork/`).** Plain Rust with `serde_json`: a `TextureAtlasLayout` per sheet from the rects,
   per-frame `Duration`s in a `DotworkAnimation` component and a system that advances it, `ImageSampler::nearest()`.
   The pivot is an `Anchor`: in 0.20 `Anchor(pub Vec2)` is a component of its own (a required component of `Sprite`),
@@ -530,8 +543,10 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   off). The extra kinds load: backgrounds through a repeating sampler (`ImageAddressMode::Repeat` on the `repeat`
   axes), particles with the emitter JSON, transitions, normal maps as an image handle and target only (Bevy 0.20's
   2D sprites have no normal-map lighting), images with a pivot. Fonts: glyph sprites from `chars`; 9-slice
-  through `TextureSlicer`. Bevy 0.20 sprites have no additive blend (drawn normal). Tests: `cargo test` on the loader
-  (no window) against `expected.json` and every game manifest.
+  through `TextureSlicer`. Bevy 0.20 sprites have no additive blend, so `spawn_clip` draws a `blend: add` clip as a
+  frame-sized `Mesh2d` quad with `DotworkAdditiveMaterial` (Bevy's `ColorMaterial` in an `ExtendedMaterial2d` whose
+  pipeline blends src * alpha + dst; frames by the uv transform, #286). Tests: `cargo test` on the loader (no window)
+  against `expected.json` and every game manifest, and a headless App that spawns the golden effect as that quad.
 - **C++ / SDL3 (#60, `src/core/DotworkAssets` + `src/gfx/DotworkRender`).** `nlohmann-json` reads the manifest. PNGs
   load with SDL's own `SDL_LoadPNG` (SDL 3.4.0 and later; the pinned 3.4.12 has it), so no SDL3_image or `stb_image`.
   `SDL_RenderTexture` with the frame rect as the source rect, the destination offset by the pivot,
@@ -560,11 +575,20 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   It writes character sheets (3 frames by 4 directions, `$` single-character files) from `walk_<dir>`, object sheets
   for props, faces (144 x 144 cells) from `portrait` expressions, side-view battlers from battle poses, enemies, the
   Window.png skin from a `ui_kit` window part, rows of `IconSet.png`, and B to E tile sheets from plain tiles, at one
-  whole-number scale (MZ's tile size over the art's). Terrain autotiles (MZ's A1 to A4 quarter-tile layouts) and maps
-  are not converted yet (#286), so the 1.1.0 map rules wait with them; the extra kinds are skipped with a note each.
+  whole-number scale (MZ's tile size over the art's). Since #286: blob47 terrain becomes MZ autotiles (A2 floor
+  kinds; an animated terrain an A1 water kind) built from Dotwork's quarter tiles and kept only when all 47 tiles
+  come back from the block pixel for pixel through MZ's floor table (RPG Maker MV's corescript `Tilemap.js`, MIT);
+  every other tile of a square tileset (sides4 and corners4 terrain, variants) goes on B to E; maps of square
+  tilesets become MZ map files (data/MapNNN.json in the MZ project; the 1.1.0 rules: keys, the roll, stamps;
+  each cell's tiles stacked into MZ's four layers) with a tileset entry in its Tilesets.json and a row in its
+  MapInfos.json (append only, the
+  converter's entries carry `<dotwork>` in their note), props as events; backgrounds as in the table above. The other
+  extra kinds are skipped with a note each.
   Dotwork's output stays in `assets/`, outside `game/`; the converter records what it wrote in
   `<src_dir>/dotwork/mz_export.json`. Every layout has been checked against stand-ins only, not in the real MZ editor
-  **(verify)**. Tests: tests/dotworkMz.test.js on the golden pack, and `dev.py check` re-checks the last export.
+  **(verify)**. Tests: tests/dotworkMz.test.js and tests/dotworkMzMaps.test.js on the golden pack (the maps drawn the
+  corescript's way from the written map, tileset entry and sheets equal `expected.json`'s placement pixel for
+  pixel), and `dev.py check` re-checks the last export.
 
 ## Limits
 - One manifest per pack. A game with several packs has several files; importers load them all (names are unique per
