@@ -282,7 +282,7 @@ class FlashLimiter:
 
 # ------------------------------------------------------------------------------------------ feel recipes
 # The small engine-free helpers SOP-18's recipe table builds on (#170): pure functions, no settings read, no clock and
-# no random number generator. The rest of the recipes are compositions a game writes itself (SOP-18 step 3).
+# no random number generator. The rest of the recipes are compositions a game writes itself (SOP-18 step 4).
 # Their tunables are the keyword defaults below (the ports use the same defaults); a game passes its own.
 
 
