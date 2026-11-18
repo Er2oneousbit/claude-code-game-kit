@@ -127,7 +127,7 @@ clamped, not counted.
 |---|---|---|
 | `available()` | true | the SDK initialised (Steam running, the app owned) |
 | `remote()` | what was stored: the unlocks in the order stored, the stats | the user's achievements and stats once they arrive |
-| `set_achievement`, `set_stat`, `store_stats` | records; the first two are staged and land at `store_stats`, which succeeds unless a test hook fails the next N (a failed store lands nothing) | ISteamUserStats (E78); `store_stats` false or its callback failing is a failed store |
+| `set_achievement`, `set_stat`, `store_stats` | records; the first two are staged and land at `store_stats`, which succeeds unless a test hook fails the next N (a failed store lands nothing) | ISteamUserStats (E78); `store_stats` false is a failed store, and so is its UserStatsStored callback failing later (`take_store_failure`, section 6) |
 | `indicate_progress`, `reset_all_stats` | records | ISteamUserStats |
 | `set_presence`, `clear_presence` | records | ISteamFriends rich presence **(verify)** |
 | `cloud_write(path)` | records | ISteamRemoteStorage, `api` mode only |
@@ -173,7 +173,21 @@ adapter expects the SDK. Bindings and licences were read on 2026-11-18 (E163); r
 | RPG Maker MZ | GamePlatform.js (plugin), `GamePlatform.service` | `GreenworksBackend` in the same plugin | Greenworks (MIT), NW.js desktop builds | Greenworks next to game/index.html |
 | web, web-3d | src/core/platform.ts, `shell.platform` | none: a browser has no Steam | | |
 
-What each adapter does not see **(verify)**: a store that fails after `StoreStats` returned true (the
-UserStatsStored callback); stats are read at start without RequestCurrentStats (Steamworks 1.61 and later load them
-at init). Greenworks stores asynchronously (a late failure takes the layer offline at the next frame), has no rich
-presence call and does not read unlocks back. Automated runs (`dev.py smoke`, tests) never start Steam.
+**The start rule.** An enabled adapter starts Steam whether or not data/achievements.json exists: rich presence,
+the overlay's pause and cloud saves need Steam without achievements. Without the file nothing is written and every
+achievement or stat call is `unknown`, but presence and the overlay work. Automated runs (`dev.py smoke`, tests)
+never start Steam. Each engine has a test that pins this.
+
+**A store that fails late.** `store_stats` returning false is a failed store at once (section 3). A store the SDK
+accepted can still fail when its result arrives (Steam's UserStatsStored callback, E78). Every adapter whose binding
+delivers that result keeps the store's set_stat and set_achievement calls until the result comes. A failure hands
+them back through the backend's `take_store_failure`, and the layer's `store_failed(batch)` treats it like a refused
+store: those stats and unlocks are pending again and the layer is offline until `connect()`, which sends them again.
+GodotSteam (`user_stats_stored`), luasteam (`OnUserStatsStored`), Steamworks.NET (`UserStatsStored_t`), the
+steamworks crate (`UserStatsStored`), the SDK in C++ and Unreal (`UserStatsStored_t`) and Greenworks (its storeStats
+error callback) all deliver it (verify). Each has a fake-binding test.
+
+Limits **(verify)**: stats are read at start without RequestCurrentStats (Steamworks 1.61 and later load them at
+init). Greenworks has no rich presence call and does not read unlocks back. A failed stat read in GodotSteam's and
+Greenworks' `remote()` looks like 0, which the merge rules keep below a larger local value on an increment-only
+stat.
