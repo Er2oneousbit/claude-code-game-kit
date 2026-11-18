@@ -315,7 +315,10 @@ def _seg(a, b):
 
 def trail_length(points):
     """Total length of a trail's points, tail (first) to head (last)."""
-    return sum((_seg(points[i], points[i + 1]) for i in range(len(points) - 1)), 0.0)
+    total = 0.0   # a plain running sum, as every port adds: sum() compensates its rounding since Python 3.12
+    for i in range(len(points) - 1):
+        total += _seg(points[i], points[i + 1])
+    return total
 
 
 def _trim_to(points, keep):
