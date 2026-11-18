@@ -14,6 +14,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): a tile's key and
 //           origin, map layers of kind stamps, a cell's key (mask or corner bits), the five extra kinds
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the additive note points at additive.rs (#286)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -58,8 +59,8 @@ pub struct Pack {
 pub struct AnimatedSprite {
     pub name: String,
     pub role: String,
-    /// `blend: add`. Bevy 0.20 sprites have no additive mode (SpriteAlphaMode is Opaque, Mask or Blend), so these
-    /// draw with normal blending until the game adds a material for them.
+    /// `blend: add`. Bevy 0.20 sprites have no additive mode (SpriteAlphaMode is Opaque, Mask or Blend), so
+    /// Dotwork::spawn_clip draws these as a quad with DotworkAdditiveMaterial (additive.rs).
     pub additive: bool,
     /// In the manifest's order (Godot's SpriteFrames order).
     pub clips: Vec<Clip>,

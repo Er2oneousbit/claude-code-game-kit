@@ -64,11 +64,13 @@
   `velocity`, `particles` the white texture and the emitter JSON
   (Bevy 0.20 ships no particle system), `transition` the greyscale wipe (the threshold texture of the kit's
   transition recipe), `normal_map` the map and its `target` image (Bevy 0.20's 2D sprites have no normal-map
-  lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. `blend: add`
-  draws with normal blending (Bevy 0.20 sprites have no additive mode). `tests/dotwork.rs` checks the golden pack in
+  lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. A `blend: add`
+  clip draws additively: Bevy 0.20 sprites have no additive mode, so `spawn_clip` makes it a frame-sized `Mesh2d`
+  quad with `DotworkAdditiveMaterial` (Bevy's `ColorMaterial` extended to blend src * alpha + dst, `additive.rs`);
+  switch its clip with `additive_clip_bundle`, not `clip_bundle`. `tests/dotwork.rs` checks the golden pack in
   `data/golden/dotwork/` against its `expected.json` (clips, sprites, the maps' terrain, placed cells and
   centres, the backgrounds) and that every manifest the game ships loads; `present.rs` shows a map, a walking
-  character, a prop and a label when the game has them.
+  character, a prop, an additive effect and a label when the game has them.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
