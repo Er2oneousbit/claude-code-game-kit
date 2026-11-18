@@ -217,7 +217,9 @@ namespace {{GAME_SLUG}}.Tests
             public readonly List<string> Log = new List<string>();
             public bool StoreOk = true;
             public event System.Action<bool> OverlayChanged;
+            public event System.Action<bool> StatsStored;
             public void Overlay(bool active) => OverlayChanged?.Invoke(active);
+            public void Stored(bool ok) => StatsStored?.Invoke(ok);
             public bool SetAchievement(string id) { Log.Add("SetAchievement " + id); return true; }
             public bool GetAchievement(string id, out bool achieved) { achieved = id == "first"; return true; }
             public bool SetStat(string id, int value) { Log.Add($"SetStat {id} {value}"); return true; }
@@ -231,6 +233,44 @@ namespace {{GAME_SLUG}}.Tests
             public void ClearRichPresence() { }
             public bool FileWrite(string name, byte[] data) { Log.Add("FileWrite " + name); return true; }
             public void RunCallbacks() => Log.Add("RunCallbacks");
+        }
+
+        [Test]
+        public void Platform_SteamStartsWithoutAchievements()
+        {
+            // docs/PLATFORM.md section 6: an enabled backend starts whether or not data/achievements.json exists
+            string dir = Scratch();
+            var fake = new FakeSteam();
+            var none = PlatformRules.AchievementsLoad(null, out _);
+            IPlatformBackend b = PlatformStart.Make(false, none, dir, (d, f) => new SteamPlatformBackend(d, f, fake));
+            Assert.IsNotNull(b, "no achievements file: Steam still starts");
+            var ps = new PlatformService(dir, null, b);
+            Assert.AreEqual("ok", ps.SetPresence("status", "Menu"));
+            CollectionAssert.AreEqual(new[] { "SetRichPresence status Menu" }, fake.Log);
+            Assert.IsNull(PlatformStart.Make(true, none, dir, (d, f) => new SteamPlatformBackend(d, f, fake)), "smoke: null");
+            Directory.Delete(dir, true);
+        }
+
+        [Test]
+        public void Platform_ALateUserStatsStoredFailureRequeuesTheStore()
+        {
+            string dir = Scratch();
+            var fake = new FakeSteam();
+            var defs = PlatformRules.AchievementsLoad(SAMPLE, out _);
+            var ps = new PlatformService(dir, SAMPLE, new SteamPlatformBackend(defs, dir, fake));
+            Assert.AreEqual("ok", ps.AddStat("kills", 12));   // the store had 4: 16, kills_10 unlocks and flushes
+            Assert.IsTrue(ps.Rules.Online);
+            fake.Stored(false);                                // UserStatsStored_t: failed
+            ps.Update();
+            Assert.IsFalse(ps.Rules.Online, "a late failure takes the layer offline");
+            Same(ps.Rules.State()["pending"], Json.Parse("{\"stats\": [\"kills\"], \"unlocks\": [\"kills_10\"], \"cloud\": []}"), 0, "queued again");
+            fake.Log.Clear();
+            ps.Rules.Connect(new Dictionary<string, object>());
+            CollectionAssert.AreEqual(new[] { "SetStat kills 16", "SetAchievement kills_10", "StoreStats" }, fake.Log);
+            fake.Stored(true);
+            ps.Update();
+            Assert.IsTrue(ps.Rules.Online);
+            Directory.Delete(dir, true);
         }
 
         [Test]

@@ -8,6 +8,7 @@
 //           assembly (Game.Steam) has the define constraint GAMEKIT_STEAM, so without the define Unity does not
 //           compile it and Factory stays null.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Make goes through Core's PlatformStart (the start rule)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -24,11 +25,7 @@ namespace {{GAME_SLUG}}.Shell
         /// <summary>The store backend, or null for the null backend.</summary>
         public static IPlatformBackend Make(bool smoke, Dictionary<string, object> defs, string dataFolder)
         {
-            if (smoke || Factory == null)
-            {
-                return null;
-            }
-            return Factory(defs, dataFolder);
+            return PlatformStart.Make(smoke, defs, dataFolder, Factory);
         }
     }
 }
