@@ -78,10 +78,21 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    pseudo smoke run (`dev.py smoke --drive pseudo --locale pseudo`) visits every screen and fails on a clipped or
    untranslated label. Use the reserved name only on the command line, never as a real locale code (E87).
 5. Fonts must cover every character of every shipped language (E70); check before adding a language (Dotwork's
-   `fonts-check` lists every character the game's strings use that a font lacks).
+   `fonts-check` lists every character the game's strings use that a font lacks; `tools/i18n/l10n.py check` reads
+   the game's TrueType and OpenType fonts too). The kit's shell font, Atkinson Hyperlegible, has no Cyrillic, Greek
+   letters or CJK (K01): a Russian or Ukrainian table needs another font, or Dotwork's
+   `tools/art/dotwork/glyphs/dialogue_cyrillic.txt`.
 6. Machine or local-model translations are drafts: a draft keeps exactly the source's placeholders or is rejected,
    and a person reviews it before it ships, with a native reader for languages far from English (K01: a local
    model invented placeholders in its drafts; `docs/resources/audio.md`, "Translations and bark lines").
+   `python tools/i18n/l10n.py` runs the round trip: `export <LANG>` writes `l10n/<LANG>.xlf` (XLIFF 1.2, or
+   `--format csv`) with each line's context note and length budget (from context.json in the same folder: your
+   notes and limits), and the plural forms the language needs that English lacks; `draft <LANG>` asks a model on this machine (LM Studio, llama.cpp or
+   Ollama through their OpenAI-compatible server, or any `--command`) and rejects a draft that changes a
+   placeholder, echoes the string id or answers in markup; `review <LANG>` accepts, fixes or rejects each draft;
+   `import <LANG>` writes only reviewed lines into `data/i18n/<LANG>.json`, in en.json's layout, and refuses a line
+   whose placeholders differ, that overruns its budget, whose English changed since export, or a file that lost
+   lines; `check` runs the placeholder, plural, length and font checks over every table and the pseudo-locale (K01).
 7. Before you call a language done, `python tools/check_i18n.py --locale <LANG>` lists every English key the table
    lacks, still has in English, or has with other placeholders (proper names and units pass; add your own with
    `--same`). A partial table is fine while you work: missing keys fall back to English.
