@@ -27,6 +27,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plurals with the .other fallback per locale,
 //           @clean variants, MaskWords and MatureWords (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): CompileWords, MaskWordSet, Tr/TrPlural on a compiled
+//           set and FGameKitWordCache, so the shell folds its word list once per locale and list (#207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -36,6 +38,7 @@
 using FGameKitStringTable = TMap<FString, FString>;               // key -> text
 using FGameKitStringTables = TMap<FString, FGameKitStringTable>;  // locale -> table
 using FGameKitTrArgs = TMap<FString, FString>;                    // placeholder name -> value
+using FGameKitWordSet = TSet<FString>;                            // a word list folded once (CompileWords)
 
 namespace GameKit
 {
@@ -78,6 +81,40 @@ namespace GameKit
 
 	/** A word list file's words (data/i18n/mature/<locale>.json: {"words": [...]}); anything else is no words. */
 	GAMEKITSHELL_API TArray<FString> MatureWords(const TSharedPtr<FJsonObject>& Object);
+
+	/** The folded set MaskWordSet matches against: build it once per word list (T() runs for every label every frame). */
+	GAMEKITSHELL_API FGameKitWordSet CompileWords(const TArray<FString>& Words);
+
+	/** MaskWords with the list compiled already. */
+	GAMEKITSHELL_API FString MaskWordSet(const FString& Text, const FGameKitWordSet& Wanted);
+
+	/** Tr() and TrPlural() with the words compiled already (the shell's cache). */
+	GAMEKITSHELL_API FString TrSet(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key,
+	                               const FGameKitTrArgs& Args, bool bClean, const FGameKitWordSet& Words);
+	GAMEKITSHELL_API FString TrPluralSet(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key,
+	                                     int64 N, const FGameKitTrArgs& Args, bool bClean, const FGameKitWordSet& Words);
+}
+
+/** The word lists per locale and the chain's folded set: Get() folds once per locale; SetLists() drops the fold. */
+class GAMEKITSHELL_API FGameKitWordCache
+{
+public:
+	void SetLists(TMap<FString, TArray<FString>> InLists) { Lists = MoveTemp(InLists); bValid = false; }
+	const TMap<FString, TArray<FString>>& GetLists() const { return Lists; }
+	/** The folded words of every locale in Locale's chain (a fallback line can come from any of them). */
+	const FGameKitWordSet& Get(const FString& Locale);
+	int32 Folds() const { return FoldCount; }   // how many times Get() folded (tests)
+
+private:
+	TMap<FString, TArray<FString>> Lists;
+	FString CachedLocale;
+	FGameKitWordSet Set;
+	bool bValid = false;
+	int32 FoldCount = 0;
+};
+
+namespace GameKit
+{
 
 	/** The pseudo-locale version of Text (see Notes). */
 	GAMEKITSHELL_API FString Pseudo(const FString& Text);
