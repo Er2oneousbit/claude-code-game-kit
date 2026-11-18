@@ -4,7 +4,9 @@
 .claude/skills/make-a-game/SKILL.md: path: docs/ENGINE_FLOW.md
 .claude/skills/make-a-game/SKILL.md: path: tools/dev.py
 CHANGELOG.md: path: bozzetto.json
+CHANGELOG.md: path: data/achievements.json
 CHANGELOG.md: path: src/core/follow.ts
+CHANGELOG.md: path: steam_appid.txt
 CHANGELOG.md: path: tests/test_capture_format.cpp
 CHANGELOG.md: path: tests/test_window_fit.cpp
 CHANGELOG.md: path: tools/audio/babble.py
