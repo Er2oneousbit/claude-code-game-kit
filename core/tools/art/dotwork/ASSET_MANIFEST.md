@@ -579,8 +579,9 @@ real engine. Each engine's `docs/ENGINE.md` or `docs/ENGINE_FLOW.md` "Dotwork" s
   kinds; an animated terrain an A1 water kind) built from Dotwork's quarter tiles and kept only when all 47 tiles
   come back from the block pixel for pixel through MZ's floor table (RPG Maker MV's corescript `Tilemap.js`, MIT);
   every other tile of a square tileset (sides4 and corners4 terrain, variants) goes on B to E; maps of square
-  tilesets become `data/MapNNN.json` (the 1.1.0 rules: keys, the roll, stamps; each cell's tiles stacked into MZ's
-  four layers) with a tileset entry in `data/Tilesets.json` and a row in `data/MapInfos.json` (append only, the
+  tilesets become MZ map files (data/MapNNN.json in the MZ project; the 1.1.0 rules: keys, the roll, stamps;
+  each cell's tiles stacked into MZ's four layers) with a tileset entry in its Tilesets.json and a row in its
+  MapInfos.json (append only, the
   converter's entries carry `<dotwork>` in their note), props as events; backgrounds as in the table above. The other
   extra kinds are skipped with a note each.
   Dotwork's output stays in `assets/`, outside `game/`; the converter records what it wrote in
