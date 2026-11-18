@@ -76,8 +76,9 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    base language, then English, then the key itself (a missing string shows, so it gets noticed).
 2. Plurals per CLDR category with one message per category, never "item(s)"; `one` does not mean only 1 (French puts
    0 in `one`) (E86). The kit's plural helper (`plural(locale, n)`, the reference's `PLURAL_FAMILIES`) has CLDR 46's
-   whole-number rules for 78 languages, Russian, Polish, Czech, Arabic and Welsh among them (K01: swept over 0 to 2000
-   and the millions against CLDR's own rules file); a language it does not list gets English's rule, so add its rule
+   whole-number rules for 77 languages and European Portuguese, Russian, Polish, Czech, Arabic and Welsh among them
+   (K01: swept over 0 to 2000 and the millions against CLDR's own rules file; `CLDR_PLURALS_XML=<plurals.xml>
+   python tools/test_golden_vectors.py` repeats the sweep); a language it does not list gets English's rule, so add its rule
    to `tools/golden_vectors.py` and every port before shipping it. Each locale in the fallback chain uses its own
    rule, and a table without the form asked for shows its `.other` (a missing French `many`, used only for whole
    millions, is fine).
@@ -113,9 +114,9 @@ values in `data/golden/shell.json` that every port's tests check (K01).
    files of every locale in the chain; the kit ships an empty English list): each whole listed word, in any case,
    becomes a same-length grawlix (`#@$%`). Limits: the mask matches whole words only, so a run of Chinese or Japanese
    characters with no spaces is one word, and a German compound must be listed as itself; text is not normalized.
-   `check_i18n.py` lists every line that holds a listed word and has no `@clean` (a warning). Subtitles of voiced
-   lines need their own clean line and recording, chosen when the line starts (Wavesmith `dialogue`), never swapped
-   halfway.
+   `check_i18n.py` lists every line that holds a listed word and has no `@clean` (a warning). Not filtered yet:
+   dialogue files (subtitles, Wavesmith `dialogue`) do not go through `tr()`. A voiced line will need its own clean
+   line and recording, chosen when the line starts, never swapped halfway.
 
 ## 6. Display and platforms
 - Pixel art: the kit's 640x360 base scales by whole numbers (2x at 720p, 3x at 1080p, 4x at 1440p); letterbox the rest

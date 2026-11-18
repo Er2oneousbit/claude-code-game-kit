@@ -10,14 +10,18 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its confirm (#308)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Platform, the platform services layer's rules (#84)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches (#171 blood, #207 clean language),
-#           CLDR plurals, @clean lookups and the word mask
+#           CLDR plurals, @clean lookups and the word mask; with CLDR_PLURALS_XML set, the plural rules against CLDR's own
+#           plurals.xml
 # ---------------------------------------------------------------------------
 import json
 import math
+import os
+import re
 import struct
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -274,6 +278,41 @@ class Plurals(unittest.TestCase):
         self.assertEqual(gv.tr_plural(t, "ru", "hits", 22), "22 удара")
         self.assertEqual(gv.tr_plural(t, "fr", "hits", 1000000), "1000000 de coups")
         self.assertEqual(gv.tr_plural({}, "ru", "hits", 5), "hits.many")   # nothing anywhere: the key shows
+
+
+@unittest.skipUnless(os.environ.get("CLDR_PLURALS_XML"), "set CLDR_PLURALS_XML to CLDR's plurals.xml to sweep it")
+class PluralsAgainstCldr(unittest.TestCase):
+    """The sweep behind PLURAL_FAMILIES: every mapped language against the rules in CLDR's own
+    common/supplemental/plurals.xml (release-46 when written), whole numbers 0..2000 and the millions."""
+
+    @staticmethod
+    def _holds(cond, n):
+        ops = {"n": n, "i": n, "v": 0, "w": 0, "f": 0, "t": 0, "e": 0, "c": 0}
+        for alt in cond.split(" or "):
+            ok = True
+            for rel in alt.split(" and "):
+                m = re.match(r"\s*([niftvwec])\s*(?:%\s*(\d+))?\s*(!=|=)\s*(.+)$", rel)
+                x = ops[m.group(1)] % int(m.group(2)) if m.group(2) else ops[m.group(1)]
+                hit = any((int(p.split("..")[0]) <= x <= int(p.split("..")[1])) if ".." in p else x == int(p)
+                          for p in m.group(4).replace(" ", "").split(","))
+                ok = ok and (hit if m.group(3) == "=" else not hit)
+            if ok:
+                return True
+        return False
+
+    def test_every_language_matches_cldr(self):
+        root = ET.parse(os.environ["CLDR_PLURALS_XML"]).getroot()
+        rules = {}
+        for pr in root.find("plurals").findall("pluralRules"):
+            for loc in pr.get("locales").split():
+                rules[loc] = [(r.get("count"), r.text.split("@")[0].strip()) for r in pr.findall("pluralRule")]
+        ns = list(range(0, 2001)) + [k * 1000000 for k in range(1, 101)]
+        for lang in sorted(gv.PLURAL_FAMILY_OF) + ["pt_PT"]:
+            with self.subTest(lang=lang):
+                self.assertIn(lang, rules)
+                for n in ns:
+                    want = next((c for c, cond in rules[lang] if c != "other" and self._holds(cond, n)), "other")
+                    self.assertEqual(gv.plural(lang.replace("_", "-"), n), want, f"{lang} {n}")
 
 
 class CleanLanguage(unittest.TestCase):
