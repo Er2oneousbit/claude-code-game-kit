@@ -8,6 +8,8 @@
 #           The pythonscript commandlet is enough here (building and saving needs no renderer); the GPU check is
 #           `python tools/dev.py smoke --shaders`.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): the post recipes also as Post Process materials
+#           (M_KitPost_<name>, scene colour in place of MainTex, #260)
 # ---------------------------------------------------------------------------
 import unreal
 
@@ -21,3 +23,8 @@ for name in RECIPES:
     if not unreal.EditorAssetLibrary.save_loaded_asset(material, False):
         raise RuntimeError(f"could not save {DEST}/M_Kit_{name}")
     unreal.log(f"made {DEST}/M_Kit_{name}")
+    if RECIPES[name]["group"] == "post":        # the same effect as a Post Process material (a volume's blendable)
+        material = kit_materials.build_post(name, DEST)
+        if not unreal.EditorAssetLibrary.save_loaded_asset(material, False):
+            raise RuntimeError(f"could not save {DEST}/M_KitPost_{name}")
+        unreal.log(f"made {DEST}/M_KitPost_{name}")

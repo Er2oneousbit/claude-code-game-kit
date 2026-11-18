@@ -71,6 +71,8 @@
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes
 #           (Content/Python/kit_shaders): `check` compiles them as materials, `smoke --shaders` draws and compares
 #           them, both in the full editor off-screen (the pythonscript commandlet has only the Null RHI)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --shaders also draws the translucent materials
+#           and the Post Process variants of the recipes and compares each with its golden image (#260)
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
 #           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
 #           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
@@ -175,6 +177,7 @@ SHADER_PY = "kit_shaders/shader_check.py"    # the same file as `py` finds it on
 SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
 SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
+SHADER_VARIANTS = (("translucent", ("sprite", "lighting")), ("post", ("post",)))   # #260: folder under SHADER_OUT, groups
 SHADER_LINE = re.compile(r"LogPython: (SHADER_(?:OK|FAIL|CHECK_DONE)\b.*)$")
 SHIP_SITE = None   # the web build `ship --kind static` publishes unless --site is given (None: none)
 DEBUG = False
@@ -736,10 +739,29 @@ def shader_pass(args):
         return rc
     rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir])
     print(out.rstrip())
-    if rc:
-        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+    worst = rc
+    for folder, groups in SHADER_VARIANTS:         # #260: the materials a game really uses, same golden images
+        names = shader_variant_names(groups)
+        if not names:
+            continue
+        print(f"[info] {folder} variants:")
+        rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare",
+                            out_dir / folder, "--only"] + names)
+        print(out.rstrip())
+        worst = max(worst, rc)
+    if worst:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if worst == 1 else
               "[error] shader_ref.py compare could not run")
-    return rc
+    return worst
+
+
+def shader_variant_names(groups):
+    """The recipes of these groups, from tools/shaders/recipes.json ([] when it cannot be read)."""
+    try:
+        data = json.loads((ROOT / "tools" / "shaders" / "recipes.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [n for n, r in data.get("recipes", {}).items() if r.get("group") in groups]
 
 
 def run_tool(cmd):

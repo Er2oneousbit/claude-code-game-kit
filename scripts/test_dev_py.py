@@ -44,10 +44,13 @@
 #           BMP for .bmp, any other name refused before the build, BMP bytes in a .png fail, PNG frames (#314)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): UnrealStaleBuild, test and smoke build first when a
 #           C++ source is newer than its built module
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnrealShaders compares the translucent and Post
+#           Process variants too (#260)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
 import importlib.util
+import json
 import io
 import os
 import re
@@ -2412,6 +2415,33 @@ class UnrealShaders(TempRoot):
     def test_a_differing_picture_fails_before_the_smoke_tests(self):
         dev = self.dev(self.OK, {"shader_ref.py": (1, "[FAIL] flash: 9 pixel(s) past 2")}, automation=0)
         rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+    RECIPES = {"recipes": {"flash": {"group": "sprite"}, "sprite_light": {"group": "lighting"},
+                           "crt": {"group": "post"}, "toon_rim": {"group": "surface"}}}
+
+    def with_recipes(self, dev):
+        folder = self.root / "tools" / "shaders"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "recipes.json").write_text(json.dumps(self.RECIPES), encoding="utf-8")
+        return dev
+
+    def test_smoke_shaders_compares_the_translucent_and_post_variants_too(self):
+        # #260: the check also draws M_Kit_<name> as a game uses it (translucent) and the Post Process materials
+        # into <out>/translucent and <out>/post; each must be compared with its golden image, by group
+        dev = self.with_recipes(self.dev(self.OK, {"shader_ref.py": (0, "[ OK ] match")}))
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        compares = [c for c in self.tools if "shader_ref.py compare" in c]
+        self.assertEqual(len(compares), 3, compares)
+        self.assertTrue(compares[1].endswith(("translucent --only flash sprite_light",)), compares[1])
+        self.assertTrue(compares[2].endswith("post --only crt"), compares[2])
+
+    def test_a_translucent_material_that_differs_fails_the_smoke(self):
+        dev = self.dev(self.OK, {"translucent": (1, "[FAIL] flash: 9 pixel(s)"), "shader_ref.py": (0, "[ OK ] match")},
+                       automation=0)
+        rc, text = self.smoke(self.with_recipes(dev))
         self.assertEqual(rc, 1, text)
         self.assertIn("differs from its golden image", text)
 
