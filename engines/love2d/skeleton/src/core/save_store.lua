@@ -24,6 +24,8 @@
 -- Pseudocode (save): recover a stranded .tmp -> read primary and .bak -> holds_newer? raise -> atomic write
 --   (the old primary becomes the .bak only when it parses as a save, so a corrupt one never replaces a good .bak)
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): SaveStore.new(store, on_saved): the platform layer's
+--           cloud hook runs after a slot's atomic write (#84)
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local AtomicFile = require("src.core.atomic_file")
@@ -105,8 +107,9 @@ local function complete_save(text)
   return problem == "" or problem == "newer"
 end
 
-function SaveStore.new(store)
-  return setmetatable({ store = store }, SaveStore)
+-- on_saved(name), if given, runs after a slot's atomic write succeeded (the platform layer's cloud hook, #84)
+function SaveStore.new(store, on_saved)
+  return setmetatable({ store = store, on_saved = on_saved }, SaveStore)
 end
 
 -- primary text, backup text, recovered (true when a stranded .tmp was put back as the primary)
@@ -139,6 +142,7 @@ function SaveStore:save(slot, data)
   local name = SaveStore.file_name(slot)
   AtomicFile.write(self.store, name, Json.encode(env, { indent = 2 }) .. "\n", {
     is_good = function(old) return SaveStore.parse(old) ~= nil end })
+  if self.on_saved then self.on_saved(name) end
   return self.store:path(name)
 end
 

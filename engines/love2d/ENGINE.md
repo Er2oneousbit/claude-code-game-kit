@@ -20,7 +20,8 @@
 conf.lua            window, identity, the command line (KIT) and the error handler (read before main.lua)
 main.lua            boot only: run modes (smoke, capture, test) around the shell
 src/version.lua     the game's name and version (title screen, log, crash files read it)
-src/core/           engine-free logic (juice, settings, saves, i18n, JSON, atomic files, ...): no love.graphics,
+src/core/           engine-free logic (juice, settings, saves, i18n, JSON, atomic files, the platform layer
+                    platform.lua: docs/PLATFORM.md, ...): no love.graphics,
                     so tests load them; checked against data/golden/*.json
 src/shell/          the runtime front end: app.lua (screen stack, settings applied, user data), screens/, drive.lua
                     (smoke scenarios), ui.lua + widgets.lua (menus, focus, the pseudo-locale layout check)
