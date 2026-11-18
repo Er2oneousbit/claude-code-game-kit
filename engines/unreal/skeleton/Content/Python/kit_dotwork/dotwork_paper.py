@@ -290,13 +290,19 @@ class Importer:
             return
         mine = {obj.get_path_name().split(".")[0] for obj in self.made}
         lib = unreal.EditorAssetLibrary
+        gone = []
         for path in lib.list_assets(self.dest, recursive=True, include_folder=False):
             path = str(path).split(".")[0]
             if path in mine:
                 continue
             obj = lib.load_asset(path)
-            if obj is None or not lib.get_metadata_tag(obj, META + "import"):
-                continue
+            if obj is not None and lib.get_metadata_tag(obj, META + "import"):
+                gone.append((isinstance(obj, unreal.Texture), path))
+        obj = None
+        # users before what they use (sprites and flipbooks before their textures): deleting a texture a loaded
+        # sprite still holds trips an ensure ("failed to unload all packages")
+        for _, path in sorted(gone):
+            unreal.SystemLibrary.collect_garbage()
             if lib.delete_asset(path):
                 self.pruned.append(path)
         if self.pruned:

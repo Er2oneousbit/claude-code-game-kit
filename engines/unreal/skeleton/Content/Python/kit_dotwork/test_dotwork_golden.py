@@ -115,7 +115,8 @@ def check_prune(root):
     keep = [a for a in doc["assets"] if (a["kind"], a["name"]) in (("sprite", "crate"), ("image", "logo_golden"))]
     lib = unreal.EditorAssetLibrary
     try:
-        for assets in (keep, keep[:1] if keep[0]["kind"] == "sprite" else keep[1:]):
+        # the second run drops the crate: its sprite and the texture it uses go, users first
+        for assets in (keep, [a for a in keep if a["kind"] == "image"]):
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(dict(doc, assets=assets), f)
             if not lib.does_asset_exist(f"{PRUNE_DEST}/Mine/MI_Mine"):
@@ -124,12 +125,12 @@ def check_prune(root):
                     unreal.MaterialInstanceConstantFactoryNew())
             imp = paper.Importer(tmp, dest=PRUNE_DEST).run()
             imp.save()
-        logo = [p for p in imp.pruned if "logo_golden" in p]
         problems = []
-        if not logo or lib.does_asset_exist(logo[0]):
-            problems.append(f"the logo texture the pack dropped is still there (pruned: {imp.pruned})")
-        if not lib.does_asset_exist(f"{PRUNE_DEST}/Sprites/S_crate"):
-            problems.append("the crate the pack still has was deleted")
+        for gone in (f"{PRUNE_DEST}/Sprites/S_crate", f"{PRUNE_DEST}/Textures/art/props/T_spr_crate"):
+            if gone not in imp.pruned or lib.does_asset_exist(gone):
+                problems.append(f"{gone}, which the pack dropped, is still there (pruned: {imp.pruned})")
+        if not lib.does_asset_exist(f"{PRUNE_DEST}/Textures/art/brand/golden/T_logo_golden"):
+            problems.append("the logo the pack still has was deleted")
         if not lib.does_asset_exist(f"{PRUNE_DEST}/Mine/MI_Mine"):
             problems.append("an asset the importer did not make was deleted")
     finally:

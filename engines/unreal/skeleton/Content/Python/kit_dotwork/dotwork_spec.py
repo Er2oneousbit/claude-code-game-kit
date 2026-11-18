@@ -320,12 +320,15 @@ def font_layout(chars, row_width=FONT_ROW_WIDTH):
     """Where each glyph of a BMFont goes on the re-laid-out pages an offline Font draws from. An offline Font draws
     a glyph's USize pixels at the pen and moves the pen by USize plus one font-wide Kerning; it has no x offset. So
     every glyph gets a cell of its own, xadvance - kerning wide, with its pixels drawn xoffset into it: the pen then
-    lands exactly where the BMFont puts it. kerning = the smallest xadvance - xoffset - width over the inked glyphs
-    (every glyph then fits its cell). Cells are packed in rows per original page, CELL_GAP apart.
+    lands exactly where the BMFont puts it. kerning = the smallest xadvance - xoffset - width over the inked glyphs,
+    never above 0 (every glyph then fits its cell): TextRender adds the Kerning only before a glyph that is not
+    whitespace (TextRenderComponent.cpp, UE 5.8), so a font whose glyphs all fit their advance gets 0 and cells
+    exactly xadvance wide, right everywhere; only an overhanging glyph makes it negative. Cells are packed in rows
+    per original page, CELL_GAP apart.
     Returns (kerning, cells, page_sizes, clipped): cells[id] = (page, u, v, cell_w, h, xoffset, x, y, w);
     clipped = ids whose negative xoffset was drawn as 0 (a glyph cannot start left of the pen)."""
     inked = [c for c in chars if c[3] > 0 and c[4] > 0]
-    kerning = min((c[7] - max(0, c[5]) - c[3] for c in inked), default=0)
+    kerning = min([0] + [c[7] - max(0, c[5]) - c[3] for c in inked])
     pages = sorted({c[8] for c in chars}) or [0]
     cells, sizes, clipped = {}, {}, []
     for page in pages:

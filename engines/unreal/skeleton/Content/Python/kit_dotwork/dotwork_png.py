@@ -6,9 +6,9 @@
 # Usage   : img = dotwork_png.read(path)          # Image(width, height, rgba bytearray, 4 bytes per pixel)
 #           dotwork_png.write(path, img)
 #           img.crop(x, y, w, h); img.paste(other, x, y); img.pixel(x, y)
-# Notes   : Reads 8-bit greyscale, RGB, palette (with tRNS), grey + alpha and RGBA, all five filter types, not
-#           interlaced (Dotwork, Pillow and Aseprite write these); writes 8-bit RGBA with filter 0. Anything else
-#           raises PngError with the reason.
+# Notes   : Reads greyscale (1 to 16 bits), RGB, palette (1 to 8 bits, with tRNS), grey + alpha and RGBA (8 or 16
+#           bits; 16 is cut to 8), all five filter types, not interlaced (Dotwork, Pillow and Aseprite write these);
+#           writes 8-bit RGBA with filter 0. Anything else raises PngError with the reason.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # ---------------------------------------------------------------------------
 import struct
@@ -87,10 +87,13 @@ def read_bytes(raw, where="PNG"):
     if head is None:
         raise PngError(f"{where}: no IHDR")
     w, h, depth, ctype, _, _, interlace = head
-    if depth != 8 or ctype not in CHANNELS or interlace:
+    ok = ctype in CHANNELS and (depth in (8, 16) if ctype in (2, 4, 6) else depth in (1, 2, 4, 8) if ctype == 3
+                                else depth in (1, 2, 4, 8, 16))
+    if not ok or interlace:
         raise PngError(f"{where}: {depth}-bit colour type {ctype}{' interlaced' if interlace else ''} is not read here")
-    bpp = CHANNELS[ctype]
-    stride = w * bpp
+    ch = CHANNELS[ctype]
+    bpp = max(1, ch * depth // 8)               # bytes per pixel for the filters (1 below 8 bits)
+    stride = (w * ch * depth + 7) // 8
     try:
         src = zlib.decompress(bytes(idat))
     except zlib.error as exc:
@@ -114,14 +117,14 @@ def read_bytes(raw, where="PNG"):
                 line[i] = (line[i] + _paeth(a, b, c)) & 255
             elif f != 0:
                 raise PngError(f"{where}: unknown filter {f}")
-        rows.append(line)
+        rows.append(_samples(line, w * ch, depth, ctype))
         prev = line
     img = Image(w, h)
     d = img.data
     for y, line in enumerate(rows):
         for x in range(w):
             o = (y * w + x) * 4
-            s = x * bpp
+            s = x * ch
             if ctype == 6:
                 d[o:o + 4] = line[s:s + 4]
             elif ctype == 2:
@@ -137,6 +140,21 @@ def read_bytes(raw, where="PNG"):
                 alpha = trns[k] if trns is not None and k < len(trns) else 255
                 d[o:o + 4] = bytes(palette[3 * k:3 * k + 3]) + bytes((alpha,))
     return img
+
+
+def _samples(line, count, depth, ctype):
+    """A row's samples as 8-bit values: bits unpacked (grey scaled up, palette indexes kept), 16-bit cut to the high
+    byte."""
+    if depth == 8:
+        return line
+    if depth == 16:
+        return bytearray(line[0::2][:count])
+    out, mask = bytearray(), (1 << depth) - 1
+    for i in range(count):
+        bit = i * depth
+        v = (line[bit // 8] >> (8 - depth - bit % 8)) & mask
+        out.append(v if ctype == 3 else v * 255 // mask)
+    return out
 
 
 def read(path):

@@ -333,6 +333,27 @@ class Png(unittest.TestCase):
         with self.assertRaises(dpng.PngError):
             dpng.read_bytes(b"not a png")
 
+    def test_small_palettes_read_like_pillow(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        import io
+        src = Image.new("RGBA", (5, 3), (0, 0, 0, 0))
+        for x, y, c in ((0, 0, (255, 255, 255, 255)), (3, 1, (200, 40, 10, 255)), (4, 2, (255, 255, 255, 255))):
+            src.putpixel((x, y), c)
+        for mode, kw in (("P1", {"bits": 1}), ("P2", {"bits": 2})):
+            buf = io.BytesIO()
+            im = src.convert("RGB").convert("P", palette=Image.ADAPTIVE, colors=2 ** kw["bits"])
+            im.save(buf, "PNG", **kw)
+            got = dpng.read_bytes(buf.getvalue(), mode)
+            want = Image.open(io.BytesIO(buf.getvalue())).convert("RGBA")
+            for y in range(3):
+                for x in range(5):
+                    self.assertEqual(got.pixel(x, y)[:3], want.getpixel((x, y))[:3],
+                                     f"{mode} {x},{y}")
+            self.assertEqual((got.width, got.height), (5, 3))
+
 
 if __name__ == "__main__":
     for stream in (sys.stdout, sys.stderr):
