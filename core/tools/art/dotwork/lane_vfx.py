@@ -470,7 +470,11 @@ def sample_ramp(name, sample, rect, conf_root="."):
         raise core.ToolError(f"vfx {name}: sample is the path of a PNG in the game (got {sample!r})")
     root = os.path.realpath(conf_root)
     path = os.path.realpath(os.path.join(root, sample))
-    if os.path.commonpath([root, path]) != root:
+    try:
+        inside = os.path.commonpath([root, path]) == root
+    except ValueError:                                            # another drive on Windows
+        inside = False
+    if not inside:
         raise core.ToolError(f"vfx {name}: sample {sample} is outside the game folder")
     if not os.path.isfile(path):
         raise core.ToolError(f"vfx {name}: sample {sample} not found")

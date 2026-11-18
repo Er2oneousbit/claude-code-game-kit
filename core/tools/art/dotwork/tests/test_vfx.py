@@ -461,7 +461,8 @@ class VfxExam(unittest.TestCase):
                           ({"name": "x", "kind": "debris", "sample": "assets/art/tiles/wall.png", "colors": ["#000000",
                                                                                                          "#ffffff"]},
                            "sample picks the colours"),
-                          ({"name": "x", "kind": "dust", "sample": "assets/art/tiles/wall.png"}, "sample is for")):
+                          ({"name": "x", "kind": "dust", "sample": "assets/art/tiles/wall.png"}, "sample is for"),
+                          ({"name": "x", "kind": "debris", "sample": "Q:/elsewhere/wall.png"}, "outside the game")):
             code, out = self.pack([spec])
             self.assertEqual(code, 2, (spec, out))
             self.assertIn(why, out)

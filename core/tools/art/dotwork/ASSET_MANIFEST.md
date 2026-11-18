@@ -373,7 +373,11 @@ on the transitions, a raised block with its own origin), plus `atlas_order_check
 `atlas_order`, whose atlases are listed id 1 first: a port that sorts atlases by `id` picks the other variant on four
 of its six cells. Its two fonts: `tiny` (one page) and `duo` (#286: two pages, with the sampled glyph `A` on page 1,
 drawn 1 px right of the pen and 1 px down, and a kerning pair), so an importer that draws a font from one texture or
-drops the x offset fails on `duo`'s sample.
+drops the x offset fails on `duo`'s sample. The shooting effects (#164, 1.2.0): `vfx_muzzle` (16x8 additive frames in a
+sheet, the pivot on the left edge, so a port that swaps width and height or assumes square frames fails),
+`vfx_muzzle_light` (with a `light`, its texture and three energies), `vfx_tracer` (with a `tracer`) and
+`vfx_stone_debris_particles` (a second particle set whose emitter, as `lane_vfx` writes it, names its texture by bare
+file name and its `palette_from` source: an importer that walks the emitter for paths fails on it).
 
 | In `expected.json` | What an importer compares |
 |---|---|

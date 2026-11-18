@@ -72,7 +72,7 @@ dist/               production build (git-ignored)
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
 
-- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0; the
+- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.2.0; the
   importer reads any 1.x): in a world's `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)`
   (src/game/dotwork/), then `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`,
   `lib.text`, `lib.icon`, `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama

@@ -76,7 +76,7 @@
   caption. Copy the parts you want into `Game.cpp`. The shake's angle is not drawn (SDL's renderer has no rotated
   rectangles).
 - **Dotwork art (#60):** packs from Dotwork (`tools/art/dotwork/`) arrive as PNGs plus `assets/dotwork/<pack>.assets.json`
-  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`, 1.x: 1.0.0 and 1.1.0 load, another major is refused).
+  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`, 1.x: 1.0.0 to 1.2.0 load, another major is refused).
   `src/core/DotworkAssets` (SDL-free, `core::dotwork`) reads them: clips with each frame's `duration` (`ClipPlayer`),
   sprites, icons, portraits, tilesets, maps, fonts (glyph quads from `chars`: `layout_text`), UI kits, and the extra
   kinds (background layers with their velocities and `repeat`, particles with the emitter JSON, transition, normal_map,

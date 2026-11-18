@@ -15,6 +15,7 @@
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): a tile's key and
 //           origin, map layers of kind stamps, a cell's key (mask or corner bits), the five extra kinds
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the additive note points at additive.rs (#286)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light and tracer
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;

@@ -500,8 +500,6 @@ def _extras(g):
 def _shooting(g):
     """The shooting effects (#164) as lane_vfx writes them: additive clips, the left (barrel tip) pivot, the 1.2.0
     light and tracer fields, and a debris emitter whose colours were sampled from a surface."""
-    import lane_vfx
-    import numpy as np
     hot = (255, 230, 140, 255)
     out = "assets/art/fx/vfx/muzzle"
     files, sheet = [], Canvas(48, 8)
@@ -514,8 +512,9 @@ def _shooting(g):
     g.png(f"{out}/vfx_muzzle_sheet.png", sheet, "sheet", frames=3, fps=30, loop=False, blend="add")
     godot.sprite_frames(g.path(f"{out}/vfx_muzzle_frames.tres"), f"{RES}/fx/vfx/muzzle", {"play": (files, 30, False)})
     out = "assets/art/fx/vfx/muzzle_light"
-    ramp = np.array([[122, 42, 8], [216, 106, 24], [255, 180, 56], [255, 232, 144], [255, 255, 255]], np.float32)
-    light = lane_vfx.light_meta("muzzle_light", "play", 3, 8, ramp)
+    # written out, not taken from lane_vfx: tuning the lane must not move the fixture every engine compares with
+    light = {"clip": "play", "texture": "vfx_muzzle_light_light.png", "color": "#ffe890", "radius": 8,
+             "energy": [1.2, 0.6, 0.0]}
     tex = Canvas(8, 8).rect(2, 2, 4, 4, (255, 255, 255, 128)).rect(3, 3, 2, 2, (255, 255, 255, 255))
     g.png(f"{out}/{light['texture']}", tex, "light_texture")
     files = []
@@ -527,7 +526,10 @@ def _shooting(g):
     godot.sprite_frames(g.path(f"{out}/vfx_muzzle_light_frames.tres"), f"{RES}/fx/vfx/muzzle_light",
                         {"play": (files, 30, False)})
     out = "assets/art/fx/vfx/tracer"
-    tracer = lane_vfx.tracer_meta("tracer", 8, ramp, 4.0, 32)
+    steps = [(0.0, (122, 42, 8), 0.0), (0.1667, (122, 42, 8), 1.0), (0.3333, (216, 106, 24), 1.0),
+             (0.5, (255, 180, 56), 1.0), (0.6667, (255, 232, 144), 1.0), (0.8333, (255, 255, 255), 1.0)]
+    tracer = {"width": 1.36, "taper": 0.25, "spacing": 4.0, "length": 32,
+              "steps": [{"at": at, "rgba": [*rgb, a]} for at, rgb, a in steps]}
     fly = []
     for i in range(2):
         fn = f"spr_vfx_tracer_{i:02d}.png"
