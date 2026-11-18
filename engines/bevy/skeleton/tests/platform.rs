@@ -14,6 +14,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{Value, json};
 
 use {{GAME_SLUG}}::logic::platform::{self, NullBackend, Platform, PlatformService};
+use {{GAME_SLUG}}::logic::platform_steam::{self, SteamApi, SteamBackend};
 use {{GAME_SLUG}}::logic::save_store;
 
 const SAMPLE: &str = r#"{"stats": [{"id": "kills", "max": 100, "increment_only": true}], "achievements": [{"id": "first", "name": "First"}, {"id": "kills_10", "name": "Ten", "stat": "kills", "threshold": 10}]}"#;
@@ -287,6 +288,108 @@ fn a_save_reaches_saved_once_it_is_on_disk() {
         .map(|a| a.iter().map(|v| v.to_string()).collect())
         .unwrap_or_default();
     assert!(calls.is_empty(), "online: written at once, nothing queued");
+}
+
+// ---- the Steam backend over a fake SteamApi (no SDK, no Steam) ---------------------------------------------
+
+#[derive(Clone, Default)]
+struct FakeSteam {
+    log: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    store_ok: std::sync::Arc<std::sync::Mutex<bool>>,
+}
+
+impl FakeSteam {
+    fn push(&self, s: String) {
+        self.log.lock().unwrap().push(s);
+    }
+}
+
+impl SteamApi for FakeSteam {
+    fn set_achievement(&mut self, id: &str) -> bool {
+        self.push(format!("SetAchievement {id}"));
+        true
+    }
+    fn achieved(&mut self, id: &str) -> Option<bool> {
+        Some(id == "first")
+    }
+    fn set_stat_int(&mut self, id: &str, v: i32) -> bool {
+        self.push(format!("SetStat {id} {v}"));
+        true
+    }
+    fn set_stat_float(&mut self, id: &str, _v: f32) -> bool {
+        self.push(format!("SetStatF {id}"));
+        true
+    }
+    fn stat_int(&mut self, _id: &str) -> Option<i32> {
+        Some(4)
+    }
+    fn stat_float(&mut self, _id: &str) -> Option<f32> {
+        Some(0.0)
+    }
+    fn store_stats(&mut self) -> bool {
+        self.push("StoreStats".into());
+        *self.store_ok.lock().unwrap()
+    }
+    fn indicate_progress(&mut self, id: &str, current: u32, max: u32) -> bool {
+        self.push(format!("Indicate {id} {current} {max}"));
+        true
+    }
+    fn reset_all_stats(&mut self, _achievements: bool) -> bool {
+        true
+    }
+    fn set_rich_presence(&mut self, key: &str, value: &str) -> bool {
+        self.push(format!("SetRichPresence {key} {value}"));
+        true
+    }
+    fn clear_rich_presence(&mut self) {}
+    fn file_write(&mut self, name: &str, _bytes: &[u8]) -> bool {
+        self.push(format!("FileWrite {name}"));
+        true
+    }
+    fn run_callbacks(&mut self) {
+        self.push("RunCallbacks".into());
+    }
+}
+
+#[test]
+fn the_steam_backend_maps_calls_and_a_refused_store() {
+    let dir = Temp::new("steam");
+    let fake = FakeSteam::default();
+    *fake.store_ok.lock().unwrap() = true;
+    let defs = platform::achievements_load(Some(SAMPLE)).0;
+    let mut backend = SteamBackend::new(defs, dir.0.clone(), Box::new(fake.clone()));
+    {
+        use platform::Backend;
+        assert_eq!(backend.remote(), json!({"unlocked": ["first"], "stats": {"kills": 4}}));
+    }
+    let overlay = backend.overlay.clone();
+    let mut ps = PlatformService::new(&dir.0, Some(SAMPLE), Some(Box::new(backend)), "auto");
+    assert_eq!(ps.add_stat("kills", 12.0), "ok"); // the store had 4: 16, and kills_10 unlocks
+    assert_eq!(
+        *fake.log.lock().unwrap(),
+        vec!["SetStat kills 16", "SetAchievement kills_10", "StoreStats"]
+    );
+    fake.log.lock().unwrap().clear();
+    *fake.store_ok.lock().unwrap() = false;
+    assert_eq!(ps.set_stat("kills", 20.0), "ok");
+    assert_eq!(ps.flush(), "failed");
+    assert!(!ps.rules.online, "a refused StoreStats takes the layer offline");
+    *overlay.lock().unwrap() = Some(true);
+    assert_eq!(ps.update(), Some(true), "the overlay reaches the shell once");
+    assert_eq!(ps.update(), None);
+    assert_eq!(
+        fake.log.lock().unwrap().last().map(String::as_str),
+        Some("RunCallbacks")
+    );
+}
+
+#[test]
+fn without_the_steam_feature_or_in_an_automated_run_the_backend_is_null() {
+    let dir = Temp::new("nosteam");
+    assert!(platform_steam::make(&json!({}), &dir.0, true).is_none());
+    if !cfg!(feature = "steam") {
+        assert!(platform_steam::make(&json!({}), &dir.0, false).is_none());
+    }
 }
 
 // {{FOOTER}}

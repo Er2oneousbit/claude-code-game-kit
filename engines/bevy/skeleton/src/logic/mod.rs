@@ -45,6 +45,7 @@ pub mod display_staging;
 pub mod hud_scale;
 pub mod i18n;
 pub mod platform;
+pub mod platform_steam;
 pub mod save_store;
 pub mod settings;
 

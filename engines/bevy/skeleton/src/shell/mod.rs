@@ -364,7 +364,10 @@ impl Shell {
         };
         // data/achievements.json is optional: without it every call is "unknown" and nothing is written
         if let Some(text) = shell.store.read_data(platform::ACHIEVEMENTS_FILE) {
-            shell.platform = PlatformService::new(&cfg_data_dir, Some(&text), None, platform::CLOUD_MODE);
+            // the `steam` feature and Steam running: its backend; else the null backend
+            let defs = platform::achievements_load(Some(&text)).0;
+            let backend = crate::logic::platform_steam::make(&defs, &cfg_data_dir, cfg.automated);
+            shell.platform = PlatformService::new(&cfg_data_dir, Some(&text), backend, platform::CLOUD_MODE);
         }
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)
