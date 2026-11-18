@@ -21,7 +21,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : UNITY_EDITOR  full path to the Unity editor executable for this project's version
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : doctor/check/test/smoke/build/clean run against Unity 6000.6.6f1 on Windows
@@ -66,6 +67,7 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply and show:confirm
 #           (the Display tab's Apply, #308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -986,8 +988,8 @@ def build_parser():
     p = sub.add_parser("clean", help="remove Library/ and Temp/")
     p.add_argument("--yes", action="store_true", help="skip confirmation")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

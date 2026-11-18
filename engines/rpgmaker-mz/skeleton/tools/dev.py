@@ -22,7 +22,8 @@
 #                      tilesets (tools/dotwork_mz.mjs; dotwork -h for its options)
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : The MZ project lives in game/ (open its .rmmzproject in the editor), so the editor's Deployment
@@ -64,6 +65,7 @@
 #           reason, exit 2) instead of "no tests ran" (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -1146,8 +1148,8 @@ def build_parser():
     p.add_argument("--dry-run", action="store_true", help="say what would be written, write nothing")
     p.add_argument("--check", action="store_true", help="check the last export (files, MZ's shapes); `check` runs it too")
     p.set_defaults(fn=cmd_dotwork)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

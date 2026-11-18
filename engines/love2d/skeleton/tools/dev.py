@@ -19,7 +19,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : LOVE_BIN   path to love.exe or lovec.exe (else lovec / love on PATH). On Windows the console build
 #                      lovec.exe next to it is used for check, test and smoke (love.exe prints nothing).
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
@@ -49,6 +50,7 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display and show:apply|confirm,
 #           the Display tab's Apply and its keep-or-revert confirm; DRIVE_DISPLAY lines (#308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # ---------------------------------------------------------------------------
 import argparse
 import base64
@@ -913,8 +915,8 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="accepted on every engine; LÖVE clean never asks anyway")
     p.set_defaults(fn=cmd_clean)
 
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

@@ -7,7 +7,9 @@
 #           HTML comments out of CREDITS.md, then the text every credits screen shows) and the writer of the
 #           golden-vector files every engine port is tested against: data/golden/juice.json, data/golden/shell.json,
 #           data/golden/telemetry.json (only the ports that
-#           write telemetry.csv read it) and data/golden/credits.json (only the ports with a credits screen read it).
+#           write telemetry.csv read it) and data/golden/credits.json (only the ports with a credits screen read it);
+#           platform services (achievements, stats, rich presence, the overlay's pause hook, the cloud-save hooks, the
+#           offline queue: docs/PLATFORM.md) in data/golden/platform.json, for the ports of that layer (#84).
 # Usage   : python tools/golden_vectors.py --check        # are the vector files current? (exit 1 if not)
 #           python tools/golden_vectors.py --write        # rewrite them after changing this reference
 #           python tools/golden_vectors.py --show shake   # print one module's cases
@@ -23,6 +25,9 @@
 #           credits screen strips (heading marks, list markers, emphasis stars), credits.json's credits_text cases (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply with a
 #           keep-or-revert confirm, and shell.json's display_staging cases (#308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the platform services layer (#84 phase 1):
+#           achievements_load, Platform (unlock once, stat rules, offline queue and replay, presence, cloud hooks),
+#           NullBackend, cloud_partition, overlay_action, platform_state_load, and platform.json's cases
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -1156,6 +1161,631 @@ def build_credits():
             "cases": cases}
 
 
+# ----------------------------------------------------------------------------------------------- platform services
+# The engine-neutral platform layer (#84; docs/PLATFORM.md is the spec, SOP-21 section 4 cites it): achievements,
+# stats, rich presence, the overlay's pause hook and the cloud-save hooks, in front of a backend (the null backend
+# that records every call, by default; a store adapter such as Steam's later). Self-contained on purpose: it reads
+# nothing from the shell's tables above. Every list is ordered (definition order, unlock order, first-save order),
+# so no rule depends on the order of a JSON object's keys.
+PLATFORM_FORMAT = "platform_state"                   # the local state file's "format"
+PLATFORM_STATE_FILE = "platform_state.json"          # in the user-data folder; never synced to the cloud
+PLATFORM_STATE_VERSION = 1
+PLATFORM_ID_MAX = 64                                 # achievement, stat and presence key names: a letter, then
+                                                     # letters, digits and '_' (ASCII), at most 64
+STAT_TYPES = ["int", "float"]
+PRESENCE_MAX_KEYS = 30                               # Steam's k_cchMaxRichPresenceKeys (verify)
+PRESENCE_MAX_VALUE_BYTES = 255                       # UTF-8 bytes; Steam's 256 counts the closing NUL (verify)
+CLOUD_MODES = ["auto", "api"]                        # auto: the store syncs the folder (Steam Auto-Cloud, no calls);
+                                                     # api: the layer calls cloud_write after every cloud save
+CLOUD_LOCAL_NAMES = ["settings.json", PLATFORM_STATE_FILE, "telemetry.csv", "log_tail.txt"]  # machine-specific
+CLOUD_LOCAL_SUFFIXES = [".tmp", ".log"]              # half-written saves and logs
+CLOUD_LOCAL_DIRS = ["logs", "crashes", "captures"]   # a first folder named so stays on the machine
+OVERLAY_PAUSE_SCREENS = ["play"]                     # the overlay opening over these opens the pause menu
+_ASCII_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_ID_CHARS = _ASCII_LETTERS + "0123456789_"
+
+
+def platform_id_ok(v):
+    """An achievement, stat or presence key name: a string, 1 to 64 ASCII characters, a letter first."""
+    return (isinstance(v, str) and 0 < len(v) <= PLATFORM_ID_MAX and v[0] in _ASCII_LETTERS
+            and all(c in _ID_CHARS for c in v))
+
+
+def _num_ok(v):
+    """A finite number that is not a boolean (JSON true is not 1 here, in any port)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _whole(v):
+    """Integer-valued, judged by the value, never by the type: 5 and 5.0 are the same in JavaScript and Lua."""
+    return _num_ok(v) and math.floor(v) == v
+
+
+def _stat_value(sdef, v):
+    """A stat value as every port stores it: an int stat as a whole number, a float stat as a float."""
+    return int(v) if sdef["type"] == "int" else float(v)
+
+
+def _clamp_stat(sdef, v):
+    lo, hi = sdef["min"], sdef["max"]
+    v = max(v, lo)
+    return min(v, hi) if hi is not None else v
+
+
+def stat_initial(sdef):
+    """A stat's value before anything happened: 0, clamped into [min, max]."""
+    return _stat_value(sdef, _clamp_stat(sdef, 0))
+
+
+def achievements_load(text):
+    """data/achievements.json -> (definitions, problems), in settings_load's style: a bad entry is dropped and counted,
+    the rest still load; no file (None or "") is no achievements and no problems. Shape:
+      {"stats": [{"id", "type": "int"|"float" (int), "min" (0), "max" (none), "increment_only" (false)}],
+       "achievements": [{"id", "name", "description" (""), "stat" (none), "threshold", "progress_every" (none)}]}
+    name and description are localization keys (tr shows the key when a table lacks it, so plain words work too).
+    Stats and achievements have their own id namespaces. A bound achievement (stat set) needs a threshold above the
+    stat's initial value and at most its max (whole for an int stat); progress_every, if set, is above 0 and below
+    the threshold (whole for an int stat)."""
+    empty = {"version": PLATFORM_STATE_VERSION, "stats": [], "achievements": []}
+    if not text:
+        return empty, 0
+    try:
+        raw = json.loads(text)
+    except ValueError:
+        return empty, 1
+    if not isinstance(raw, dict):
+        return empty, 1
+    problems = 0
+    stats, achievements = [], []
+    raw_stats = raw.get("stats", [])
+    if not isinstance(raw_stats, list):
+        raw_stats, problems = [], problems + 1
+    for s in raw_stats:
+        ok = isinstance(s, dict) and platform_id_ok(s.get("id")) and all(s.get("id") != t["id"] for t in stats)
+        if ok:
+            kind = s.get("type", "int")
+            lo, hi, inc = s.get("min", 0), s.get("max"), s.get("increment_only", False)
+            whole = _whole if kind == "int" else _num_ok
+            ok = (kind in STAT_TYPES and whole(lo) and (hi is None or (whole(hi) and hi >= lo))
+                  and isinstance(inc, bool))
+        if not ok:
+            problems += 1
+            continue
+        conv = int if kind == "int" else float
+        stats.append({"id": s["id"], "type": kind, "min": conv(lo), "max": None if hi is None else conv(hi),
+                      "increment_only": inc})
+    by_id = {s["id"]: s for s in stats}
+    raw_ach = raw.get("achievements", [])
+    if not isinstance(raw_ach, list):
+        raw_ach, problems = [], problems + 1
+    for a in raw_ach:
+        ok = (isinstance(a, dict) and platform_id_ok(a.get("id")) and all(a.get("id") != b["id"] for b in achievements)
+              and isinstance(a.get("name"), str) and a.get("name") != ""
+              and isinstance(a.get("description", ""), str))
+        stat, threshold, every = (a.get("stat"), a.get("threshold"), a.get("progress_every")) if ok else (None,) * 3
+        if ok and stat is not None:
+            sdef = by_id.get(stat) if isinstance(stat, str) else None
+            whole = _whole if sdef and sdef["type"] == "int" else _num_ok
+            ok = (sdef is not None and whole(threshold) and threshold > stat_initial(sdef)
+                  and (sdef["max"] is None or threshold <= sdef["max"])
+                  and (every is None or (whole(every) and 0 < every < threshold)))
+        elif ok:
+            ok = threshold is None and every is None          # a threshold without a stat is a mistake
+        if not ok:
+            problems += 1
+            continue
+        sdef = by_id.get(stat)
+        achievements.append({"id": a["id"], "name": a["name"], "description": a.get("description", ""),
+                             "stat": stat, "threshold": None if stat is None else _stat_value(sdef, threshold),
+                             "progress_every": None if every is None else _stat_value(sdef, every)})
+    return {"version": PLATFORM_STATE_VERSION, "stats": stats, "achievements": achievements}, problems
+
+
+def cloud_partition(path):
+    """Which of the user-data folder's files sync to the cloud: "cloud" or "local". path is relative to that folder
+    ('/' or '\\'), compared without case. Local: settings.json (the display settings belong to this machine, E79), the
+    platform layer's own state, telemetry and logs, half-written *.tmp, and a first folder named logs, crashes or
+    captures. Everything else (the save slots and their .bak) is "cloud"."""
+    folded = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in path)   # ASCII only, in every port
+    parts = [p for p in folded.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts:
+        return "local"
+    name = parts[-1]
+    if (len(parts) > 1 and parts[0] in CLOUD_LOCAL_DIRS) or name in CLOUD_LOCAL_NAMES \
+            or any(name.endswith(s) for s in CLOUD_LOCAL_SUFFIXES):
+        return "local"
+    return "cloud"
+
+
+def overlay_action(active, screen):
+    """The store overlay opened (active) or closed: "pause" opens the pause menu, "none" does nothing. Opening over
+    gameplay pauses (as focus loss does, SOP-19 section 6); closing never resumes: the player resumes from the pause
+    menu, which is still open."""
+    return "pause" if active and screen in OVERLAY_PAUSE_SCREENS else "none"
+
+
+def _utf8_len(text):
+    return len(text.encode("utf-8"))
+
+
+class Platform:
+    """The platform layer's game-facing half (#84). Every operation returns (out, calls): calls are what it sent to
+    the backend during that operation, in order, as lists ([name, args...]). The rules:
+    - unlock(id): "unknown", "already" (no call, ever: an achievement unlocks once), or "unlocked": it is unlocked
+      locally at once and, online, flushed at once (so the store's popup shows).
+    - set_stat(id, v) / add_stat(id, d): "unknown"; "refused" (not a finite number, not whole for an int stat, or
+      lower than now on an increment_only stat: the value stays); "same" (no change, nothing pending); "ok" or
+      "clamped" (into [min, max]). A change is pending until a flush. Every achievement bound to the stat whose
+      threshold the new value reaches unlocks, in definition order; online, a bound achievement whose progress_every
+      step the value just crossed (and whose threshold it did not reach) sends indicate_progress at once. Stats wait
+      for flush() (level end, pause, quit) unless an unlock flushed them.
+    - flush(): "offline" (kept), "nothing", "sent" or "failed". Sends set_stat for every pending stat (definition
+      order, the latest value only), set_achievement for every pending unlock (unlock order), one store_stats, then
+      cloud_write for every pending cloud file (first-save order). The pending lists clear only when store_stats
+      succeeds; a failed store keeps them all and the layer goes offline until connect().
+    - set_presence(key, value): "refused" (a bad key, a value that is not a string or longer than 255 UTF-8 bytes,
+      a 31st key), "same" (unchanged: nothing is resent) or "ok". "" removes the key. Sent at once when online;
+      offline only the map changes, and connect() sends the map as it is then, keys sorted, never the history.
+      clear_presence(): "same" when empty, else "ok" and clear_presence when online.
+    - saved(path): after the game wrote a file (SOP-19's atomic write done): its cloud_partition. In "api" cloud mode
+      a cloud file is cloud_write now (online) or queued once (offline); "auto" mode sends nothing.
+    - connect(remote): the backend came (back): remote unlocks join the local ones without a call (dropped from
+      pending); a remote stat replaces the local one unless a local change is pending, and on an increment_only stat
+      the larger wins (pending drops when the remote is at least as far); bound achievements are checked again
+      (no progress popups here); then flush() and the presence map. disconnect(): offline.
+    - reset_all(): testing only; "offline" (refused: a reset is never queued), else everything back to the initial
+      values, the pending lists emptied, reset_all_stats sent."""
+
+    def __init__(self, defs, online=False, cloud="auto"):
+        self.defs = defs
+        self.stat_defs = {s["id"]: s for s in defs["stats"]}
+        self.ach_defs = {a["id"]: a for a in defs["achievements"]}
+        self.online = online
+        self.cloud = cloud
+        self.store_failures = 0                      # the null backend's test hook: fail the next N store_stats
+        self.presence = {}
+        self._reset_local()
+
+    def _reset_local(self):
+        self.unlocked = []
+        self.stats = {s["id"]: stat_initial(s) for s in self.defs["stats"]}
+        self.pending_stats, self.pending_unlocks, self.pending_cloud = [], [], []
+
+    # --- what ports compare after every step
+    def state(self):
+        return {"format": PLATFORM_FORMAT, "version": PLATFORM_STATE_VERSION, "unlocked": list(self.unlocked),
+                "stats": dict(self.stats), "pending": {"stats": [s["id"] for s in self.defs["stats"]
+                                                                 if s["id"] in self.pending_stats],
+                                                       "unlocks": list(self.pending_unlocks),
+                                                       "cloud": list(self.pending_cloud)}}
+
+    # --- achievements and stats
+    def _unlock_local(self, aid):
+        self.unlocked.append(aid)
+        self.pending_unlocks.append(aid)
+
+    def unlock(self, aid):
+        if aid not in self.ach_defs:
+            return "unknown", []
+        if aid in self.unlocked:
+            return "already", []
+        self._unlock_local(aid)
+        return "unlocked", (self.flush()[1] if self.online else [])
+
+    def _check(self, sid, old, new, notify, calls):
+        """Unlock what the new value reaches; online and notify: progress popups for steps just crossed."""
+        unlocked = False
+        for a in self.defs["achievements"]:
+            if a["stat"] != sid or a["id"] in self.unlocked:
+                continue
+            if new >= a["threshold"]:
+                self._unlock_local(a["id"])
+                unlocked = True
+            elif notify and self.online and a["progress_every"] is not None \
+                    and math.floor(new / a["progress_every"]) > math.floor(old / a["progress_every"]):
+                calls.append(["indicate_progress", a["id"], new, a["threshold"]])
+        return unlocked
+
+    def set_stat(self, sid, v):
+        sdef = self.stat_defs.get(sid)
+        if sdef is None:
+            return "unknown", []
+        if not _num_ok(v) or (sdef["type"] == "int" and not _whole(v)):
+            return "refused", []
+        c = _stat_value(sdef, _clamp_stat(sdef, v))
+        old = self.stats[sid]
+        if sdef["increment_only"] and c < old:
+            return "refused", []
+        if c == old:
+            return "same", []
+        self.stats[sid] = c
+        if sid not in self.pending_stats:
+            self.pending_stats.append(sid)
+        calls = []
+        if self._check(sid, old, c, True, calls) and self.online:
+            calls += self.flush()[1]
+        return ("clamped" if c != v else "ok"), calls
+
+    def add_stat(self, sid, d):
+        sdef = self.stat_defs.get(sid)
+        if sdef is None:
+            return "unknown", []
+        if not _num_ok(d) or (sdef["type"] == "int" and not _whole(d)):
+            return "refused", []
+        return self.set_stat(sid, self.stats[sid] + d)
+
+    def flush(self):
+        if not self.online:
+            return "offline", []
+        if not (self.pending_stats or self.pending_unlocks or self.pending_cloud):
+            return "nothing", []
+        calls = []
+        if self.pending_stats or self.pending_unlocks:
+            calls += [["set_stat", s["id"], self.stats[s["id"]]] for s in self.defs["stats"]
+                      if s["id"] in self.pending_stats]
+            calls += [["set_achievement", aid] for aid in self.pending_unlocks]
+            calls.append(["store_stats"])
+            if self.store_failures > 0:              # the store said no: keep everything, wait for connect()
+                self.store_failures -= 1
+                self.online = False
+                return "failed", calls
+            self.pending_stats, self.pending_unlocks = [], []
+        calls += [["cloud_write", p] for p in self.pending_cloud]
+        self.pending_cloud = []
+        return "sent", calls
+
+    # --- rich presence
+    def set_presence(self, key, value):
+        if not platform_id_ok(key) or not isinstance(value, str) or _utf8_len(value) > PRESENCE_MAX_VALUE_BYTES:
+            return "refused", []
+        if value == "":
+            if key not in self.presence:
+                return "same", []
+            del self.presence[key]
+        else:
+            if self.presence.get(key) == value:
+                return "same", []
+            if key not in self.presence and len(self.presence) >= PRESENCE_MAX_KEYS:
+                return "refused", []
+            self.presence[key] = value
+        return "ok", ([["set_presence", key, value]] if self.online else [])
+
+    def clear_presence(self):
+        if not self.presence:
+            return "same", []
+        self.presence = {}
+        return "ok", ([["clear_presence"]] if self.online else [])
+
+    # --- cloud saves
+    def saved(self, path):
+        part = cloud_partition(path)
+        calls = []
+        if part == "cloud" and self.cloud == "api":
+            if self.online:
+                calls.append(["cloud_write", path])
+            elif path not in self.pending_cloud:
+                self.pending_cloud.append(path)
+        return part, calls
+
+    # --- the backend coming and going
+    def connect(self, remote):
+        self.online = True
+        for aid in remote.get("unlocked", []):
+            if aid in self.ach_defs and aid not in self.unlocked:
+                self.unlocked.append(aid)
+            if aid in self.pending_unlocks:
+                self.pending_unlocks.remove(aid)
+        rstats = remote.get("stats", {})
+        for s in self.defs["stats"]:
+            sid = s["id"]
+            r = rstats.get(sid)
+            if not _num_ok(r) or (s["type"] == "int" and not _whole(r)):
+                continue
+            r = _stat_value(s, _clamp_stat(s, r))
+            old = self.stats[sid]
+            if s["increment_only"]:
+                if r >= old and sid in self.pending_stats:
+                    self.pending_stats.remove(sid)
+                new = max(old, r)
+            else:
+                new = old if sid in self.pending_stats else r
+            self.stats[sid] = new
+            self._check(sid, old, new, False, [])
+        calls = self.flush()[1]
+        if self.online:                              # a failed store on the way back leaves presence for later
+            calls += [["set_presence", k, self.presence[k]] for k in sorted(self.presence)]
+        return ("online" if self.online else "failed"), calls
+
+    def disconnect(self):
+        self.online = False
+        return "offline", []
+
+    def reset_all(self):
+        if not self.online:
+            return "offline", []
+        self._reset_local()
+        return "reset", [["reset_all_stats", True]]
+
+
+class NullBackend:
+    """The backend every game runs by default (#84): it accepts every call, keeps them in order in `calls` (what
+    would have been sent), and keeps what a store would hold, so remote() can be handed to Platform.connect.
+    set_stat and set_achievement are staged and land in the stored copy only at store_stats (E78: SetAchievement,
+    then StoreStats); fail_stores makes the next N store_stats fail, and a failed store lands nothing. send()
+    returns whether the call succeeded (only store_stats can fail)."""
+
+    def __init__(self):
+        self.calls = []
+        self.unlocked, self.stats = [], {}
+        self.staged_unlocks, self.staged_stats = [], {}
+        self.presence, self.cloud = {}, []
+        self.fail_stores = 0
+
+    def send(self, call):
+        self.calls.append(list(call))
+        name, args = call[0], call[1:]
+        if name == "set_achievement":
+            if args[0] not in self.staged_unlocks:
+                self.staged_unlocks.append(args[0])
+        elif name == "set_stat":
+            self.staged_stats[args[0]] = args[1]
+        elif name == "store_stats":
+            if self.fail_stores > 0:
+                self.fail_stores -= 1
+                return False
+            self.unlocked += [a for a in self.staged_unlocks if a not in self.unlocked]
+            self.stats.update(self.staged_stats)
+            self.staged_unlocks, self.staged_stats = [], {}
+        elif name == "reset_all_stats":
+            self.unlocked, self.stats, self.staged_unlocks, self.staged_stats = [], {}, [], {}
+        elif name == "set_presence":
+            if args[1] == "":
+                self.presence.pop(args[0], None)
+            else:
+                self.presence[args[0]] = args[1]
+        elif name == "clear_presence":
+            self.presence = {}
+        elif name == "cloud_write" and args[0] not in self.cloud:
+            self.cloud.append(args[0])
+        return True
+
+    def remote(self):
+        """What connect() gets: the stored unlocks (in the order stored) and stats."""
+        return {"unlocked": list(self.unlocked), "stats": dict(self.stats)}
+
+
+def platform_state_load(defs, text):
+    """platform_state.json -> (state, problems). No file: the initial state, no problems. Not JSON, not an object,
+    another format or another version: the initial state and 1 problem (the store's own copy is the truth; the
+    queue is rebuilt from play). Otherwise every entry that does not fit the definitions is dropped and counted:
+    an unknown or repeated unlock, an unknown stat or a value that is not a number (not whole for an int stat;
+    out of range is clamped, not counted), a pending id that is unknown, repeated or (for an unlock) not unlocked,
+    a pending cloud path that is not a string or not a cloud file."""
+    p = Platform(defs)
+    if not text:
+        return p.state(), 0
+    try:
+        raw = json.loads(text)
+    except ValueError:
+        return p.state(), 1
+    if not isinstance(raw, dict) or raw.get("format") != PLATFORM_FORMAT or \
+            raw.get("version") != PLATFORM_STATE_VERSION:
+        return p.state(), 1
+    problems = 0
+
+    def items(v, kind):
+        nonlocal problems
+        if isinstance(v, kind):
+            return v
+        if v is not None:
+            problems += 1
+        return kind()
+    for aid in items(raw.get("unlocked"), list):
+        if isinstance(aid, str) and aid in p.ach_defs and aid not in p.unlocked:
+            p.unlocked.append(aid)
+        else:
+            problems += 1
+    for sid, v in items(raw.get("stats"), dict).items():
+        sdef = p.stat_defs.get(sid)
+        if sdef is None or not _num_ok(v) or (sdef["type"] == "int" and not _whole(v)):
+            problems += 1
+            continue
+        p.stats[sid] = _stat_value(sdef, _clamp_stat(sdef, v))
+    pending = items(raw.get("pending"), dict)
+    for sid in items(pending.get("stats"), list):
+        if isinstance(sid, str) and sid in p.stat_defs and sid not in p.pending_stats:
+            p.pending_stats.append(sid)
+        else:
+            problems += 1
+    for aid in items(pending.get("unlocks"), list):
+        if isinstance(aid, str) and aid in p.unlocked and aid not in p.pending_unlocks:
+            p.pending_unlocks.append(aid)
+        else:
+            problems += 1
+    for path in items(pending.get("cloud"), list):
+        if isinstance(path, str) and cloud_partition(path) == "cloud" and path not in p.pending_cloud:
+            p.pending_cloud.append(path)
+        else:
+            problems += 1
+    return p.state(), problems
+
+
+SAMPLE_ACHIEVEMENTS = {
+    "stats": [{"id": "enemies_defeated", "type": "int", "min": 0, "max": 1000000, "increment_only": True},
+              {"id": "coins", "type": "int", "max": 999},
+              {"id": "best_time_s", "type": "float", "min": 0, "max": 3600}],
+    "achievements": [{"id": "first_win", "name": "ach_first_win", "description": "ach_first_win_desc"},
+                     {"id": "defeat_1", "name": "ach_defeat_1", "stat": "enemies_defeated", "threshold": 1},
+                     {"id": "defeat_100", "name": "ach_defeat_100", "stat": "enemies_defeated", "threshold": 100,
+                      "progress_every": 25},
+                     {"id": "coins_500", "name": "ach_coins_500", "stat": "coins", "threshold": 500}]}
+
+
+def _platform_case(name, script, online=False, cloud="auto", defs=None):
+    """Run a script of [op, args...] steps; record each step's out, its backend calls and the state after it."""
+    defs = defs or achievements_load(json.dumps(SAMPLE_ACHIEVEMENTS))[0]
+    p = Platform(defs, online=online, cloud=cloud)
+    steps = []
+    for op in script:
+        kind, args = op[0], op[1:]
+        if kind == "fail_store":                     # the null backend's hook: its next store_stats fails
+            p.store_failures += 1
+            out, calls = None, []
+        elif kind == "overlay":
+            out, calls = overlay_action(*args), []
+        else:
+            out, calls = getattr(p, kind)(*args)
+        steps.append({"op": op, "out": out, "calls": calls, "state": p.state(),
+                      "presence": [[k, p.presence[k]] for k in sorted(p.presence)], "online": p.online})
+    return {"type": "platform_script", "name": name, "defs": defs, "online": online, "cloud": cloud, "steps": steps}
+
+
+def build_platform():
+    cases = [{"type": "platform_format", "name": "names and limits", "state_format": PLATFORM_FORMAT,
+              "state_file": PLATFORM_STATE_FILE, "state_version": PLATFORM_STATE_VERSION, "id_max": PLATFORM_ID_MAX,
+              "stat_types": STAT_TYPES, "presence_max_keys": PRESENCE_MAX_KEYS,
+              "presence_max_value_bytes": PRESENCE_MAX_VALUE_BYTES, "cloud_modes": CLOUD_MODES,
+              "cloud_local_names": CLOUD_LOCAL_NAMES, "cloud_local_suffixes": CLOUD_LOCAL_SUFFIXES,
+              "cloud_local_dirs": CLOUD_LOCAL_DIRS, "overlay_pause_screens": OVERLAY_PAUSE_SCREENS}]
+    sample = json.dumps(SAMPLE_ACHIEVEMENTS)
+    loads = [
+        ("the sample", sample),
+        ("no file", None),
+        ("empty file", ""),
+        ("not json", "{achievements"),
+        ("not an object", "[1, 2]"),
+        ("only achievements, no stats", '{"achievements": [{"id": "win", "name": "Win"}]}'),
+        ("defaults filled in", '{"stats": [{"id": "s"}], "achievements": [{"id": "a", "name": "A", "stat": "s", '
+                               '"threshold": 3}]}'),
+        ("a whole float is an int", '{"stats": [{"id": "s", "min": 0.0, "max": 10.0}], "achievements": '
+                                    '[{"id": "a", "name": "A", "stat": "s", "threshold": 5.0, '
+                                    '"progress_every": 2.0}]}'),
+        ("bad stats dropped and counted",
+         '{"stats": [{"id": "ok"}, {"id": "ok"}, {"id": "9lives"}, {"id": "x y"}, {"id": "t", "type": "double"}, '
+         '{"id": "u", "min": 5, "max": 1}, {"id": "v", "min": 0.5}, {"id": "w", "increment_only": 1}, '
+         '{"id": "f", "type": "float", "min": -1.5, "max": 2.25}, "s", {"id": "' + "s" * 65 + '"}]}'),
+        ("bad achievements dropped and counted",
+         '{"stats": [{"id": "s", "max": 10}, {"id": "g", "type": "float", "max": 1}], "achievements": ['
+         '{"id": "a", "name": "A"}, {"id": "a", "name": "A again"}, {"id": "b"}, {"id": "c", "name": ""}, '
+         '{"id": "d", "name": "D", "stat": "nope", "threshold": 1}, {"id": "e", "name": "E", "stat": "s"}, '
+         '{"id": "f", "name": "F", "stat": "s", "threshold": 0}, '
+         '{"id": "h", "name": "H", "stat": "s", "threshold": 11}, '
+         '{"id": "i", "name": "I", "stat": "s", "threshold": 2.5}, {"id": "j", "name": "J", "threshold": 3}, '
+         '{"id": "k", "name": "K", "stat": "s", "threshold": 4, "progress_every": 4}, '
+         '{"id": "m", "name": "M", "stat": "g", "threshold": 0.5, "progress_every": 0.25}, '
+         '{"id": "n", "name": "N", "description": 7}, {"id": "o", "name": "O", "stat": "s", "threshold": true}]}'),
+        ("stats and achievements not lists", '{"stats": {"id": "s"}, "achievements": "none"}'),
+    ]
+    pts = []
+    for name, text in loads:
+        defs, problems = achievements_load(text)
+        pts.append([name, text, defs, problems])
+    cases.append({"type": "achievements_load", "name": "data/achievements.json as every port reads it", "points": pts})
+    cases.append({"type": "cloud_partition", "name": "which user-data files sync", "points": [
+        [path, cloud_partition(path)] for path in [
+            "save_1.json", "save_1.json.bak", "save_1.json.tmp", "slots/2.save", "settings.json", "Settings.JSON",
+            "platform_state.json", "telemetry.csv", "log_tail.txt", "game.log", "logs/today.txt", "crashes/1.txt",
+            "captures/a.png", "sub/logs/x.txt", "saves\\slot_3.json", "./save_2.json", "", "notes/settings.json",
+            "LOGS/A.TXT", "Ärger/save.json", "SpeicherstÄnde/GAME.LOG"]]})
+    cases.append({"type": "overlay", "name": "the overlay's pause hook", "points": [
+        [active, screen, overlay_action(active, screen)]
+        for active in (True, False) for screen in ("play", "pause", "menu", "title", "settings")]})
+    cases.append(_platform_case("an achievement unlocks once and flushes at once", [
+        ["unlock", "first_win"], ["unlock", "first_win"], ["unlock", "no_such"], ["flush"]], online=True))
+    cases.append(_platform_case("stats wait for a flush; thresholds unlock in definition order", [
+        ["add_stat", "enemies_defeated", 0], ["set_stat", "coins", 120], ["flush"], ["flush"],
+        ["add_stat", "enemies_defeated", 30], ["add_stat", "enemies_defeated", 20], ["add_stat", "enemies_defeated", 1],
+        ["set_stat", "enemies_defeated", 100], ["add_stat", "enemies_defeated", 5]], online=True))
+    cases.append(_platform_case("refused, clamped and same", [
+        ["set_stat", "enemies_defeated", 10], ["set_stat", "enemies_defeated", 9], ["add_stat", "enemies_defeated", -1],
+        ["set_stat", "enemies_defeated", 2.5], ["set_stat", "enemies_defeated", "11"],
+        ["set_stat", "enemies_defeated", True],
+        ["set_stat", "enemies_defeated", 10.0], ["set_stat", "coins", 5000], ["set_stat", "coins", -3],
+        ["add_stat", "coins", 0.5], ["set_stat", "best_time_s", 61.25], ["set_stat", "best_time_s", 59],
+        ["set_stat", "best_time_s", 9999.5], ["set_stat", "nope", 1], ["add_stat", "nope", 1], ["flush"]],
+        online=True))
+    cases.append(_platform_case("offline: local at once, one replay when the backend returns", [
+        ["unlock", "first_win"], ["add_stat", "enemies_defeated", 1], ["add_stat", "enemies_defeated", 60],
+        ["set_stat", "coins", 40], ["set_stat", "coins", 30], ["flush"], ["set_presence", "status", "In the crypt"],
+        ["connect", {"unlocked": [], "stats": {}}], ["flush"]]))
+    cases.append(_platform_case("a failed store keeps the queue and waits for connect", [
+        ["set_stat", "coins", 7], ["fail_store"], ["flush"], ["set_stat", "coins", 8], ["unlock", "first_win"],
+        ["flush"], ["connect", {}], ["disconnect"], ["set_presence", "status", "Back"], ["set_stat", "coins", 9],
+        ["fail_store"], ["connect", {}], ["connect", {}]], online=True))
+    cases.append(_platform_case("connect merges what the store already has", [
+        ["add_stat", "enemies_defeated", 40], ["set_stat", "coins", 300], ["unlock", "first_win"],
+        ["connect", {"unlocked": ["first_win", "defeat_1", "not_ours"],
+                     "stats": {"enemies_defeated": 120, "coins": 999, "best_time_s": 42.5}}],
+        ["disconnect"], ["add_stat", "enemies_defeated", 5],
+        ["connect", {"unlocked": ["first_win", "defeat_1", "defeat_100"],
+                     "stats": {"enemies_defeated": 150, "coins": "lots", "best_time_s": 30}}]]))
+    cases.append(_platform_case("rich presence: limits, no resend, the map on reconnect", [
+        ["set_presence", "status", "Title screen"], ["set_presence", "status", "Title screen"],
+        ["set_presence", "status", "Level 2"], ["set_presence", "level", "2"], ["set_presence", "level", ""],
+        ["set_presence", "level", ""], ["set_presence", "bad key", "x"], ["set_presence", "note", "x" * 256],
+        ["set_presence", "note", "é" * 128], ["set_presence", "note", "é" * 127 + "a"],
+        ["set_presence", "count", 3], ["disconnect"], ["set_presence", "status", "Level 3"],
+        ["set_presence", "boss", "Lich"], ["clear_presence"], ["set_presence", "zone", "Crypt"],
+        ["set_presence", "act", "1"], ["connect", {}], ["clear_presence"], ["clear_presence"]], online=True))
+    cases.append(_platform_case("thirty presence keys and no more", [
+        *[["set_presence", "k%02d" % i, "v"] for i in range(PRESENCE_MAX_KEYS)], ["set_presence", "k99", "v"],
+        ["set_presence", "k00", "w"], ["set_presence", "k00", ""], ["set_presence", "k99", "v"]], online=True))
+    cases.append(_platform_case("cloud hooks in api mode", [
+        ["saved", "save_1.json"], ["saved", "settings.json"], ["saved", "save_1.json.tmp"], ["disconnect"],
+        ["saved", "save_1.json"], ["saved", "save_2.json"], ["saved", "save_1.json"], ["saved", "logs/x.log"],
+        ["connect", {}], ["saved", "save_2.json"]], online=True, cloud="api"))
+    cases.append(_platform_case("cloud hooks in auto mode send nothing", [
+        ["saved", "save_1.json"], ["saved", "settings.json"], ["disconnect"], ["saved", "save_1.json"],
+        ["connect", {}]], online=True, cloud="auto"))
+    cases.append(_platform_case("the overlay pauses gameplay only", [
+        ["overlay", True, "play"], ["overlay", False, "pause"], ["overlay", True, "menu"]], online=True))
+    cases.append(_platform_case("reset is for testing and never queued", [
+        ["add_stat", "enemies_defeated", 3], ["unlock", "first_win"], ["reset_all"], ["disconnect"],
+        ["set_stat", "coins", 5], ["reset_all"]], online=True))
+    cases.append(_platform_case("no achievements file: every call is unknown", [
+        ["unlock", "first_win"], ["set_stat", "coins", 1], ["flush"], ["set_presence", "status", "ok"]],
+        online=True, defs=achievements_load(None)[0]))
+    defs = achievements_load(sample)[0]
+    good = Platform(defs)
+    good.unlock("first_win")
+    good.add_stat("enemies_defeated", 7)
+    good.saved("save_1.json")
+    good.cloud = "api"
+    good.saved("save_2.json")
+    states = [
+        ("no file", None), ("empty file", ""), ("not json", "{"), ("not an object", '"state"'),
+        ("another format", json.dumps({"format": "save", "version": 1})),
+        ("a newer version", json.dumps({"format": PLATFORM_FORMAT, "version": 2, "unlocked": ["first_win"]})),
+        ("what dump wrote", json.dumps(good.state())),
+        ("entries that do not fit are dropped", json.dumps({
+            "format": PLATFORM_FORMAT, "version": 1, "unlocked": ["first_win", "first_win", "gone", 3],
+            "stats": {"enemies_defeated": 12, "coins": 2.5, "best_time_s": 5000, "gone": 1, "best": "x"},
+            "pending": {"stats": ["coins", "coins", "gone"], "unlocks": ["first_win", "defeat_1"],
+                        "cloud": ["save_1.json", "settings.json", 4, "save_1.json"]}})),
+        ("wrong shapes", json.dumps({"format": PLATFORM_FORMAT, "version": 1, "unlocked": "first_win",
+                                     "stats": [1], "pending": {"stats": {}, "unlocks": None}})),
+    ]
+    cases.append({"type": "platform_state_load", "name": "platform_state.json as every port reads it",
+                  "defs": defs, "points": [[name, text, *platform_state_load(defs, text)] for name, text in states]})
+    nb = NullBackend()
+    sends = []
+    for call in [["set_stat", "coins", 5], ["set_achievement", "first_win"], ["store_stats"],
+                 ["set_stat", "coins", 9], ["set_achievement", "defeat_1"], ["fail_next_store"], ["store_stats"],
+                 ["set_stat", "enemies_defeated", 3], ["store_stats"], ["set_presence", "status", "Menu"],
+                 ["set_presence", "level", "2"], ["set_presence", "status", ""], ["cloud_write", "save_1.json"],
+                 ["cloud_write", "save_1.json"], ["reset_all_stats", True], ["clear_presence"]]:
+        if call == ["fail_next_store"]:          # the test hook, not a call: ok is null and calls skip it
+            nb.fail_stores += 1
+            ok = None
+        else:
+            ok = nb.send(call)
+        sends.append([call, ok, nb.remote(), [[k, nb.presence[k]] for k in sorted(nb.presence)], list(nb.cloud)])
+    cases.append({"type": "null_backend", "name": "the null backend keeps what a store would hold",
+                  "sends": sends, "calls": nb.calls})
+    return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
+            "cases": cases}
+
+
 def render(obj):
     return json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -1170,6 +1800,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     files = {"juice.json": render(build_juice()), "shell.json": render(build_shell()),
              "telemetry.json": render(build_telemetry()), "credits.json": render(build_credits())}
+    files["platform.json"] = render(build_platform())     # the platform layer (#84): its own line, its own file
     out = Path(args.out)
     if args.show:
         for text in files.values():
