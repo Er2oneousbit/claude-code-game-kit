@@ -23,6 +23,8 @@
 --   service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 --          connect(backend.remote()) ; after every op: write the state file when it changed
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Rules:store_failed and Service:update take a store
+--           that failed after it was accepted (Steam's UserStatsStored) back onto the queue
 -- ---------------------------------------------------------------------------
 local Json = require("src.core.json")
 local AtomicFile = require("src.core.atomic_file")
@@ -440,6 +442,21 @@ function Rules:disconnect()
   return self:done("offline")
 end
 
+-- A store the backend accepted failed later (Steam's UserStatsStored): the same as a refused store_stats. The
+-- batch's stats and unlocks (its set_stat / set_achievement calls) are pending again; offline until connect().
+function Rules:store_failed(batch)
+  self.online = false
+  for _, call in ipairs(batch) do
+    local name, id = call[1], call[2]
+    if name == "set_stat" and self.stat_defs[id] ~= nil and not has(self.pending_stats, id) then
+      self.pending_stats[#self.pending_stats + 1] = id
+    elseif name == "set_achievement" and has(self.unlocked, id) and not has(self.pending_unlocks, id) then
+      self.pending_unlocks[#self.pending_unlocks + 1] = id
+    end
+  end
+  return self:done("failed")
+end
+
 -- Testing only: refused offline (a reset is never queued).
 function Rules:reset_all()
   if not self.online then return self:done("offline") end
@@ -552,8 +569,20 @@ function Service:clear_presence() return after(self, (self.rules:clear_presence(
 function Service:saved(path) return after(self, (self.rules:saved(path))) end
 -- The store overlay opened or closed over `screen`: "pause" means open the pause menu.
 function Service:overlay(active, screen) return Platform.overlay_action(active, screen) end
--- Each frame: the backend's callbacks; true / false when the store overlay opened / closed, else nil.
-function Service:update() return self.backend:update() end
+-- Each frame: the backend's callbacks; true / false when the store overlay opened / closed, else nil. A store that
+-- failed late (a backend with take_store_failure: Steam's UserStatsStored) goes back on the queue, offline.
+function Service:update()
+  local overlay = self.backend:update()
+  if self.backend.take_store_failure then
+    local batch = self.backend:take_store_failure()
+    while batch do
+      Log.warn("platform", "a store the backend accepted failed later: kept for the next connect")
+      after(self, (self.rules:store_failed(batch)))
+      batch = self.backend:take_store_failure()
+    end
+  end
+  return overlay
+end
 
 return Platform
 

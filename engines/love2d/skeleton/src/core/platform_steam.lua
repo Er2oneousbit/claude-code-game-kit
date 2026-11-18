@@ -11,8 +11,10 @@
 --           v6's docs: Steam.Init, Steam.RunCallbacks, Steam.UserStats.SetAchievement / SetStatInt32 /
 --           SetStatFloat / StoreStats / GetAchievement / GetStatInt32 / GetStatFloat / IndicateAchievementProgress /
 --           ResetAllStats, Steam.Friends.SetRichPresence / ClearRichPresence / OnGameOverlayActivated,
---           Steam.RemoteStorage.FileWrite (verify against the installed luasteam). Only StoreStats returning false
---           counts as a failed store (a later UserStatsStored failure is not seen, verify). No love.* calls.
+--           Steam.RemoteStorage.FileWrite, Steam.UserStats.OnUserStatsStored (verify against the installed
+--           luasteam). A store that fails later (OnUserStatsStored with m_eResult other than 1, k_EResultOK) is handed
+--           to the layer by take_store_failure(). The adapter starts Steam whether or not data/achievements.json
+--           exists (presence, the overlay and cloud saves need it too). No love.* calls.
 --
 -- Pseudocode
 --   make: no binding (require fails) -> nil ; Init() false -> nil ; else a backend over Steam.UserStats etc.
@@ -20,6 +22,8 @@
 --   remote: GetAchievement / GetStatInt32 / GetStatFloat for every defined id
 --   update: RunCallbacks() ; OnGameOverlayActivated sets the overlay state update() returns once
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStats.OnUserStatsStored failures reach the layer
+--           (take_store_failure); Steam starts without achievements too
 -- ---------------------------------------------------------------------------
 local Log = require("src.core.log")
 
@@ -28,6 +32,7 @@ PlatformSteam.__index = PlatformSteam
 
 -- ---- Tunables ----------------------------------------------------------------
 PlatformSteam.MODULE = "luasteam"
+PlatformSteam.RESULT_OK = 1                  -- Steam's k_EResultOK
 
 -- The Steam backend, or nil. binding: a luasteam-shaped table (tests); nil loads the real module.
 function PlatformSteam.make(defs, store, binding)
@@ -41,7 +46,14 @@ function PlatformSteam.make(defs, store, binding)
     Log.warn("platform", "luasteam is installed but Steam did not start (the null backend runs)")
     return nil
   end
-  local self = setmetatable({ name = "steam", steam = steam, defs = defs, store = store, overlay = nil }, PlatformSteam)
+  local self = setmetatable({ name = "steam", steam = steam, defs = defs, store = store, overlay = nil,
+                              staged = {}, inflight = {}, failed = {} }, PlatformSteam)
+  if steam.UserStats then
+    steam.UserStats.OnUserStatsStored = function(data)
+      local batch = table.remove(self.inflight, 1)
+      if batch and data.m_eResult ~= PlatformSteam.RESULT_OK then self.failed[#self.failed + 1] = batch end
+    end
+  end
   if steam.Friends then
     steam.Friends.OnGameOverlayActivated = function(data)
       self.overlay = data.m_bActive == 1 or data.m_bActive == true
@@ -76,12 +88,16 @@ end
 
 function PlatformSteam:send(call)
   local s, name, a, b = self.steam, call[1], call[2], call[3]
+  if name == "set_achievement" or name == "set_stat" then self.staged[#self.staged + 1] = { name, a, b } end
   if name == "set_achievement" then
     s.UserStats.SetAchievement(a)
   elseif name == "set_stat" then
     if stat_type(self.defs, a) == "int" then s.UserStats.SetStatInt32(a, math.floor(b)) else s.UserStats.SetStatFloat(a, b) end
   elseif name == "store_stats" then
-    return s.UserStats.StoreStats() and true or false
+    local ok = s.UserStats.StoreStats() and true or false
+    if ok then self.inflight[#self.inflight + 1] = self.staged end
+    self.staged = {}
+    return ok
   elseif name == "indicate_progress" then
     s.UserStats.IndicateAchievementProgress(a, math.floor(b), math.floor(call[4]))
   elseif name == "reset_all_stats" then
@@ -96,6 +112,9 @@ function PlatformSteam:send(call)
   end
   return true
 end
+
+-- The oldest store that failed after StoreStats accepted it (its set_stat / set_achievement calls), or nil.
+function PlatformSteam:take_store_failure() return table.remove(self.failed, 1) end
 
 -- Each frame: runs Steam's callbacks; returns true / false once when the overlay opened / closed, else nil.
 function PlatformSteam:update()
