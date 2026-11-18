@@ -989,7 +989,7 @@ def build_parser():
                         "PSEUDO_FAIL), pseudo-plant (the same plus a label too small: must fail), bug (F8 bug "
                         "report: DRIVE_BUG), display (the Display tab's Apply: stage, warn, apply, the 15 s confirm "
                         "reverts in real time, discard; DRIVE_DISPLAY lines; headless), "
-                        "show:<title|main_menu|settings|pause|help|history|credits|"
+                        "show:<title|main_menu|settings|content|pause|help|history|credits|"
                         "subtitle|juice|apply|confirm> (opens that screen in a window; add --screenshot), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py; "
                         "a window); waits for DRIVE_DONE")

@@ -5,6 +5,7 @@
 // Usage   : let (s, problems) = settings::load_file(&path);          // never fails: bad fields fall back
 //           settings::num(&s, "audio", "music");  settings::flag(&s, "access", "reduce_motion");
 //           settings::effective_shake(&s);  settings::telemetry_allowed(&s);  settings::save_file(&path, &s)?;
+//           settings::blood_enabled(&s);  settings::clean_language(&s);   // the content switches (#171, #207)
 // Notes   : Settings stay a JSON object (serde_json::Value) so unknown keys survive: a file written by a newer
 //           build loads in an older one without losing anything. Missing fields take the default, each fixed
 //           field is one problem (log them, do not nag the player). SCHEMA below is the one list of fields and
@@ -17,6 +18,8 @@
 //   not an object -> problem, use {}; keep its keys; each field: missing -> default, present -> fix by rule
 //   (num: clamp, NaN or wrong type -> default; bool; enum; resolution) -> input.bindings: strings only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+//           blood_enabled() and clean_language() (#171, #207)
 // ---------------------------------------------------------------------------
 use std::io;
 use std::path::Path;
@@ -108,6 +111,7 @@ const SCHEMA: &[(&str, &[(&str, Rule)])] = &[
         ],
     ),
     ("telemetry", &[("consent", Rule::Text(CONSENT))]),
+    ("content", &[("blood", Rule::Bool), ("clean_language", Rule::Bool)]),
 ];
 
 /// The built-in settings: what a first start (or a missing file) uses.
@@ -125,6 +129,7 @@ pub fn defaults() -> Value {
         "input": {"bindings": bindings_value(&bindings::default_bindings()), "deadzone": 0.2, "invert_y": false,
                   "glyphs": "auto"},
         "telemetry": {"consent": "unset"},
+        "content": {"blood": true, "clean_language": false},
     })
 }
 
@@ -286,6 +291,16 @@ pub fn effective_shake(s: &Value) -> f64 {
 /// Telemetry only after an explicit yes ("unset" and "no" both mean no).
 pub fn telemetry_allowed(s: &Value) -> bool {
     text(s, "telemetry", "consent") == "yes"
+}
+
+/// #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18).
+pub fn blood_enabled(s: &Value) -> bool {
+    s["content"]["blood"].as_bool().unwrap_or(true)
+}
+
+/// #207: the shell's t() picks @clean lines and masks the game's word list (SOP-19).
+pub fn clean_language(s: &Value) -> bool {
+    flag(s, "content", "clean_language")
 }
 
 /// input.bindings as Bindings.

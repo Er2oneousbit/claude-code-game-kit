@@ -19,6 +19,8 @@
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the narration cases run too
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
 //           and its keep-or-revert confirm (logic::display_staging, #308)
 // ---------------------------------------------------------------------------
@@ -58,7 +60,11 @@ const JUICE_TYPES: [&str; 10] = [
     "squash",
     "flash_limiter",
 ];
-const SHELL_TYPES: [&str; 12] = [
+const SHELL_TYPES: [&str; 16] = [
+    "plural_rules",
+    "tr_clean",
+    "mask_words",
+    "mature_words",
     "display_staging",
     "defaults",
     "settings_load",
@@ -216,6 +222,10 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "save_load" => save_load(case, exam),
         "tr" => tr(case, exam),
         "plural" => plural(case, exam),
+        "plural_rules" => plural_rules(case, exam),
+        "tr_clean" => tr_clean(case, exam),
+        "mask_words" => mask_words(case, exam),
+        "mature_words" => mature_words(case, exam),
         "pseudo" => pseudo(case, exam),
         "narration" => narration(case, exam),
         "display_staging" => display_staging_steps(case, exam),
@@ -399,12 +409,16 @@ fn settings_load(case: &Value, exam: &mut Exam) {
         "problems": problems.len(),
         "effective_shake": settings::effective_shake(&loaded),
         "telemetry_allowed": settings::telemetry_allowed(&loaded),
+        "blood_enabled": settings::blood_enabled(&loaded),
+        "clean_language": settings::clean_language(&loaded),
     });
     let want = json!({
         "settings": case["expect"],
         "problems": case["problems"],
         "effective_shake": case["effective_shake"],
         "telemetry_allowed": case["telemetry_allowed"],
+        "blood_enabled": case["blood_enabled"],
+        "clean_language": case["clean_language"],
     });
     exam.check("load", got, &want);
 }
@@ -490,8 +504,87 @@ fn plural(case: &Value, exam: &mut Exam) {
     for p in arr(&case["points"]) {
         let p = arr(p);
         let (locale, n) = (s(&p[0]), i(&p[1]));
-        let got = json!([i18n::plural(locale, n), i18n::tr_plural(&t, locale, PLURAL_KEY, n, &[])]);
+        let key = case["key"].as_str().unwrap_or(PLURAL_KEY);
+        let got = json!([i18n::plural(locale, n), i18n::tr_plural(&t, locale, key, n, &[])]);
         exam.check(&format!("plural({}, {})", p[0], p[1]), got, &json!([p[2], p[3]]));
+    }
+}
+
+fn plural_rules(case: &Value, exam: &mut Exam) {
+    for sw in arr(&case["sweep"]) {
+        let sw = arr(sw);
+        let (locale, start) = (s(&sw[0]), i(&sw[1]));
+        for (k, cat) in s(&sw[2]).split(' ').enumerate() {
+            let n = start + k as i64;
+            exam.check(
+                &format!("plural({locale}, {n})"),
+                json!(i18n::plural(locale, n)),
+                &json!(cat),
+            );
+        }
+    }
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        exam.check(
+            &format!("plural({}, {})", p[0], p[1]),
+            json!(i18n::plural(s(&p[0]), i(&p[1]))),
+            &p[2],
+        );
+    }
+}
+
+fn words_of(v: &Value) -> Vec<String> {
+    arr(v).iter().map(|w| s(w).to_string()).collect()
+}
+
+fn tr_clean(case: &Value, exam: &mut Exam) {
+    let t = tables(case);
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let args: Vec<(String, String)> = p[3]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.as_str().map_or(v.to_string(), str::to_string)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let args: Vec<(&str, &str)> = args.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let clean = p[4].as_bool().unwrap_or(false);
+        let words = words_of(&p[5]);
+        let got = if p[2].is_null() {
+            i18n::tr_clean(&t, s(&p[0]), s(&p[1]), &args, clean, &words)
+        } else {
+            i18n::tr_plural_clean(&t, s(&p[0]), s(&p[1]), i(&p[2]), &args, clean, &words)
+        };
+        exam.check(&format!("tr_clean({}, {}, {})", p[0], p[1], p[4]), json!(got), &p[6]);
+    }
+}
+
+fn mask_words(case: &Value, exam: &mut Exam) {
+    exam.check("grawlix", json!(i18n::GRAWLIX), &case["grawlix"]);
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        exam.check(
+            &format!("mask_words({})", p[0]),
+            json!(i18n::mask_words(s(&p[0]), &words_of(&p[1]))),
+            &p[2],
+        );
+    }
+}
+
+fn mature_words(case: &Value, exam: &mut Exam) {
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let parsed: Value = p[0]
+            .as_str()
+            .and_then(|t| serde_json::from_str(t).ok())
+            .unwrap_or(Value::Null);
+        exam.check(
+            &format!("mature_words({})", p[0]),
+            json!(i18n::mature_words(&parsed)),
+            &p[1],
+        );
     }
 }
 

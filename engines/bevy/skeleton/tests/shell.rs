@@ -22,6 +22,7 @@
 //           and Back's warning (#308); HudScale follows text_scale and an applied ui_scale (#309)
 //           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): an Apply that waits for Keep is not saved, Keep saves it; Back's
 //           warning outlasts a settings message
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Shell::t_args and tn honour clean language (#207)
 // ---------------------------------------------------------------------------
 use std::path::PathBuf;
 
@@ -38,7 +39,7 @@ use {{GAME_SLUG}}::app::{shell_test_app, tick};
 use {{GAME_SLUG}}::game::{AccessRules, GameActive, GameConfig, Intent, Palette, ScreenShake};
 use {{GAME_SLUG}}::logic::audio_access::ARROWS;
 use {{GAME_SLUG}}::logic::charmap::CharMap;
-use {{GAME_SLUG}}::logic::i18n::pseudo;
+use {{GAME_SLUG}}::logic::i18n::{parse_tables, pseudo};
 use {{GAME_SLUG}}::shell::display::FrameLimit;
 use {{GAME_SLUG}}::shell::juice::{JUICE_LAYER, JuiceCamera, JuiceStagePlugin};
 use {{GAME_SLUG}}::shell::view::{DEFAULT_FONT, READABLE_FONT, ShellInputPlugin};
@@ -102,6 +103,43 @@ fn until_screen(app: &mut App, name: ScreenName) {
         name.as_str(),
         shell(app).top_name()
     );
+}
+
+/// #207: the translator every screen uses picks @clean lines and masks the chain's words, pseudo included.
+#[test]
+fn shell_text_honours_clean_language() {
+    let dir = TempDir::new("clean");
+    let mut s = Shell::new(&cfg(&dir));
+    assert_eq!(
+        s.mature.get("en").map(Vec::len),
+        Some(0),
+        "the kit's word list ships empty"
+    );
+    s.tables = parse_tables(
+        r#"{"en": {"bye": "Damn, bye {name}.", "bye@clean": "Bye {name}.", "hits.one": "{n} damn hit",
+                   "hits.one@clean": "{n} hit", "hits.other": "{n} hits"},
+            "fr": {"bye": "Merde, salut {name}."}}"#,
+    )
+    .expect("tables");
+    s.mature.insert("fr".into(), vec!["merde".into()]);
+    s.mature.insert("en".into(), vec!["damn".into()]);
+    s.locale_override = Some("fr".into());
+    assert_eq!(
+        s.t_args("bye", &[("name", "Ana")]),
+        "Merde, salut Ana.",
+        "off: as written"
+    );
+    s.settings["content"]["clean_language"] = json!(true);
+    assert_eq!(
+        s.t_args("bye", &[("name", "Damn")]),
+        "#@$%#, salut #@$%.",
+        "fr stays fr, masked"
+    );
+    s.locale_override = Some("en".into());
+    assert_eq!(s.t_args("bye", &[("name", "Ana")]), "Bye Ana.");
+    assert_eq!(s.tn("hits", 1), "1 hit");
+    s.locale_override = Some("pseudo".into());
+    assert_eq!(s.t_args("bye", &[("name", "Ana")]), pseudo("Bye Ana."));
 }
 
 /// Boots to the main menu (answers the consent question with Later).
