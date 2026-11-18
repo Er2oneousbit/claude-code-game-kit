@@ -15,7 +15,8 @@
 #           http://127.0.0.1:1234/v1) and optionally L10N_LIVE_MODEL to also draft three lines with a real model.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the plural categories agree with the engines' CLDR
-#           plural() in tools/golden_vectors.py, which now has a rule for every language (no helper-gap warning)
+#           plural() in tools/golden_vectors.py, which now has a rule for every language (no helper-gap warning);
+#           a data/i18n/ with only the word lists passes check
 # ---------------------------------------------------------------------------
 import io
 import json
@@ -483,8 +484,12 @@ class L10nExam(unittest.TestCase):
         self.assertIn("pseudo menu.quit: the budget 5 is below the pseudo-locale's 6", out)
         self.assertNotIn("no ru rule", out)
         self.assertEqual(self.cli("check", "--font", "nope.ttf")[0], 2)
-        # a project with no tables at all passes (the tool ships into every game)
+        # a project with no tables at all passes (the tool ships into every game), and so does one that holds only
+        # the clean-language word lists core ships (#207: RPG Maker MZ has data/i18n/mature/en.json and no en.json)
         shutil.rmtree(self.tmp / "data")
+        self.assertEqual(self.cli("check")[0], 0)
+        (self.tmp / "data" / "i18n" / "mature").mkdir(parents=True)
+        put(self.tmp / "data" / "i18n" / "mature" / "en.json", '{"words": []}', encoding="utf-8")
         self.assertEqual(self.cli("check")[0], 0)
         self.assertEqual(self.cli("export", "ru")[0], 2)
 

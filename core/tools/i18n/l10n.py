@@ -23,7 +23,8 @@
 #           completeness check before a language ships.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a plural group is complete without its rare forms
-#           (French whole-million many, l10n_rules.required_categories), since every engine falls back to .other
+#           (French whole-million many, l10n_rules.required_categories), since every engine falls back to .other;
+#           a data/i18n/ that holds only the word lists (mature/, #207) is a project without tables
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -745,8 +746,9 @@ def main(argv=None):
         ap.print_help()
         return 2
     root = Path(a.project) if a.project else PROJECT
-    if a.cmd == "check" and not a.dir and not (root / I18N_DIR).is_dir():
-        print(f"[ OK ] no string tables ({I18N_DIR}/ does not exist), nothing to check")
+    # core ships data/i18n/mature/en.json (#207) into every game, RPG Maker MZ too: no en.json means no tables
+    if a.cmd == "check" and not a.dir and not (root / I18N_DIR / f"{BASE}.json").is_file():
+        print(f"[ OK ] no string tables ({I18N_DIR}/{BASE}.json does not exist), nothing to check")
         return 0
     try:
         proj = Project(root, a.dir, a.work)
