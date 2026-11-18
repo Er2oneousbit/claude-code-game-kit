@@ -25,6 +25,9 @@
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 -- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plural rules, the .other fallback per
 --           locale, @clean variants, mask_words and mature_words, i18n.clean and i18n.mature (#207, #87)
+-- Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words and mask_word_set; the translator folds
+--           the chain's words once per locale and list (assign a new i18n.mature table to change the lists), not
+--           on every t()
 -- ---------------------------------------------------------------------------
 local I18n = {}
 I18n.__index = I18n
@@ -128,7 +131,9 @@ end
 
 function I18n.finish(text, args, clean, words)
   local out = I18n.fill(text, args or {})
-  if clean and words and #words > 0 then return I18n.mask_words(out, words) end
+  if not clean or not words then return out end
+  if words.is_word_set then return I18n.mask_word_set(out, words) end   -- compiled already (the translator's cache)
+  if #words > 0 then return I18n.mask_words(out, words) end
   return out
 end
 
@@ -305,17 +310,29 @@ local function scan(text)
   return parts
 end
 
--- text with every whole word that is in words (case folded) replaced by a same-length grawlix
-function I18n.mask_words(text, words)
-  local wanted, any = {}, false
+-- The folded set the mask matches against ({ is_word_set = true, keys = {...}, any = bool }): build it once per
+-- word list (t() runs for every label every frame)
+function I18n.compile_words(words)
+  local set = { is_word_set = true, keys = {}, any = false }
   for _, w in ipairs(words or {}) do
     local parts = scan(w)
     if #parts == 1 and parts[1].key then
-      wanted[parts[1].key] = true
-      any = true
+      set.keys[parts[1].key] = true
+      set.any = true
     end
   end
-  if not any then return text end
+  return set
+end
+
+-- text with every whole word that is in words (case folded) replaced by a same-length grawlix
+function I18n.mask_words(text, words)
+  return I18n.mask_word_set(text, I18n.compile_words(words))
+end
+
+-- mask_words with the list compiled already (compile_words)
+function I18n.mask_word_set(text, set)
+  if not set.any then return text end
+  local wanted = set.keys
   local out, g = {}, I18n.GRAWLIX
   for _, p in ipairs(scan(text)) do
     if p.key and wanted[p.key] then
@@ -416,18 +433,28 @@ function I18n:words()
   return out
 end
 
+-- the chain's words folded once: rebuilt when the locale changes or i18n.mature is a new table
+function I18n:word_set()
+  local c = self._word_cache
+  if not c or c.locale ~= self.locale or c.mature ~= self.mature then
+    c = { locale = self.locale, mature = self.mature, set = I18n.compile_words(self:words()) }
+    self._word_cache = c
+  end
+  return c.set
+end
+
 function I18n:t(key, args)
   if self:is_pseudo() then
     local text = I18n.lookup(self.tables, I18n.FALLBACK, key, self.clean)
     if text == nil then return key end                     -- unbracketed on purpose: the check flags it
     return I18n.fill(I18n.pseudo(text), args or {})
   end
-  return I18n.tr(self.tables, self.locale, key, args, self.clean, self:words())
+  return I18n.tr(self.tables, self.locale, key, args, self.clean, self.clean and self:word_set() or nil)
 end
 
 function I18n:tp(key, n, args)
   if not self:is_pseudo() then
-    return I18n.tr_plural(self.tables, self.locale, key, n, args, self.clean, self:words())
+    return I18n.tr_plural(self.tables, self.locale, key, n, args, self.clean, self.clean and self:word_set() or nil)
   end
   local a = {}
   for k, v in pairs(args or {}) do a[k] = v end

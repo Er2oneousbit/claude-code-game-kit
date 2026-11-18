@@ -110,6 +110,12 @@ on focus loss). "What now?" shows the goal from `app:set_objective()`, the last 
   reveal times (`Subtitles.TYPEWRITER = false` shows the cue chunks instead).
 Narration (#165): the shell's `narrator.lua` says a line for every focus change, value change and screen
 (`Bindings.narration_line`), spoken with `access.narration` on through the system's speech from a thread.
+Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+Accessibility tab; `SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING` in `src/shell/screens/settings.lua` hide them in a
+game without blood or strong language. The game reads `app:blood_enabled()` (off: a neutral hit effect, SOP-18
+step 4); with `Settings.clean_language(s)` on, `app:t()` and `app:tp()` pick `<key>@clean` lines and mask the
+words of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot captures/content.png`
+pictures both rows.
 
 ## Smoke scenarios (`python tools/dev.py smoke --drive <scenario>`)
 | Scenario | What it proves |
@@ -122,7 +128,7 @@ Narration (#165): the shell's `narrator.lua` says a line for every focus change,
 | `access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`: ui.lua records each label's colour, size and glyph box and every filled rectangle under it (the drive hooks `love.graphics.rectangle`), and which rows `ui_down` reaches; `pad` presses with gamepad buttons only |
 | `bug` | presses F8 on the menu and checks the `bug_<timestamp>/` files: `DRIVE_BUG <path>` |
 | `display` | the Display tab's Apply (#308): `DRIVE_DISPLAY staged` (a mode change), `warned` (Back), `applied` (the confirm, focus on Keep), `reverted <ms> ms` (the countdown ran out in real time, `settings.json` holds the old mode; sooner than 14 s fails), `discarded` (a second change, Back twice), then `DRIVE_DONE display`. Takes about 20 s |
-| `show:<screen>` | `title`, `settings` (a slider focused), `pause`, `subtitle`, `juice`, `credits` (the first lines at the top), `apply` (the Display tab with a staged change, Apply focused), `confirm` (the keep-or-revert confirm, its countdown held): opens it and ends; add `--screenshot captures/<screen>.png` |
+| `show:<screen>` | `title`, `settings` (a slider focused), `content` (the Blood and Clean language rows), `pause`, `subtitle`, `juice`, `credits` (the first lines at the top), `apply` (the Display tab with a staged change, Apply focused), `confirm` (the keep-or-revert confirm, its countdown held): opens it and ends; add `--screenshot captures/<screen>.png` |
 
 `dev.py smoke` never uses the real save folder: without `--data-dir` the game's files go to a fresh
 `build/smoke-data/` each run (read its logs and crash files there); `--data-dir captures/run1` keeps a run's files

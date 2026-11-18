@@ -24,6 +24,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plural rules, the .other fallback per
 //           locale, @clean variants, maskWords and matureWords, I18n.clean and I18n.mature (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compileWords and maskWordSet; I18n folds its word list
+//           once per locale and list (setting I18n.mature or the locale drops the cache), not on every t()
 // ---------------------------------------------------------------------------
 
 // ---- Tunables ----------------------------------------------------------------
@@ -71,6 +73,9 @@ export type Table = Record<string, string>;
 export type Tables = Record<string, Table>;
 export type Args = Record<string, unknown>;
 export type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other";
+/** A word list folded once (compileWords): what the mask matches against. */
+export type WordSet = ReadonlySet<string>;
+export type Words = readonly string[] | WordSet;
 
 const own = (o: object, k: string) => Object.prototype.hasOwnProperty.call(o, k);
 const language = (locale: string) => locale.split("-")[0].split("_")[0];
@@ -121,15 +126,16 @@ export function lookup(tables: Tables, locale: string, key: string, clean = fals
   return null;
 }
 
-function finish(text: string, args: Args, clean: boolean, words: readonly string[]): string {
+function finish(text: string, args: Args, clean: boolean, words: Words): string {
   const out = fill(text, args);
-  return clean && words.length > 0 ? maskWords(out, words) : out;
+  if (!clean) return out;
+  return Array.isArray(words) ? maskWords(out, words as readonly string[]) : maskWordSet(out, words as WordSet);
 }
 
 /** A string through the fallback chain; a missing key returns the key itself, so it shows. With clean (the
  *  content.clean_language setting) each locale gives key@clean, then key, and the filled text is masked. */
 export function tr(tables: Tables, locale: string, key: string, args: Args = {}, clean = false,
-  words: readonly string[] = []): string {
+  words: Words = []): string {
   const text = lookup(tables, locale, key, clean);
   return text === null ? key : finish(text, args, clean, words);
 }
@@ -214,7 +220,7 @@ export function lookupPlural(tables: Tables, locale: string, key: string, n: num
 }
 
 export function trPlural(tables: Tables, locale: string, key: string, n: number, args: Args = {}, clean = false,
-  words: readonly string[] = []): string {
+  words: Words = []): string {
   const text = lookupPlural(tables, locale, key, n, clean);
   return text === null ? `${key}.${plural(locale, n)}` : finish(text, { ...args, n }, clean, words);
 }
@@ -247,13 +253,23 @@ export function foldChar(cp: number): number {
 const codePoints = (s: string): number[] => Array.from(s, (c) => c.codePointAt(0) as number);
 const foldKey = (cps: readonly number[]): string => cps.map(foldChar).join(",");
 
-/** text with every whole word that is in words (case folded) replaced by a same-length grawlix. */
-export function maskWords(text: string, words: readonly string[]): string {
+/** The folded set the mask matches against: build it once per word list (t() runs for every label every frame). */
+export function compileWords(words: readonly string[]): WordSet {
   const wanted = new Set<string>();
   for (const w of words) {
     const cps = codePoints(w);
     if (cps.length > 0 && cps.every(isWordChar)) wanted.add(foldKey(cps));
   }
+  return wanted;
+}
+
+/** text with every whole word that is in words (case folded) replaced by a same-length grawlix. */
+export function maskWords(text: string, words: readonly string[]): string {
+  return maskWordSet(text, compileWords(words));
+}
+
+/** maskWords with the list compiled already (compileWords). */
+export function maskWordSet(text: string, wanted: WordSet): string {
   if (wanted.size === 0) return text;
   const cps = codePoints(text);
   let out = "";
@@ -319,9 +335,28 @@ export function pseudo(text: string): string {
  *  the word lists per locale (data/i18n/mature/<locale>.json). Every shell string goes through t() and tn(). */
 export class I18n {
   clean = false;
-  mature: Record<string, string[]> = {};
+  private matureLists: Record<string, string[]> = {};
+  private wordCache: { locale: string; set: WordSet } | null = null; // the chain's words, folded once
 
   constructor(public tables: Tables, public locale = FALLBACK_LOCALE) {}
+
+  /** The word lists per locale; setting them drops the folded cache. */
+  get mature(): Record<string, string[]> {
+    return this.matureLists;
+  }
+
+  set mature(lists: Record<string, string[]>) {
+    this.matureLists = lists;
+    this.wordCache = null;
+  }
+
+  /** The chain's words folded once per locale and list (rebuilt after a locale change or new lists). */
+  wordSet(): WordSet {
+    if (this.wordCache === null || this.wordCache.locale !== this.locale) {
+      this.wordCache = { locale: this.locale, set: compileWords(this.words()) };
+    }
+    return this.wordCache.set;
+  }
 
   /** Locales with a table, plus the pseudo-locale. */
   get locales(): string[] {
@@ -331,18 +366,18 @@ export class I18n {
   /** The word lists of every locale in the current chain (a fallback line can come from any of them). */
   words(): string[] {
     const loc = this.locale === PSEUDO_LOCALE ? FALLBACK_LOCALE : this.locale;
-    return localeChain(loc).flatMap((l) => (own(this.mature, l) ? this.mature[l] : []));
+    return localeChain(loc).flatMap((l) => (own(this.matureLists, l) ? this.matureLists[l] : []));
   }
 
   t(key: string, args: Args = {}): string {
-    if (this.locale !== PSEUDO_LOCALE) return tr(this.tables, this.locale, key, args, this.clean, this.words());
+    if (this.locale !== PSEUDO_LOCALE) return tr(this.tables, this.locale, key, args, this.clean, this.clean ? this.wordSet() : []);
     const text = lookup(this.tables, FALLBACK_LOCALE, key, this.clean);
     return text === null ? key : fill(pseudo(text), args);
   }
 
   tn(key: string, n: number, args: Args = {}): string {
     if (this.locale !== PSEUDO_LOCALE) {
-      return trPlural(this.tables, this.locale, key, n, args, this.clean, this.words());
+      return trPlural(this.tables, this.locale, key, n, args, this.clean, this.clean ? this.wordSet() : []);
     }
     const text = lookupPlural(this.tables, FALLBACK_LOCALE, key, n, this.clean);
     return text === null ? `${key}.${plural(FALLBACK_LOCALE, n)}` : fill(pseudo(text), { ...args, n });

@@ -32,6 +32,8 @@
 //           the screen cannot show never reaches settings.json)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
 //           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): a dimmed Apply is not focusable, like its place in the
+//           focus grid (the access sweep found a focusable Apply no key could reach, #308)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -422,6 +424,7 @@ namespace {{GAME_SLUG}}.Shell.Screens
             bool applyOn = _tab == "display" && _staging.HasPending;
             _apply.Element.style.display = _tab == "display" ? DisplayStyle.Flex : DisplayStyle.None;
             _apply.Element.style.opacity = applyOn ? 1f : 0.45f;
+            _apply.Element.focusable = applyOn;        // out of the grid: not a focus target either (sweep, #308)
             switch (_tab)
             {
                 case "display":

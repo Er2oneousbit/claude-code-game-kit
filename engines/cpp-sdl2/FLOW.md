@@ -49,7 +49,7 @@ python tools/dev.py build --preset release
 | `check` | `cmake --preset <p>` then `cmake --build --preset <p>` |
 | `test` | build, then `ctest --preset <p> --output-on-failure` |
 | `smoke` | runs `<exe> --smoke 120 -- --data-dir build/smoke-data` with dummy SDL drivers (the shell walks title -> menu -> play), checks exit code and output |
-| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `display` (the Display tab's Apply and its 15 s real-time confirm: `DRIVE_DISPLAY` lines), `show:<title|menu|settings|pause|subtitle|play|juice|credits|apply|confirm>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
+| `smoke --drive <scenario>` | the same with `--drive`, 6000 frames at most, passes when the run prints `DRIVE_DONE`: `menus` (prints `SETTINGS_WRITTEN`), `display` (the Display tab's Apply and its 15 s real-time confirm: `DRIVE_DISPLAY` lines), `show:<title|menu|settings|content|pause|subtitle|play|juice|credits|apply|confirm>` (add `--screenshot`), `access[:res=WxH,scale=N,pad,read]` (what `tools/access/sweep.py` runs), `bug` (F8: `DRIVE_BUG`), `pseudo` with `--locale pseudo` (`PSEUDO_PASS`); `crash` (`CRASH_WRITTEN`) and `pseudo-plant` (a `PSEUDO_FAIL` for `plant.too_small`) exit 1 on purpose |
 | `smoke --shaders` | also runs `kit_shader_check <build>/shader_check` (GPU renderer, hidden window), then `tools/shaders/shader_ref.py compare` |
 | `run` | runs the built exe from the project root so `assets/` paths resolve |
 | `build` | same steps as check; add `--preset release` for the shipping build (global options work before or after the command) |
@@ -181,3 +181,11 @@ the same move in 0.14; its diff is a worked example.
 
 ## Field notes (reported, unverified)
 None recorded yet. Add notes from videos, forums or your own runs here, with an `E##` id in `docs/EVIDENCE.md`.
+
+## Content switches
+- Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `kShowBloodSetting` / `kShowLanguageSetting` in `src/core/Menu.cpp` hide them in a game
+  without blood or strong language. The game reads `Shell::blood_enabled()` (off: a neutral hit effect, SOP-18
+  step 4); with `core::clean_language(settings)` on, `Shell::t()` picks `<key>@clean` lines and masks the words
+  of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot captures/content.png` pictures
+  both rows.

@@ -41,6 +41,8 @@
 //           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old size while the
 //           confirm waits
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the access tour wants only enabled rows: a disabled
+//           Apply (nothing staged) was reported unreached, though focus skips it by design (#308)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -379,7 +381,12 @@ impl Drive {
                         Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
                         _ => String::new(),
                     };
-                    let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
+                    // a disabled row (Apply while nothing waits, #308) is not a control: focus skips it on purpose
+                    let want: Vec<String> = rows
+                        .iter()
+                        .filter(|r| r.enabled)
+                        .map(|r| format!("{prefix}{}", r.id))
+                        .collect();
                     d.reach_seen.clear();
                     state = Some((rows.len() + 1, want, shell.focus_id()));
                 }
@@ -404,7 +411,12 @@ impl Drive {
                 Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
                 _ => String::new(),
             };
-            let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
+            // a disabled row (Apply while nothing waits, #308) is not a control: focus skips it on purpose
+            let want: Vec<String> = rows
+                .iter()
+                .filter(|r| r.enabled)
+                .map(|r| format!("{prefix}{}", r.id))
+                .collect();
             let unreached: Vec<&String> = want.iter().filter(|w| !d.reach_seen.contains(w)).collect();
             let mut narration = BTreeMap::new();
             for row in &rows {

@@ -193,3 +193,10 @@ for NW.js), the kit's lands as `package.json.gold` at the root; only `game/packa
 ## Scenario runs (smoke options)
 `--query Q` (URL query), `--until MARKER`, `--fail-on A,B`, `--timeout S`, `--screenshot FILE`, `--record DIR`,
 `--headed`: the same as the web overlay. Markers are console lines your plugins print.
+
+## Content switches
+- Content switches (#171, #207): GameAccess adds Blood and Clean Language rows to MZ's Options screen (labels
+  `bloodText` / `cleanLanguageText`, hidden with `showBlood` / `showCleanLanguage` off in a game without blood or
+  strong language). Your game reads `GameShell.bloodEnabled(GameAccess.settings())` (off: a neutral hit effect,
+  SOP-18 step 4) and passes `GameShell.cleanLanguage(...)` to `GameShell.tr` (with a word list compiled once by
+  `GameShell.compileWords`). MZ has no `--drive`: check the rows on the Options screen by hand.

@@ -38,6 +38,8 @@
 // Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): battle animation flashes through the limiter, window
 //           line height with Text Size and a Line Spacing row, more Options rows a game can switch on (extraRows),
 //           the kit's save version in MZ's save contents (#280)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Blood and Clean Language rows (content.blood,
+//           content.clean_language, #171, #207), each hidden by a plugin parameter; rows may sit in another section
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -49,10 +51,13 @@
  *
  * @help GameAccess.js
  *
- * Keeps the kit's player settings in MZ's config file and adds five
+ * Keeps the kit's player settings in MZ's config file and adds seven
  * options to the Options screen: Reduce Motion, Screen Shake (0 to 100 %),
- * Gentle Flashes, Text Size and Line Spacing (more on/off rows through the
- * More Options rows parameter). MZ's Shake Screen follows Reduce Motion
+ * Gentle Flashes, Text Size, Line Spacing, Blood and Clean Language (more
+ * on/off rows through the More Options rows parameter). Blood and Clean
+ * Language are for your game to honour: GameShell.bloodEnabled(settings)
+ * (draw a neutral hit effect when off) and GameShell.cleanLanguage(settings)
+ * (pass it to GameShell.tr). Hide either with its Show parameter. MZ's Shake Screen follows Reduce Motion
  * and Screen Shake; every Flash Screen, and the flashes of battle
  * animations, goes through a limit of three flashes per second, and is
  * softer while Gentle Flashes is on. Windows grow their line height with
@@ -84,6 +89,28 @@
  * @type string
  * @default Line Spacing
  *
+ * @param bloodText
+ * @text Blood label
+ * @type string
+ * @default Blood
+ *
+ * @param cleanLanguageText
+ * @text Clean Language label
+ * @type string
+ * @default Clean Language
+ *
+ * @param showBlood
+ * @text Show the Blood row
+ * @type boolean
+ * @default true
+ * @desc Off for a game with no blood: no switch that does nothing.
+ *
+ * @param showCleanLanguage
+ * @text Show the Clean Language row
+ * @type boolean
+ * @default true
+ * @desc Off for a game with no strong language.
+ *
  * @param extraRows
  * @text More Options rows
  * @type string
@@ -112,6 +139,7 @@
 
     const params = PluginManager.parameters(PLUGIN);
     const label = (name, fallback) => String(params[name] || fallback);
+    const shown = (name) => String(params[name] ?? "true") !== "false";   // a boolean parameter, true when unset
     // symbol (the ConfigManager property Window_Options reads), label, settings field under access, steps or bool
     const titleCase = (field) => field.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
     const camel = (field) => field.split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join("");
@@ -137,6 +165,11 @@
         { symbol: "kitFlashLimit", text: label("flashText", "Gentle Flashes"), field: "flash_limit" },
         { symbol: "kitTextScale", text: label("textSizeText", "Text Size"), field: "text_scale", steps: TEXT_STEPS },
         { symbol: "kitLineSpacing", text: label("lineSpacingText", "Line Spacing"), field: "line_spacing", steps: SPACING_STEPS },
+        // #171, #207: what the game shows (content.*), on unless a game without blood or strong language hides them
+        ...(shown("showBlood") ? [{ symbol: "kitBlood", text: label("bloodText", "Blood"), field: "blood", section: "content" }] : []),
+        ...(shown("showCleanLanguage")
+            ? [{ symbol: "kitCleanLanguage", text: label("cleanLanguageText", "Clean Language"), field: "clean_language", section: "content" }]
+            : []),
         ...extraRows(params.extraRows, (m) => console.warn(m)),
     ];
     const bySymbol = new Map(OPTIONS.map((o) => [o.symbol, o]));
@@ -194,8 +227,8 @@
     // ---- ConfigManager: the settings in config.rpgsave ---------------------------
     for (const o of OPTIONS) {
         Object.defineProperty(ConfigManager, o.symbol, {
-            get: () => settings.access[o.field],
-            set: (v) => { settings.access[o.field] = o.steps ? Number(v) : !!v; },
+            get: () => settings[o.section || "access"][o.field],
+            set: (v) => { settings[o.section || "access"][o.field] = o.steps ? Number(v) : !!v; },
             configurable: true,
         });
     }

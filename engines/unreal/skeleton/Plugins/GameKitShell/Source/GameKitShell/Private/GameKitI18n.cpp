@@ -9,10 +9,32 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): CLDR 46 plural families, the .other fallback per
 //           locale, @clean lookups, MaskWords and MatureWords (#207, #87)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): CompileWords, MaskWordSet, TrSet, TrPluralSet and
+//           FGameKitWordCache (#207)
 // ---------------------------------------------------------------------------
 #include "GameKitI18n.h"
 
 #include "GameKitJson.h"
+
+const FGameKitWordSet& FGameKitWordCache::Get(const FString& Locale)
+{
+	if (!bValid || !Locale.Equals(CachedLocale, ESearchCase::CaseSensitive))
+	{
+		TArray<FString> Words;
+		for (const FString& Loc : GameKit::LocaleChain(Locale))
+		{
+			if (const TArray<FString>* List = Lists.Find(Loc))
+			{
+				Words.Append(*List);
+			}
+		}
+		Set = GameKit::CompileWords(Words);
+		CachedLocale = Locale;
+		bValid = true;
+		++FoldCount;
+	}
+	return Set;
+}
 
 namespace GameKit
 {
@@ -145,10 +167,10 @@ namespace GameKit
 			return Table->Find(Key);
 		}
 
-		FString Finish(const FString& Text, const FGameKitTrArgs& Args, bool bClean, const TArray<FString>& Words)
+		FString Finish(const FString& Text, const FGameKitTrArgs& Args, bool bClean, const FGameKitWordSet& Words)
 		{
 			const FString Out = FillPlaceholders(Text, Args);
-			return bClean && Words.Num() > 0 ? MaskWords(Out, Words) : Out;
+			return bClean && Words.Num() > 0 ? MaskWordSet(Out, Words) : Out;
 		}
 
 		// CLDR 46 whole-number plural rules: family -> languages (the reference's PLURAL_LANGUAGES)
@@ -302,13 +324,19 @@ namespace GameKit
 	FString Tr(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key, const FGameKitTrArgs& Args,
 	           bool bClean, const TArray<FString>& Words)
 	{
+		return TrSet(Tables, Locale, Key, Args, bClean, bClean ? CompileWords(Words) : FGameKitWordSet());
+	}
+
+	FString TrSet(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key, const FGameKitTrArgs& Args,
+	              bool bClean, const FGameKitWordSet& Words)
+	{
 		const FString* Text = Lookup(Tables, Locale, Key, bClean);
 		return Text ? Finish(*Text, Args, bClean, Words) : Key;
 	}
 
-	FString MaskWords(const FString& Text, const TArray<FString>& Words)
+	FGameKitWordSet CompileWords(const TArray<FString>& Words)
 	{
-		TSet<FString> Wanted;
+		FGameKitWordSet Wanted;
 		for (const FString& W : Words)
 		{
 			const TArray<FWordPart> Parts = Scan(W);
@@ -317,6 +345,16 @@ namespace GameKit
 				Wanted.Add(Parts[0].Key);
 			}
 		}
+		return Wanted;
+	}
+
+	FString MaskWords(const FString& Text, const TArray<FString>& Words)
+	{
+		return MaskWordSet(Text, CompileWords(Words));
+	}
+
+	FString MaskWordSet(const FString& Text, const FGameKitWordSet& Wanted)
+	{
 		if (Wanted.Num() == 0)
 		{
 			return Text;
@@ -424,6 +462,12 @@ namespace GameKit
 
 	FString TrPlural(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key, int64 N,
 	                 const FGameKitTrArgs& Args, bool bClean, const TArray<FString>& Words)
+	{
+		return TrPluralSet(Tables, Locale, Key, N, Args, bClean, bClean ? CompileWords(Words) : FGameKitWordSet());
+	}
+
+	FString TrPluralSet(const FGameKitStringTables& Tables, const FString& Locale, const FString& Key, int64 N,
+	                    const FGameKitTrArgs& Args, bool bClean, const FGameKitWordSet& Words)
 	{
 		FGameKitTrArgs A = Args;
 		A.Add(TEXT("n"), FString::Printf(TEXT("%lld"), static_cast<long long>(N)));

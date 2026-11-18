@@ -72,6 +72,12 @@ keyboard and gamepad reach every control, and the focused one has an outline.
 - **Narration** (#165): `Narrator` (made by `FrontEnd`) says a line for every focus change, value change and screen
   (`Narrator.describe()`, `Bindings.narration_line()`), through `DisplayServer.tts_speak` when `access.narration` is
   on (`project.godot` turns on `audio/general/text_to_speech`); `Shell.last_narration` holds the last line.
+- **Content switches** (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; a game without blood or strong language hides them with `SHOW_BLOOD_SETTING` /
+  `SHOW_LANGUAGE_SETTING` in `settings_screen.gd`. The game reads `Shell.blood_enabled()` (off: a neutral hit
+  effect, SOP-18 step 4); `Shell.t()` and `tn()` pick `<key>@clean` lines and mask the words of
+  `data/i18n/mature/<locale>.json` while `Shell.clean_language()` is on. `smoke --drive show:content
+  --screenshot captures/content.png` pictures both rows.
 - **Subtitles**: `SubtitleBar` reads `data/dialogue/sample.built.json` (format v0 of Wavesmith's dialogue
   subcommand, tools/audio/wavesmith: cues for a classic bar, per-character reveal times for a typewriter; unknown fields are ignored).
   A caption marked `"directional": true` gets an arrow while its source is off screen: `bar.caption(id, {"dx": .., "dy": .., "half_w": .., "half_h": ..})`.
@@ -100,7 +106,7 @@ folder such as `build/windows/`, exit 2). Drives run with `--fixed-fps 60`, so f
 | `smoke --drive pseudo --locale pseudo` | every screen and settings tab is shown and no label is untranslated, clipped or off screen (`PSEUDO_OK`) |
 | `smoke --drive pseudo-plant --locale pseudo` | exits 1 on purpose, naming a planted label that is too small (`PSEUDO_FAIL`) |
 | `smoke --drive access[:res=WxH][,scale=N][,pad]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the focus graph, the subtitle and the prompts; the drive sets the window size itself (headless Godot ignores `--resolution`), `pad` presses with gamepad events only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot captures/x.png` | opens that screen (settings with a control focused; `apply`: the Display tab with a staged change, `confirm`: its confirm, countdown held) and photographs it in a window |
+| `smoke --drive show:<title\|settings\|content\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot captures/x.png` | opens that screen (settings with a control focused; `apply`: the Display tab with a staged change, `confirm`: its confirm, countdown held) and photographs it in a window |
 | `... --screenshot new.png --compare base.png [--tolerance N]` | `tools/image_diff.py` finds no difference (exit 1 when it does) |
 Any run with `--locale pseudo` checks each screen as it appears. The windowed capture ignores the mouse, so a cursor
 resting on the window cannot change the picture.

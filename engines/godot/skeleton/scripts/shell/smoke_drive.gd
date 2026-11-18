@@ -30,6 +30,8 @@
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input is ignored while a drive runs (#276)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the content drive: each switch toggled from its row,
+#           focus kept and the screen redrawn (DRIVE_CONTENT lines), settings.json holds both
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 #           and the pseudo drive checks the Display tab's warning and confirm (#308)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning stays up on another tab, and
@@ -135,6 +137,8 @@ func _run() -> void:
 		await _crash()
 	elif scenario == "display":
 		await _display()
+	elif scenario == "content":
+		await _content()
 	elif scenario == "pseudo" or scenario == "pseudo-plant":
 		await _pseudo(scenario == "pseudo-plant")
 	elif scenario.begins_with("show:") and SHOW_TARGETS.has(scenario.trim_prefix("show:")):
@@ -142,7 +146,7 @@ func _run() -> void:
 	elif scenario == "access" or scenario.begins_with("access:"):
 		await _access(scenario.trim_prefix("access").trim_prefix(":"))
 	else:
-		_fail("unknown scenario '%s' (menus, crash, display, pseudo, pseudo-plant, access[:scale=N][,pad], show:<%s>)"
+		_fail("unknown scenario '%s' (menus, crash, display, content, pseudo, pseudo-plant, access[:scale=N][,pad], show:<%s>)"
 				% [scenario, "|".join(SHOW_TARGETS)])
 
 
@@ -185,6 +189,52 @@ func _menus() -> void:
 		return
 	Log.raw("DRIVE_DONE menus")
 	await _press("ui_accept") # Quit: exit code 0
+
+
+## Blood and Clean language (#171, #207) toggled from their rows with ui_accept: the focus stays on the row (clean
+## language redraws every label), the row shows its new value, and Back saves both.
+func _content() -> void:
+	var file: String = Shell.path(Shell.SETTINGS_FILE)
+	if not await _to_main_menu():
+		return
+	if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
+		return
+	if not await _nav_to("Tab_audio", "ui_right") or not await _nav_to("Tab_access", "ui_right"):
+		return
+	var wanted: Dictionary = {}
+	for field: String in ["clean_language", "blood"]:
+		var id: String = "Setting_content_" + field
+		if not await _nav_to(id, "ui_down"):
+			return
+		var before: bool = bool(Shell.settings["content"][field])
+		await _press("ui_accept")
+		await _frames(3)
+		var now: bool = bool(Shell.settings["content"][field])
+		var owner_now: Control = get_viewport().gui_get_focus_owner()
+		if now == before:
+			_fail("content.%s did not change" % field)
+			return
+		if owner_now == null or owner_now.name != id:
+			_fail("focus left %s (now %s)" % [id, owner_now.name if owner_now else "nothing"])
+			return
+		var shown: String = Shell.t("value.on" if now else "value.off")
+		if owner_now is Button and (owner_now as Button).text != shown:
+			_fail("%s shows '%s', not '%s'" % [id, (owner_now as Button).text, shown])
+			return
+		wanted[field] = now
+		Log.raw("DRIVE_CONTENT content.%s %s -> %s, focus kept, the row shows %s" % [field, before, now, shown])
+	await _press("ui_cancel") # Back saves
+	if not await _wait_screen("main_menu"):
+		return
+	var saved: Dictionary = GameSettings.load_text(AtomicFile.read_text(file))["settings"]["content"]
+	if bool(saved["clean_language"]) != wanted["clean_language"] or bool(saved["blood"]) != wanted["blood"]:
+		_fail("settings file does not hold the switches (%s)" % saved)
+		return
+	Log.raw("DRIVE_CONTENT saved %s" % JSON.stringify(saved))
+	if not await _nav_to("Quit", "ui_down"):
+		return
+	Log.raw("DRIVE_DONE content")
+	await _press("ui_accept")
 
 
 ## The Display tab's Apply (#308): a staged mode change applies nothing, Back warns, Apply opens the confirm with

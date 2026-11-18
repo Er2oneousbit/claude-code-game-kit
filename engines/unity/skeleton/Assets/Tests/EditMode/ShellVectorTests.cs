@@ -12,6 +12,8 @@
 //           Display tab's Apply and its keep-or-revert confirm, #308)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
 //           mask_words and mature_words; plural cases read their key from the case (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): I18n.WordCache folds once and follows new lists and
+//           locales, and its cost against folding per call (#207)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -52,6 +54,51 @@ namespace {{GAME_SLUG}}.Tests
             {
                 Assert.IsTrue(seen.Contains(type), $"{FILE} has no '{type}' case");
             }
+        }
+
+        [Test]
+        public void WordCache_FoldsOnceAndFollowsNewListsAndLocales()
+        {
+            var cache = new I18n.WordCache { Lists = new Dictionary<string, List<string>> { { "en", new List<string> { "damn" } } } };
+            Assert.AreEqual("#@$%, bob", I18n.MaskWordSet("Damn, bob", cache.Get("en")));
+            Assert.AreEqual("#@$%, bob", I18n.MaskWordSet("Damn, bob", cache.Get("en")));
+            Assert.AreEqual(1, cache.Folds, "the second Get reused the fold");
+            cache.Lists = new Dictionary<string, List<string>>
+            {
+                { "en", new List<string> { "bob" } }, { "fr", new List<string> { "merde" } },
+            };
+            Assert.AreEqual("Damn, #@$", I18n.MaskWordSet("Damn, bob", cache.Get("en")), "a new list drops the old fold");
+            Assert.AreEqual("#@$%#, #@$", I18n.MaskWordSet("Merde, bob", cache.Get("fr")), "a new chain: fr's words join");
+        }
+
+        [Test]
+        public void WordCache_IsATenthOfFoldingPerCallOrLess()
+        {
+            var words = new List<string>();
+            for (int k = 0; k < 3000; k++)
+            {
+                words.Add("word" + k);
+            }
+            var tables = new Dictionary<string, Dictionary<string, string>>
+            {
+                { "en", new Dictionary<string, string> { { "label", "A settings label with {name} in it" } } },
+            };
+            var args = new Dictionary<string, object> { { "name", "x" } };
+            var cache = new I18n.WordCache { Lists = new Dictionary<string, List<string>> { { "en", words } } };
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            for (int k = 0; k < 100; k++)
+            {
+                I18n.Tr(tables, "en", "label", args, true, words);
+            }
+            double uncached = watch.Elapsed.TotalMilliseconds;
+            watch.Restart();
+            for (int k = 0; k < 100; k++)
+            {
+                I18n.Finish(I18n.Lookup(tables, "en", "label", true), args, true, cache.Get("en"));
+            }
+            double cached = watch.Elapsed.TotalMilliseconds;
+            TestContext.WriteLine($"T_COST 100 labels, 3000 words: uncached {uncached:F1} ms, cached {cached:F1} ms");
+            Assert.Less(cached, uncached / 10, "the folded set is built once, not per label");
         }
 
         [Test]

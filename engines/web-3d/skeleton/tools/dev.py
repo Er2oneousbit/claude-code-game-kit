@@ -10,7 +10,7 @@
 #             smoke    production build, then boot it in headless Chromium; fail on errors
 #                      (--query autoplay --until ESCAPED --fail-on CAUGHT for scenario runs,
 #                       --screenshot FILE, --record DIR for a GIF;
-#                       --drive menus|crash|pseudo|pseudo-plant|display|show:<screen> for the shell's scripted runs,
+#                       --drive menus|crash|pseudo|pseudo-plant|display|content|show:<screen> for the shell's scripted runs,
 #                       --data-dir DIR, --locale ID, --compare BASELINE.png [--tolerance N])
 #             build    production build into dist/ (relative paths: upload dist/ anywhere)
 #             run      Vite dev server with hot reload (opens the browser)
@@ -74,6 +74,7 @@ BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the 
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
               "pseudo-plant, display (Apply a Display change, let its confirm revert: about 20 s), "
+              "content (toggle Blood and Clean language from their rows: DRIVE_CONTENT lines), "
               "show:title|settings|content|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
               "waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "

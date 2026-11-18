@@ -9,6 +9,8 @@
 #           Give focusable controls stable node names: rebuild() and the smoke drive find them by name.
 #           Only the top screen of FrontEnd's stack reacts to input; screens below it are hidden.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): rebuild(take_focus): a screen under the top one keeps its control's name
+#           without grabbing it
 # ---------------------------------------------------------------------------
 class_name ShellScreen
 extends Control
@@ -50,14 +52,18 @@ func focus_first() -> void:
 		c.grab_focus()
 
 
-func rebuild() -> void:
-	# Same screen, new strings or sizes: keep the focused control by name
+func rebuild(take_focus: bool = true) -> void:
+	# Same screen, new strings or sizes: keep the focused control by name. A screen under the top one
+	# (take_focus false) only remembers its control: grabbing it would take the focus from the screen on top.
 	var owner_node: Control = get_viewport().gui_get_focus_owner()
 	var focused: String = owner_node.name if owner_node != null and is_ancestor_of(owner_node) else _last_focus
 	for child: Node in get_children():
 		remove_child(child)
 		child.queue_free()
 	build()
+	if not take_focus:
+		_last_focus = focused
+		return
 	if not _focus_named(focused):
 		focus_first()
 
