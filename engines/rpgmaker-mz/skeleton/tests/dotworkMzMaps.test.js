@@ -255,6 +255,14 @@ test("database: entries appended after MZ's own, a re-run writes nothing, the us
     const fourth = exportInto(root);
     assert.match(fourth.res.notes.join("\n"), /map yard: .*changed in MZ since the export; kept/);
     assert.match(fs.readFileSync(yardFile, "utf8"), /"edited"/);
+    // the held map keeps its id on record: the next run makes no second copy of it
+    assert.equal(fourth.res.record.data.maps["golden/yard"], third.res.record.data.maps["golden/yard"]);
+    const files = () => fs.readdirSync(path.join(root, "game", "data")).filter((n) => /^Map\d+\.json$/.test(n)).sort();
+    const before = files(), rows = readData(root, "MapInfos.json").length;
+    const fifth = exportInto(root);
+    assert.deepEqual(files(), before, "no new map file");
+    assert.equal(readData(root, "MapInfos.json").length, rows, "no new MapInfos row");
+    assert.equal(fifth.res.record.data.maps["golden/yard"], third.res.record.data.maps["golden/yard"]);
     // --check reads the map files as MZ's maps
     assert.deepEqual(mz.checkExport(fourth.paths, [golden])[0], []);
 });

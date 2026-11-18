@@ -501,5 +501,3 @@ export function parallaxPlan(bg, k) {
     };
   });
 }
-
-// {{FOOTER}}

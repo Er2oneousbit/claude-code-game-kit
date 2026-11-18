@@ -1050,7 +1050,12 @@ export function writeDatabase(paths, w, oldData, pending, notes, log) {
     // a free slot whose map file exists belongs to someone else: look further
     while (!owned(infos[id]) && existsSync(join(paths.game, ...rel(id).split("/"))) && !w.ours(rel(id))) id++;
     const text = mapText(mapFile(p.mp, tsIds[`${p.m.pack}/${p.tileset}`], p.a.name));
-    if (!w.putText(rel(id), text)) { notes.push(`${p.m.pack}: map ${p.a.name}: ${rel(id)} was changed in MZ since the export; kept (--replace overwrites it)`); continue; }
+    if (!w.putText(rel(id), text)) {
+      // kept as the user edited it: the id stays ours on record, so the next run neither moves nor copies the map
+      notes.push(`${p.m.pack}: map ${p.a.name}: ${rel(id)} was changed in MZ since the export; kept (--replace overwrites it)`);
+      out.maps[key] = id;
+      continue;
+    }
     while (infos.length <= id) infos.push(null);
     const was = infos[id];
     infos[id] = { id, expanded: false, name, order: owned(was) ? was.order : lastOrder() + 1, parentId: owned(was) ? was.parentId : 0,
