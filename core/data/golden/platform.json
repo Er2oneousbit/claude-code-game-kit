@@ -1,0 +1,8369 @@
+{
+ "cases": [
+  {
+   "cloud_local_dirs": [
+    "logs",
+    "crashes",
+    "captures"
+   ],
+   "cloud_local_names": [
+    "settings.json",
+    "platform_state.json",
+    "telemetry.csv",
+    "log_tail.txt"
+   ],
+   "cloud_local_suffixes": [
+    ".tmp",
+    ".log"
+   ],
+   "cloud_modes": [
+    "auto",
+    "api"
+   ],
+   "id_max": 64,
+   "name": "names and limits",
+   "overlay_pause_screens": [
+    "play"
+   ],
+   "presence_max_keys": 30,
+   "presence_max_value_bytes": 255,
+   "stat_types": [
+    "int",
+    "float"
+   ],
+   "state_file": "platform_state.json",
+   "state_format": "platform_state",
+   "state_version": 1,
+   "type": "platform_format"
+  },
+  {
+   "name": "data/achievements.json as every port reads it",
+   "points": [
+    [
+     "the sample",
+     "{\"stats\": [{\"id\": \"enemies_defeated\", \"type\": \"int\", \"min\": 0, \"max\": 1000000, \"increment_only\": true}, {\"id\": \"coins\", \"type\": \"int\", \"max\": 999}, {\"id\": \"best_time_s\", \"type\": \"float\", \"min\": 0, \"max\": 3600}], \"achievements\": [{\"id\": \"first_win\", \"name\": \"ach_first_win\", \"description\": \"ach_first_win_desc\"}, {\"id\": \"defeat_1\", \"name\": \"ach_defeat_1\", \"stat\": \"enemies_defeated\", \"threshold\": 1}, {\"id\": \"defeat_100\", \"name\": \"ach_defeat_100\", \"stat\": \"enemies_defeated\", \"threshold\": 100, \"progress_every\": 25}, {\"id\": \"coins_500\", \"name\": \"ach_coins_500\", \"stat\": \"coins\", \"threshold\": 500}]}",
+     {
+      "achievements": [
+       {
+        "description": "ach_first_win_desc",
+        "id": "first_win",
+        "name": "ach_first_win",
+        "progress_every": null,
+        "stat": null,
+        "threshold": null
+       },
+       {
+        "description": "",
+        "id": "defeat_1",
+        "name": "ach_defeat_1",
+        "progress_every": null,
+        "stat": "enemies_defeated",
+        "threshold": 1
+       },
+       {
+        "description": "",
+        "id": "defeat_100",
+        "name": "ach_defeat_100",
+        "progress_every": 25,
+        "stat": "enemies_defeated",
+        "threshold": 100
+       },
+       {
+        "description": "",
+        "id": "coins_500",
+        "name": "ach_coins_500",
+        "progress_every": null,
+        "stat": "coins",
+        "threshold": 500
+       }
+      ],
+      "stats": [
+       {
+        "id": "enemies_defeated",
+        "increment_only": true,
+        "max": 1000000,
+        "min": 0,
+        "type": "int"
+       },
+       {
+        "id": "coins",
+        "increment_only": false,
+        "max": 999,
+        "min": 0,
+        "type": "int"
+       },
+       {
+        "id": "best_time_s",
+        "increment_only": false,
+        "max": 3600.0,
+        "min": 0.0,
+        "type": "float"
+       }
+      ],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "no file",
+     null,
+     {
+      "achievements": [],
+      "stats": [],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "empty file",
+     "",
+     {
+      "achievements": [],
+      "stats": [],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "not json",
+     "{achievements",
+     {
+      "achievements": [],
+      "stats": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "not an object",
+     "[1, 2]",
+     {
+      "achievements": [],
+      "stats": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "only achievements, no stats",
+     "{\"achievements\": [{\"id\": \"win\", \"name\": \"Win\"}]}",
+     {
+      "achievements": [
+       {
+        "description": "",
+        "id": "win",
+        "name": "Win",
+        "progress_every": null,
+        "stat": null,
+        "threshold": null
+       }
+      ],
+      "stats": [],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "defaults filled in",
+     "{\"stats\": [{\"id\": \"s\"}], \"achievements\": [{\"id\": \"a\", \"name\": \"A\", \"stat\": \"s\", \"threshold\": 3}]}",
+     {
+      "achievements": [
+       {
+        "description": "",
+        "id": "a",
+        "name": "A",
+        "progress_every": null,
+        "stat": "s",
+        "threshold": 3
+       }
+      ],
+      "stats": [
+       {
+        "id": "s",
+        "increment_only": false,
+        "max": null,
+        "min": 0,
+        "type": "int"
+       }
+      ],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "a whole float is an int",
+     "{\"stats\": [{\"id\": \"s\", \"min\": 0.0, \"max\": 10.0}], \"achievements\": [{\"id\": \"a\", \"name\": \"A\", \"stat\": \"s\", \"threshold\": 5.0, \"progress_every\": 2.0}]}",
+     {
+      "achievements": [
+       {
+        "description": "",
+        "id": "a",
+        "name": "A",
+        "progress_every": 2,
+        "stat": "s",
+        "threshold": 5
+       }
+      ],
+      "stats": [
+       {
+        "id": "s",
+        "increment_only": false,
+        "max": 10,
+        "min": 0,
+        "type": "int"
+       }
+      ],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "bad stats dropped and counted",
+     "{\"stats\": [{\"id\": \"ok\"}, {\"id\": \"ok\"}, {\"id\": \"9lives\"}, {\"id\": \"x y\"}, {\"id\": \"t\", \"type\": \"double\"}, {\"id\": \"u\", \"min\": 5, \"max\": 1}, {\"id\": \"v\", \"min\": 0.5}, {\"id\": \"w\", \"increment_only\": 1}, {\"id\": \"f\", \"type\": \"float\", \"min\": -1.5, \"max\": 2.25}, \"s\", {\"id\": \"sssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss\"}]}",
+     {
+      "achievements": [],
+      "stats": [
+       {
+        "id": "ok",
+        "increment_only": false,
+        "max": null,
+        "min": 0,
+        "type": "int"
+       },
+       {
+        "id": "f",
+        "increment_only": false,
+        "max": 2.25,
+        "min": -1.5,
+        "type": "float"
+       }
+      ],
+      "version": 1
+     },
+     9
+    ],
+    [
+     "bad achievements dropped and counted",
+     "{\"stats\": [{\"id\": \"s\", \"max\": 10}, {\"id\": \"g\", \"type\": \"float\", \"max\": 1}], \"achievements\": [{\"id\": \"a\", \"name\": \"A\"}, {\"id\": \"a\", \"name\": \"A again\"}, {\"id\": \"b\"}, {\"id\": \"c\", \"name\": \"\"}, {\"id\": \"d\", \"name\": \"D\", \"stat\": \"nope\", \"threshold\": 1}, {\"id\": \"e\", \"name\": \"E\", \"stat\": \"s\"}, {\"id\": \"f\", \"name\": \"F\", \"stat\": \"s\", \"threshold\": 0}, {\"id\": \"h\", \"name\": \"H\", \"stat\": \"s\", \"threshold\": 11}, {\"id\": \"i\", \"name\": \"I\", \"stat\": \"s\", \"threshold\": 2.5}, {\"id\": \"j\", \"name\": \"J\", \"threshold\": 3}, {\"id\": \"k\", \"name\": \"K\", \"stat\": \"s\", \"threshold\": 4, \"progress_every\": 4}, {\"id\": \"m\", \"name\": \"M\", \"stat\": \"g\", \"threshold\": 0.5, \"progress_every\": 0.25}, {\"id\": \"n\", \"name\": \"N\", \"description\": 7}, {\"id\": \"o\", \"name\": \"O\", \"stat\": \"s\", \"threshold\": true}]}",
+     {
+      "achievements": [
+       {
+        "description": "",
+        "id": "a",
+        "name": "A",
+        "progress_every": null,
+        "stat": null,
+        "threshold": null
+       },
+       {
+        "description": "",
+        "id": "m",
+        "name": "M",
+        "progress_every": 0.25,
+        "stat": "g",
+        "threshold": 0.5
+       }
+      ],
+      "stats": [
+       {
+        "id": "s",
+        "increment_only": false,
+        "max": 10,
+        "min": 0,
+        "type": "int"
+       },
+       {
+        "id": "g",
+        "increment_only": false,
+        "max": 1.0,
+        "min": 0.0,
+        "type": "float"
+       }
+      ],
+      "version": 1
+     },
+     12
+    ],
+    [
+     "stats and achievements not lists",
+     "{\"stats\": {\"id\": \"s\"}, \"achievements\": \"none\"}",
+     {
+      "achievements": [],
+      "stats": [],
+      "version": 1
+     },
+     2
+    ]
+   ],
+   "type": "achievements_load"
+  },
+  {
+   "name": "which user-data files sync",
+   "points": [
+    [
+     "save_1.json",
+     "cloud"
+    ],
+    [
+     "save_1.json.bak",
+     "cloud"
+    ],
+    [
+     "save_1.json.tmp",
+     "local"
+    ],
+    [
+     "slots/2.save",
+     "cloud"
+    ],
+    [
+     "settings.json",
+     "local"
+    ],
+    [
+     "Settings.JSON",
+     "local"
+    ],
+    [
+     "platform_state.json",
+     "local"
+    ],
+    [
+     "telemetry.csv",
+     "local"
+    ],
+    [
+     "log_tail.txt",
+     "local"
+    ],
+    [
+     "game.log",
+     "local"
+    ],
+    [
+     "logs/today.txt",
+     "local"
+    ],
+    [
+     "crashes/1.txt",
+     "local"
+    ],
+    [
+     "captures/a.png",
+     "local"
+    ],
+    [
+     "sub/logs/x.txt",
+     "cloud"
+    ],
+    [
+     "saves\\slot_3.json",
+     "cloud"
+    ],
+    [
+     "./save_2.json",
+     "cloud"
+    ],
+    [
+     "",
+     "local"
+    ],
+    [
+     "notes/settings.json",
+     "local"
+    ]
+   ],
+   "type": "cloud_partition"
+  },
+  {
+   "name": "the overlay's pause hook",
+   "points": [
+    [
+     true,
+     "play",
+     "pause"
+    ],
+    [
+     true,
+     "pause",
+     "none"
+    ],
+    [
+     true,
+     "menu",
+     "none"
+    ],
+    [
+     true,
+     "title",
+     "none"
+    ],
+    [
+     true,
+     "settings",
+     "none"
+    ],
+    [
+     false,
+     "play",
+     "none"
+    ],
+    [
+     false,
+     "pause",
+     "none"
+    ],
+    [
+     false,
+     "menu",
+     "none"
+    ],
+    [
+     false,
+     "title",
+     "none"
+    ],
+    [
+     false,
+     "settings",
+     "none"
+    ]
+   ],
+   "type": "overlay"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "an achievement unlocks once and flushes at once",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "set_achievement",
+       "first_win"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unlocked",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "already",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "unlock",
+      "no_such"
+     ],
+     "out": "unknown",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "nothing",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "stats wait for a flush; thresholds unlock in definition order",
+   "online": true,
+   "steps": [
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      0
+     ],
+     "out": "same",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "coins",
+      120
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       120
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "sent",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "nothing",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "indicate_progress",
+       "defeat_100",
+       30,
+       100
+      ],
+      [
+       "set_stat",
+       "enemies_defeated",
+       30
+      ],
+      [
+       "set_achievement",
+       "defeat_1"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      30
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 30
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "indicate_progress",
+       "defeat_100",
+       50,
+       100
+      ]
+     ],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      20
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 50
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      1
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 51
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "enemies_defeated",
+       100
+      ],
+      [
+       "set_achievement",
+       "defeat_100"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      100
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 100
+      },
+      "unlocked": [
+       "defeat_1",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      5
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 120,
+       "enemies_defeated": 105
+      },
+      "unlocked": [
+       "defeat_1",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "refused, clamped and same",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "set_stat",
+       "enemies_defeated",
+       10
+      ],
+      [
+       "set_achievement",
+       "defeat_1"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      10
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      9
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      -1
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      2.5
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      "11"
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      true
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "enemies_defeated",
+      10.0
+     ],
+     "out": "same",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       999
+      ],
+      [
+       "set_achievement",
+       "coins_500"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_stat",
+      "coins",
+      5000
+     ],
+     "out": "clamped",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 999,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "coins",
+      -3
+     ],
+     "out": "clamped",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "coins",
+      0.5
+     ],
+     "out": "refused",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "best_time_s",
+      61.25
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins",
+        "best_time_s"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 61.25,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "best_time_s",
+      59
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins",
+        "best_time_s"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 59.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "best_time_s",
+      9999.5
+     ],
+     "out": "clamped",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins",
+        "best_time_s"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 3600.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "nope",
+      1
+     ],
+     "out": "unknown",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins",
+        "best_time_s"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 3600.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "add_stat",
+      "nope",
+      1
+     ],
+     "out": "unknown",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins",
+        "best_time_s"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 3600.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       0
+      ],
+      [
+       "set_stat",
+       "best_time_s",
+       3600.0
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "sent",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 3600.0,
+       "coins": 0,
+       "enemies_defeated": 10
+      },
+      "unlocked": [
+       "defeat_1",
+       "coins_500"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "offline: local at once, one replay when the backend returns",
+   "online": false,
+   "steps": [
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unlocked",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": [
+        "first_win"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      1
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 1
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      60
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      40
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 40,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      30
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 30,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "flush"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 30,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "status",
+      "In the crypt"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "In the crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 30,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "enemies_defeated",
+       61
+      ],
+      [
+       "set_stat",
+       "coins",
+       30
+      ],
+      [
+       "set_achievement",
+       "first_win"
+      ],
+      [
+       "set_achievement",
+       "defeat_1"
+      ],
+      [
+       "store_stats"
+      ],
+      [
+       "set_presence",
+       "status",
+       "In the crypt"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {
+       "stats": {},
+       "unlocked": []
+      }
+     ],
+     "out": "online",
+     "presence": [
+      [
+       "status",
+       "In the crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 30,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "nothing",
+     "presence": [
+      [
+       "status",
+       "In the crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 30,
+       "enemies_defeated": 61
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "a failed store keeps the queue and waits for connect",
+   "online": true,
+   "steps": [
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "coins",
+      7
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 7,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "fail_store"
+     ],
+     "out": null,
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 7,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       7
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": false,
+     "op": [
+      "flush"
+     ],
+     "out": "failed",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 7,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      8
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unlocked",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": [
+        "first_win"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "flush"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": [
+        "first_win"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       8
+      ],
+      [
+       "set_achievement",
+       "first_win"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "online",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "status",
+      "Back"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "Back"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 8,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      9
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "Back"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 9,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "fail_store"
+     ],
+     "out": null,
+     "presence": [
+      [
+       "status",
+       "Back"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 9,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       9
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": false,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "failed",
+     "presence": [
+      [
+       "status",
+       "Back"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 9,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       9
+      ],
+      [
+       "store_stats"
+      ],
+      [
+       "set_presence",
+       "status",
+       "Back"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "online",
+     "presence": [
+      [
+       "status",
+       "Back"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 9,
+       "enemies_defeated": 0
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "connect merges what the store already has",
+   "online": false,
+   "steps": [
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      40
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": [
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 40
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      300
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 300,
+       "enemies_defeated": 40
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unlocked",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated",
+        "coins"
+       ],
+       "unlocks": [
+        "defeat_1",
+        "first_win"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 300,
+       "enemies_defeated": 40
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_stat",
+       "coins",
+       300
+      ],
+      [
+       "set_achievement",
+       "defeat_100"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {
+       "stats": {
+        "best_time_s": 42.5,
+        "coins": 999,
+        "enemies_defeated": 120
+       },
+       "unlocked": [
+        "first_win",
+        "defeat_1",
+        "not_ours"
+       ]
+      }
+     ],
+     "out": "online",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 42.5,
+       "coins": 300,
+       "enemies_defeated": 120
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 42.5,
+       "coins": 300,
+       "enemies_defeated": 120
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      5
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 42.5,
+       "coins": 300,
+       "enemies_defeated": 125
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "connect",
+      {
+       "stats": {
+        "best_time_s": 30,
+        "coins": "lots",
+        "enemies_defeated": 150
+       },
+       "unlocked": [
+        "first_win",
+        "defeat_1",
+        "defeat_100"
+       ]
+      }
+     ],
+     "out": "online",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 30.0,
+       "coins": 300,
+       "enemies_defeated": 150
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win",
+       "defeat_100"
+      ],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "rich presence: limits, no resend, the map on reconnect",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "set_presence",
+       "status",
+       "Title screen"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "status",
+      "Title screen"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "Title screen"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "status",
+      "Title screen"
+     ],
+     "out": "same",
+     "presence": [
+      [
+       "status",
+       "Title screen"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "status",
+       "Level 2"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "status",
+      "Level 2"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "level",
+       "2"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "level",
+      "2"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "level",
+       "2"
+      ],
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "level",
+       ""
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "level",
+      ""
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "level",
+      ""
+     ],
+     "out": "same",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "bad key",
+      "x"
+     ],
+     "out": "refused",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "note",
+      "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+     ],
+     "out": "refused",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "note",
+      "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+     ],
+     "out": "refused",
+     "presence": [
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "note",
+      "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ],
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "count",
+      3
+     ],
+     "out": "refused",
+     "presence": [
+      [
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ],
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [
+      [
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ],
+      [
+       "status",
+       "Level 2"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "status",
+      "Level 3"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ],
+      [
+       "status",
+       "Level 3"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "boss",
+      "Lich"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "boss",
+       "Lich"
+      ],
+      [
+       "note",
+       "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééa"
+      ],
+      [
+       "status",
+       "Level 3"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "clear_presence"
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "zone",
+      "Crypt"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "zone",
+       "Crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_presence",
+      "act",
+      "1"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "act",
+       "1"
+      ],
+      [
+       "zone",
+       "Crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "act",
+       "1"
+      ],
+      [
+       "set_presence",
+       "zone",
+       "Crypt"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "online",
+     "presence": [
+      [
+       "act",
+       "1"
+      ],
+      [
+       "zone",
+       "Crypt"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "clear_presence"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "clear_presence"
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "clear_presence"
+     ],
+     "out": "same",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "thirty presence keys and no more",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k00",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k00",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k01",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k01",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k02",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k02",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k03",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k03",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k04",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k04",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k05",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k05",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k06",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k06",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k07",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k07",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k08",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k08",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k09",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k09",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k10",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k10",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k11",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k11",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k12",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k12",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k13",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k13",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k14",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k14",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k15",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k15",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k16",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k16",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k17",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k17",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k18",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k18",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k19",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k19",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k20",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k20",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k21",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k21",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k22",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k22",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k23",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k23",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k24",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k24",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k25",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k25",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k26",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k26",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k27",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k27",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k28",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k28",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k29",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k29",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ],
+      [
+       "k29",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k99",
+      "v"
+     ],
+     "out": "refused",
+     "presence": [
+      [
+       "k00",
+       "v"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ],
+      [
+       "k29",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k00",
+       "w"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k00",
+      "w"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k00",
+       "w"
+      ],
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ],
+      [
+       "k29",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k00",
+       ""
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k00",
+      ""
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ],
+      [
+       "k29",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "k99",
+       "v"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "k99",
+      "v"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "k01",
+       "v"
+      ],
+      [
+       "k02",
+       "v"
+      ],
+      [
+       "k03",
+       "v"
+      ],
+      [
+       "k04",
+       "v"
+      ],
+      [
+       "k05",
+       "v"
+      ],
+      [
+       "k06",
+       "v"
+      ],
+      [
+       "k07",
+       "v"
+      ],
+      [
+       "k08",
+       "v"
+      ],
+      [
+       "k09",
+       "v"
+      ],
+      [
+       "k10",
+       "v"
+      ],
+      [
+       "k11",
+       "v"
+      ],
+      [
+       "k12",
+       "v"
+      ],
+      [
+       "k13",
+       "v"
+      ],
+      [
+       "k14",
+       "v"
+      ],
+      [
+       "k15",
+       "v"
+      ],
+      [
+       "k16",
+       "v"
+      ],
+      [
+       "k17",
+       "v"
+      ],
+      [
+       "k18",
+       "v"
+      ],
+      [
+       "k19",
+       "v"
+      ],
+      [
+       "k20",
+       "v"
+      ],
+      [
+       "k21",
+       "v"
+      ],
+      [
+       "k22",
+       "v"
+      ],
+      [
+       "k23",
+       "v"
+      ],
+      [
+       "k24",
+       "v"
+      ],
+      [
+       "k25",
+       "v"
+      ],
+      [
+       "k26",
+       "v"
+      ],
+      [
+       "k27",
+       "v"
+      ],
+      [
+       "k28",
+       "v"
+      ],
+      [
+       "k29",
+       "v"
+      ],
+      [
+       "k99",
+       "v"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "api",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "cloud hooks in api mode",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "cloud_write",
+       "save_1.json"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "saved",
+      "save_1.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "saved",
+      "settings.json"
+     ],
+     "out": "local",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "saved",
+      "save_1.json.tmp"
+     ],
+     "out": "local",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "saved",
+      "save_1.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_1.json"
+       ],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "saved",
+      "save_2.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_1.json",
+        "save_2.json"
+       ],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "saved",
+      "save_1.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_1.json",
+        "save_2.json"
+       ],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "saved",
+      "logs/x.log"
+     ],
+     "out": "local",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_1.json",
+        "save_2.json"
+       ],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "cloud_write",
+       "save_1.json"
+      ],
+      [
+       "cloud_write",
+       "save_2.json"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "online",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "cloud_write",
+       "save_2.json"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "saved",
+      "save_2.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "cloud hooks in auto mode send nothing",
+   "online": true,
+   "steps": [
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "saved",
+      "save_1.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "saved",
+      "settings.json"
+     ],
+     "out": "local",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "saved",
+      "save_1.json"
+     ],
+     "out": "cloud",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "connect",
+      {}
+     ],
+     "out": "online",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "the overlay pauses gameplay only",
+   "online": true,
+   "steps": [
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "overlay",
+      true,
+      "play"
+     ],
+     "out": "pause",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "overlay",
+      false,
+      "pause"
+     ],
+     "out": "none",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "overlay",
+      true,
+      "menu"
+     ],
+     "out": "none",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "reset is for testing and never queued",
+   "online": true,
+   "steps": [
+    {
+     "calls": [
+      [
+       "set_stat",
+       "enemies_defeated",
+       3
+      ],
+      [
+       "set_achievement",
+       "defeat_1"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "add_stat",
+      "enemies_defeated",
+      3
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "defeat_1"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_achievement",
+       "first_win"
+      ],
+      [
+       "store_stats"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unlocked",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 3
+      },
+      "unlocked": [
+       "defeat_1",
+       "first_win"
+      ],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "reset_all_stats",
+       true
+      ]
+     ],
+     "online": true,
+     "op": [
+      "reset_all"
+     ],
+     "out": "reset",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "disconnect"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "set_stat",
+      "coins",
+      5
+     ],
+     "out": "ok",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 5,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": false,
+     "op": [
+      "reset_all"
+     ],
+     "out": "offline",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 5,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "cloud": "auto",
+   "defs": {
+    "achievements": [],
+    "stats": [],
+    "version": 1
+   },
+   "name": "no achievements file: every call is unknown",
+   "online": true,
+   "steps": [
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "unlock",
+      "first_win"
+     ],
+     "out": "unknown",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {},
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "set_stat",
+      "coins",
+      1
+     ],
+     "out": "unknown",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {},
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [],
+     "online": true,
+     "op": [
+      "flush"
+     ],
+     "out": "nothing",
+     "presence": [],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {},
+      "unlocked": [],
+      "version": 1
+     }
+    },
+    {
+     "calls": [
+      [
+       "set_presence",
+       "status",
+       "ok"
+      ]
+     ],
+     "online": true,
+     "op": [
+      "set_presence",
+      "status",
+      "ok"
+     ],
+     "out": "ok",
+     "presence": [
+      [
+       "status",
+       "ok"
+      ]
+     ],
+     "state": {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {},
+      "unlocked": [],
+      "version": 1
+     }
+    }
+   ],
+   "type": "platform_script"
+  },
+  {
+   "defs": {
+    "achievements": [
+     {
+      "description": "ach_first_win_desc",
+      "id": "first_win",
+      "name": "ach_first_win",
+      "progress_every": null,
+      "stat": null,
+      "threshold": null
+     },
+     {
+      "description": "",
+      "id": "defeat_1",
+      "name": "ach_defeat_1",
+      "progress_every": null,
+      "stat": "enemies_defeated",
+      "threshold": 1
+     },
+     {
+      "description": "",
+      "id": "defeat_100",
+      "name": "ach_defeat_100",
+      "progress_every": 25,
+      "stat": "enemies_defeated",
+      "threshold": 100
+     },
+     {
+      "description": "",
+      "id": "coins_500",
+      "name": "ach_coins_500",
+      "progress_every": null,
+      "stat": "coins",
+      "threshold": 500
+     }
+    ],
+    "stats": [
+     {
+      "id": "enemies_defeated",
+      "increment_only": true,
+      "max": 1000000,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "coins",
+      "increment_only": false,
+      "max": 999,
+      "min": 0,
+      "type": "int"
+     },
+     {
+      "id": "best_time_s",
+      "increment_only": false,
+      "max": 3600.0,
+      "min": 0.0,
+      "type": "float"
+     }
+    ],
+    "version": 1
+   },
+   "name": "platform_state.json as every port reads it",
+   "points": [
+    [
+     "no file",
+     null,
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "empty file",
+     "",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "not json",
+     "{",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "not an object",
+     "\"state\"",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "another format",
+     "{\"format\": \"save\", \"version\": 1}",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "a newer version",
+     "{\"format\": \"platform_state\", \"version\": 2, \"unlocked\": [\"first_win\"]}",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     1
+    ],
+    [
+     "what dump wrote",
+     "{\"format\": \"platform_state\", \"version\": 1, \"unlocked\": [\"first_win\", \"defeat_1\"], \"stats\": {\"enemies_defeated\": 7, \"coins\": 0, \"best_time_s\": 0.0}, \"pending\": {\"stats\": [\"enemies_defeated\"], \"unlocks\": [\"first_win\", \"defeat_1\"], \"cloud\": [\"save_2.json\"]}}",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_2.json"
+       ],
+       "stats": [
+        "enemies_defeated"
+       ],
+       "unlocks": [
+        "first_win",
+        "defeat_1"
+       ]
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 7
+      },
+      "unlocked": [
+       "first_win",
+       "defeat_1"
+      ],
+      "version": 1
+     },
+     0
+    ],
+    [
+     "entries that do not fit are dropped",
+     "{\"format\": \"platform_state\", \"version\": 1, \"unlocked\": [\"first_win\", \"first_win\", \"gone\", 3], \"stats\": {\"enemies_defeated\": 12, \"coins\": 2.5, \"best_time_s\": 5000, \"gone\": 1, \"best\": \"x\"}, \"pending\": {\"stats\": [\"coins\", \"coins\", \"gone\"], \"unlocks\": [\"first_win\", \"defeat_1\"], \"cloud\": [\"save_1.json\", \"settings.json\", 4, \"save_1.json\"]}}",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [
+        "save_1.json"
+       ],
+       "stats": [
+        "coins"
+       ],
+       "unlocks": [
+        "first_win"
+       ]
+      },
+      "stats": {
+       "best_time_s": 3600.0,
+       "coins": 0,
+       "enemies_defeated": 12
+      },
+      "unlocked": [
+       "first_win"
+      ],
+      "version": 1
+     },
+     12
+    ],
+    [
+     "wrong shapes",
+     "{\"format\": \"platform_state\", \"version\": 1, \"unlocked\": \"first_win\", \"stats\": [1], \"pending\": {\"stats\": {}, \"unlocks\": null}}",
+     {
+      "format": "platform_state",
+      "pending": {
+       "cloud": [],
+       "stats": [],
+       "unlocks": []
+      },
+      "stats": {
+       "best_time_s": 0.0,
+       "coins": 0,
+       "enemies_defeated": 0
+      },
+      "unlocked": [],
+      "version": 1
+     },
+     3
+    ]
+   ],
+   "type": "platform_state_load"
+  }
+ ],
+ "generator": "tools/golden_vectors.py",
+ "tolerance": 1e-09,
+ "version": 1
+}
