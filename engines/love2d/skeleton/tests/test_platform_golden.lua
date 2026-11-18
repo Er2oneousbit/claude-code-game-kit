@@ -14,6 +14,7 @@ local Json = require("src.core.json")
 local Platform = require("src.core.platform")
 local TextStore = require("src.core.text_store")
 local SaveStore = require("src.core.save_store")
+local PlatformSteam = require("src.core.platform_steam")
 
 local FILE = "platform.json"
 local SAMPLE = '{"stats": [{"id": "kills", "max": 100, "increment_only": true}], "achievements": [{"id": "first", '
@@ -150,6 +151,55 @@ function suite.test_the_overlay_pauses_only_over_play()
   A.eq(ps:overlay(true, "play"), "pause")
   A.eq(ps:overlay(true, "juice_demo"), "none")
   A.eq(ps:overlay(false, "pause"), "none")
+end
+
+-- ---- the luasteam adapter against a fake binding (no luasteam, no Steam) -------------------------------------
+
+local function fake_steam(init_ok)
+  local log = {}
+  local fake = { log = log, store_ok = true }
+  fake.Init = function() return init_ok end
+  fake.RunCallbacks = function() log[#log + 1] = "RunCallbacks" end
+  fake.UserStats = {
+    SetAchievement = function(id) log[#log + 1] = "SetAchievement " .. id end,
+    SetStatInt32 = function(id, v) log[#log + 1] = "SetStatInt32 " .. id .. " " .. v end,
+    SetStatFloat = function(id, v) log[#log + 1] = "SetStatFloat " .. id .. " " .. v end,
+    StoreStats = function() log[#log + 1] = "StoreStats" return fake.store_ok end,
+    GetAchievement = function(id) return true, id == "first" end,
+    GetStatInt32 = function() return true, 4 end,
+    GetStatFloat = function() return true, 0.5 end,
+  }
+  fake.Friends = { SetRichPresence = function(k, v) log[#log + 1] = "SetRichPresence " .. k .. " " .. v end }
+  return fake
+end
+
+function suite.test_the_steam_adapter_maps_calls_and_a_refused_store()
+  local defs = Platform.achievements_load(SAMPLE)
+  local fake = fake_steam(true)
+  local steam = PlatformSteam.make(defs, TextStore.memory(), fake)
+  A.truthy(steam, "a binding whose Init succeeds gives a backend")
+  local remote = steam:remote()
+  A.same(remote.unlocked, { "first" }, 0, "remote unlocks")
+  A.eq(remote.stats.kills, 4)
+  local rules = Platform.rules(defs, steam, true)
+  A.eq((rules:add_stat("kills", 12)), "ok")
+  A.same(fake.log, { "SetStatInt32 kills 12", "SetAchievement kills_10", "StoreStats" }, 0, "the unlock flushed")
+  for i = #fake.log, 1, -1 do fake.log[i] = nil end
+  fake.store_ok = false
+  A.eq((rules:unlock("first")), "unlocked")
+  A.falsy(rules.online, "a refused StoreStats takes the layer offline")
+  A.eq((rules:set_presence("status", "Menu")), "ok")
+  A.same(fake.log, { "SetAchievement first", "StoreStats" }, 0, "offline: presence waits")
+  fake.Friends.OnGameOverlayActivated({ m_bActive = 1 })
+  A.eq(steam:update(), true, "the overlay opening reaches update() once")
+  A.eq(steam:update(), nil)
+end
+
+function suite.test_the_steam_adapter_is_off_without_steam()
+  A.eq(PlatformSteam.make(Platform.achievements_load(SAMPLE), TextStore.memory(), fake_steam(false)), nil,
+       "Init false: the null backend")
+  local ok = pcall(require, "luasteam")
+  if not ok then A.eq(PlatformSteam.make(Platform.achievements_load(SAMPLE), TextStore.memory()), nil, "no luasteam") end
 end
 
 return suite

@@ -552,8 +552,8 @@ function Service:clear_presence() return after(self, (self.rules:clear_presence(
 function Service:saved(path) return after(self, (self.rules:saved(path))) end
 -- The store overlay opened or closed over `screen`: "pause" means open the pause menu.
 function Service:overlay(active, screen) return Platform.overlay_action(active, screen) end
--- Each frame: the backend's callbacks (the null backend does nothing).
-function Service:update() self.backend:update() end
+-- Each frame: the backend's callbacks; true / false when the store overlay opened / closed, else nil.
+function Service:update() return self.backend:update() end
 
 return Platform
 
