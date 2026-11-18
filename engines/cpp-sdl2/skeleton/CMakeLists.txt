@@ -22,6 +22,7 @@
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): the game_data target (data/ next to the exe)
 # Updated : 2026-11-11 with Claude (Opus 5.5, claude-opus-5-5): the Dotwork importer (#60); assets/ ships too
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): tests/test_capture_format.cpp (#314); tests/test_window_fit.cpp (#308)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): src/core/Platform.cpp and tests/test_golden_platform.cpp (#84)
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.21)
 project({{GAME_SLUG}} VERSION 0.1.0 LANGUAGES CXX)
@@ -58,6 +59,7 @@ set(CORE_SOURCES
   src/core/DotworkAssets.cpp
   src/core/I18n.cpp
   src/core/Menu.cpp
+  src/core/Platform.cpp
   src/core/Report.cpp
   src/core/SaveStore.cpp
   src/core/Settings.cpp
@@ -159,6 +161,7 @@ if(BUILD_TESTS)
     tests/test_frame_times.cpp
     tests/test_golden_vectors.cpp
     tests/test_golden_audio.cpp
+    tests/test_golden_platform.cpp
     tests/test_menu.cpp
     tests/test_motor_access.cpp
     tests/test_reports.cpp

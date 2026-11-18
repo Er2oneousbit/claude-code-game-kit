@@ -25,6 +25,8 @@
 //           back the window that was on screen (#308, seen on a real window)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
 //           tables, t() takes content.clean_language and the chain's words, blood_enabled() (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): start_platform(), save_slot(),
+//           on_overlay(); the pause screen and quit flush it, update() runs its backend
 // ---------------------------------------------------------------------------
 #include "shell/Shell.hpp"
 
@@ -263,6 +265,7 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
     core::report::set_crash_context(std::move(crash));
     game_dir_ = find_game_dir();
     load_tables();
+    start_platform();
     presets_ = load_json(game_dir_ / core::path_from_utf8(kPresetsFile), "presets");
     colours_ = load_json(game_dir_ / core::path_from_utf8(kColoursFile), "colours");
     load_dialogue();
@@ -283,6 +286,27 @@ bool Shell::init(SDL_Window* window, SDL_Renderer* renderer) {
     }
     push(ScreenId::Title);
     return true;
+}
+
+void Shell::start_platform() {
+    const fs::path ach = game_dir_ / core::path_from_utf8(core::kAchievementsFile);
+    std::error_code ec;
+    const std::optional<std::string> text = fs::exists(ach, ec) ? core::read_file(ach) : std::nullopt;
+    platform_ = std::make_unique<core::PlatformService>(data_dir_, text, core::make_platform_backend(opts_.automated));
+    platform_->backend().on_overlay = [this](bool active) { on_overlay(active); };
+    LOG_INFO("platform", "backend " << platform_->backend().name());
+}
+
+core::SaveStore Shell::save_slot(const std::string& file_name) {
+    core::SaveStore store(data_dir_ / core::path_from_utf8(file_name));
+    store.on_saved = [this](const std::string& name) { platform_->saved(name); };
+    return store;
+}
+
+void Shell::on_overlay(bool active) {
+    if (top() && platform_->overlay(active, screen_name(top()->id)) == "pause") {
+        push(ScreenId::Pause);
+    }
 }
 
 void Shell::apply_settings() {
@@ -614,6 +638,9 @@ void Shell::push(ScreenId id) {
     }
     stack_.push_back(make_screen(id));
     LOG_INFO("shell", "screen " << screen_name(id));
+    if (id == ScreenId::Pause && platform_) {
+        platform_->flush();   // a checkpoint (docs/PLATFORM.md)
+    }
 }
 
 void Shell::pop() {
@@ -673,6 +700,9 @@ void Shell::open_main_menu() {
 
 void Shell::quit() {
     LOG_INFO("shell", "quit");
+    if (platform_) {
+        platform_->flush();
+    }
     if (drive_) {
         finish("DRIVE_DONE " + drive_->name(), drive_->exit_code());
     } else {
@@ -1167,6 +1197,7 @@ bool Shell::screen_action(Screen& s, const std::string& action) {
 // ---- Frame ---------------------------------------------------------------------------------------------------
 void Shell::update(double dt) {
     time_ += dt;
+    platform_->update();   // the backend's callbacks (the null backend does nothing)
     // The display confirm's countdown runs on the wall clock (#308): not game time, not access.game_speed, and not
     // the fixed tick a smoke run feeds (one per frame, however fast the frames go)
     const auto now = std::chrono::steady_clock::now();
