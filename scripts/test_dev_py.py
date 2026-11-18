@@ -44,6 +44,7 @@
 #           BMP for .bmp, any other name refused before the build, BMP bytes in a .png fail, PNG frames (#314)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): UnrealStaleBuild, test and smoke build first when a
 #           C++ source is newer than its built module
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): MzDrive, RPG Maker MZ smoke --drive (#280)
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnityShaders compares the camera pictures and names
 #           the pipeline, and the HDRP helper is gated on the package (#260)
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnrealShaders compares the translucent and Post
@@ -1982,6 +1983,62 @@ class MzShaders(TempRoot):
 
     def test_unreadable_recipes_are_an_environment_problem(self):
         self.assertEqual(self.check(self.dev({"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
+
+
+# ---- #280: RPG Maker MZ smoke --drive ------------------------------------------------
+class MzDrive(TempRoot):
+    """smoke --drive hands the scenario to tools/smoke.mjs; a drive that fails on purpose (crash) always exits 1, and says
+    when the planted error is not what failed it."""
+
+    def dev(self, rc, out):
+        dev = load("rpgmaker-mz")
+        dev.ROOT = self.root
+        game = self.root / "game"
+        game.mkdir(parents=True, exist_ok=True)
+        dev.node_problem = lambda: None
+        dev.deps_stale = lambda: False
+        dev.need_project = lambda: game
+        self.calls = []
+
+        def fake_run(cmd, **kwargs):
+            self.calls.append([str(c) for c in cmd])
+            return rc, out
+        dev.run = fake_run
+        return dev
+
+    def smoke(self, dev, drive):
+        args = argparse.Namespace(frames=1, query="", until="", fail_on="", timeout=1, screenshot="", record="",
+                                  record_every=66, headed=False, shaders=False, drive=drive)
+        return quiet(dev.cmd_smoke, args)
+
+    def test_the_drive_reaches_smoke_mjs(self):
+        dev = self.dev(0, "[ OK ] boot marker seen, drive access done, no errors\n")
+        rc, text = self.smoke(dev, "access")
+        self.assertEqual(rc, 0, text)
+        cmd = self.calls[0]
+        self.assertEqual(cmd[cmd.index("--drive") + 1], "access")
+
+    def test_a_failing_drive_fails_smoke(self):
+        rc, text = self.smoke(self.dev(1, "[FAIL] errors during smoke:\n  [drive menus] DRIVE_FAIL Scene_Save did not open\n"), "menus")
+        self.assertEqual(rc, 1, text)
+
+    def test_crash_fails_on_purpose_and_names_the_proof(self):
+        rc, text = self.smoke(self.dev(1, "[FAIL] errors during smoke:\n  [pageerror] DRIVE_CRASH planted by smoke --drive crash\n"), "crash")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("fails on purpose", text)
+        self.assertNotIn("did not fail with its planted error", text)
+
+    def test_crash_that_fails_for_another_reason_says_so(self):
+        rc, text = self.smoke(self.dev(1, "[FAIL] errors during smoke:\n  [http 404] /img/x.png\n"), "crash")
+        self.assertEqual(rc, 1, text)
+        self.assertIn("did not fail with its planted error", text)
+
+    def test_the_help_names_the_drives_and_no_drive_is_the_default(self):
+        dev = load("rpgmaker-mz")
+        self.assertEqual(dev.build_parser().parse_args(["smoke"]).drive, "")
+        self.assertEqual(dev.build_parser().parse_args(["smoke", "--drive", "access"]).drive, "access")
+        with self.assertRaises(SystemExit):
+            quiet(dev.build_parser().parse_args, ["smoke", "--drive", "pseudo"])
 
 
 # ---- #249: LÖVE shader recipes -----------------------------------------------------

@@ -6,8 +6,9 @@
 //           Called by `python tools/dev.py smoke`; run it directly only for debugging.
 // Usage   : node tools/smoke.mjs [--root game] [--frames N] [--marker TEXT] [--query Q] [--until TEXT]
 //                                [--fail-on TEXT[,TEXT]] [--timeout-ms MS] [--viewport WxH]
-//                                [--screenshot FILE] [--record DIR] [--record-every MS] [--headed] [--gpu] [--verbose]
+//                                [--screenshot FILE] [--record DIR] [--record-every MS] [--drive NAME] [--headed] [--gpu] [--verbose]
 //           e.g. --query autoplay --until ESCAPED --fail-on CAUGHT --record build/frames
+//           --drive menus|access|crash runs a scripted walk of MZ's own screens (tools/mz_drives.js) after boot (#280)
 // Exit    : 0 ok, 1 errors / marker missing / a --fail-on marker seen, 2 environment
 //           problem (no MZ project in the root, Playwright browser not installed)
 // Notes   : Serves the root with tools/serve.mjs on a free port, loads index.html
@@ -24,6 +25,8 @@
 //   recording: screenshot every --record-every ms while it runs
 //   screenshot -> print errors (or everything with --verbose) -> close all -> exit code
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): --drive runs a scenario from tools/mz_drives.js in the
+//           page after boot and needs its DRIVE_DONE marker (#280)
 // Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): a recorded frame that fails to save is an error
 //           (it was swallowed), an old --screenshot is deleted first, and each capture is checked after the run
 // Updated : 2026-11-03 with Claude (Opus 5.5, claude-opus-5-5): --record clears the folder's old f*.png frames
@@ -33,6 +36,7 @@
 //           reports and checks against --frame-budget (#90)
 // ---------------------------------------------------------------------------
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 
 const args = process.argv.slice(2);
@@ -53,6 +57,7 @@ const SCREENSHOT = opt("--screenshot", "") && resolve(ROOT, opt("--screenshot", 
 const RECORD = opt("--record", "") && resolve(ROOT, opt("--record", ""));
 const RECORD_EVERY = Number(opt("--record-every", "66"));
 const FRAME_FILE = /^f\d+\.png$/; // the frames --record writes (f00000.png, ...), cleared before a run
+const DRIVE = opt("--drive", "");
 const VERBOSE = args.includes("--verbose");
 const HEADED = args.includes("--headed");
 const GPU_ARGS = args.includes("--gpu") ? ["--enable-unsafe-webgpu", "--enable-features=Vulkan", "--use-angle=vulkan"] : [];
@@ -63,6 +68,12 @@ if (!existsSync(resolve(GAME, "index.html")) || !existsSync(resolve(GAME, "js", 
 }
 if (!VW || !VH) {
   console.error("[error] --viewport must look like 816x624");
+  process.exit(2);
+}
+
+const { DRIVES } = createRequire(import.meta.url)("./mz_drives.js");
+if (DRIVE && !DRIVES[DRIVE]) {
+  console.error(`[error] no drive ${JSON.stringify(DRIVE)}: the drives are ${Object.keys(DRIVES).join(", ")}`);
   process.exit(2);
 }
 
@@ -112,6 +123,7 @@ try {
   const page = await browser.newPage({ viewport: { width: VW, height: VH } });
   const boot = waiter(MARKER);
   const until = UNTIL ? waiter(UNTIL) : null;
+  const driveDone = DRIVE ? waiter(`DRIVE_DONE ${DRIVE}`) : null;
   page.on("console", (msg) => {
     const text = `[console.${msg.type()}] ${msg.text()}`;
     lines.push(text);
@@ -119,6 +131,7 @@ try {
     for (const bad of FAIL_ON) if (msg.text().includes(bad)) errors.push(`[fail-on ${bad}] ${msg.text()}`);
     boot.check(msg.text());
     until?.check(msg.text());
+    driveDone?.check(msg.text());
   });
   page.on("pageerror", (err) => {
     const text = `[pageerror] ${err.message}`;
@@ -146,7 +159,12 @@ try {
           .finally(() => { recording = null; });
       }, RECORD_EVERY);
     }
-    if (until) {
+    if (DRIVE) {
+      // the drive's source goes into the page; an error it throws is a console error or page error: smoke fails on it
+      await page.evaluate(`(${DRIVES[DRIVE].toString()})()`).catch((err) => errors.push(`[drive ${DRIVE}] ${String(err.message).split("\n")[0]}`));
+      if (!(await Promise.race([driveDone.promise, timeout(1000)]))) errors.push(`[drive ${DRIVE}] DRIVE_DONE ${DRIVE} not printed: the drive did not get to its end`);
+      await timeout(300); // an error thrown in a scene's update arrives after the drive's own last frame
+    } else if (until) {
       if (!(await Promise.race([until.promise, timeout(TIMEOUT_MS)]))) {
         errors.push(`[smoke] marker ${JSON.stringify(UNTIL)} not seen within ${TIMEOUT_MS} ms`);
       } else {
@@ -195,7 +213,7 @@ if (errors.length) {
   for (const e of errors.slice(0, 20)) console.log(`  ${e}`);
   code = 1;
 } else {
-  const what = UNTIL ? `marker ${JSON.stringify(UNTIL)} reached` : `${FRAMES} frames`;
+  const what = DRIVE ? `drive ${DRIVE} done` : UNTIL ? `marker ${JSON.stringify(UNTIL)} reached` : `${FRAMES} frames`;
   console.log(`[ OK ] boot marker seen, ${what}, no errors`);
   const frames = frameKit?.frameLine(frameTimes, HEADED ? "render" : "software") ?? "";
   if (frames) console.log(frames); // dev.py smoke reports it and checks --frame-budget

@@ -139,20 +139,26 @@ part that protects players into MZ (verify each hook in a test play: the overlay
   `trPlural` / `pseudo`, and the save envelope (`saveLoad`, `saveMigrate`, `MIGRATIONS`, `saveText`).
 - **GameAccess.js** (MZ glue): the kit's settings live in MZ's `config.rpgsave` under `kit` (ConfigManager.makeData
   and applyData, repaired on load); MZ's Options screen gets Reduce Motion, Screen Shake (0 to 100 %), Gentle
-  Flashes and Text Size after its own rows (labels are plugin parameters, for translated games); MZ's Shake Screen
-  is scaled by `effectiveShake` (0 with reduce motion), every Flash Screen goes through the FlashLimiter (three per
-  real second, always) and is softer with Gentle Flashes on; Text Size scales `Game_System.mainFontSize`.
+  Flashes, Text Size and Line Spacing after its own rows (labels are plugin parameters, for translated games; the
+  `extraRows` parameter adds on/off rows for subtitles, speaker names, captions, hold to toggle, auto repeat,
+  narration and readable font, which your game reads from `GameAccess.settings().access`); MZ's Shake Screen
+  is scaled by `effectiveShake` (0 with reduce motion), every Flash Screen and every flash of a battle animation
+  (`Sprite_Animation.processFlashTimings`, and `Sprite_AnimationMV.startFlash` / `startScreenFlash` for MV-format
+  animations) goes through the FlashLimiter (three per real second in all, always) and is softer with Gentle Flashes
+  on; Text Size scales `Game_System.mainFontSize` and `Window_Base.lineHeight` grows with it and with Line Spacing;
+  `DataManager.makeSaveContents` carries the kit's save version (`kitSave`) and `extractSaveContents` migrates older
+  saves with `GameShell.saveMigrate` and refuses newer ones.
 
 | Kit rule | In MZ |
 |---|---|
 | Settings saved and restored (SOP-19 step 2) | **Wired:** GameAccess keeps the kit's settings in config.rpgsave next to MZ's options, repaired by `GameShell.settingsLoad`; unknown keys stay |
-| Shake and flash safety (SOP-18 step 3, F33, F34) | **Wired:** "Shake Screen" (and anything calling `$gameScreen.startShake`) follows Reduce Motion and Screen Shake; "Flash Screen" and damage flashes (`$gameScreen.startFlash`) go through the limiter. **Left to you:** battle animations' own flashes (Sprite_Animation) are not routed (verify what yours flash) |
-| Text size (SOP-20) | **Wired:** Text Size (75 to 150 %) scales the main font. **Left to you:** windows keep their line height, so check long messages and menus at 150 % (verify) |
-| The other accessibility settings (SOP-20) | **Left to you:** subtitles are MZ's message window already; colour-blind palettes, difficulty, game speed, hold to toggle, timing and the rest are in `GameAccess.settings()` with no Options row: add a row the way GameAccess does (a ConfigManager property, a `Window_Options` command, one more in `Scene_Options.maxCommands`) when your game uses one |
-| Versioned saves with migration (SOP-19 step 3) | **Left to you:** DataManager.makeSaveContents / extractSaveContents: put `GameShell.SAVE_VERSION` in the contents and run your `MIGRATIONS` in extractSaveContents; test them in Node with `GameShell.saveMigrate` |
+| Shake and flash safety (SOP-18 step 3, F33, F34) | **Wired:** "Shake Screen" (and anything calling `$gameScreen.startShake`) follows Reduce Motion and Screen Shake; "Flash Screen", damage flashes (`$gameScreen.startFlash`) and battle animations' own flashes go through the limiter (method names from MZ 1.x, **verify** in a test play; a plugin that flashes by another route is yours to route through `GameAccess.flashColor`) |
+| Text size (SOP-20) | **Wired:** Text Size (75 to 150 %) scales the main font, `Window_Base.lineHeight` grows with it (and with the Line Spacing row, 1 to 2), so windows built from it follow. **Left to you:** a window that sets its own height or a fixed pixel line (some plugins do) still needs a look at 150 % (verify) |
+| The other accessibility settings (SOP-20) | **Wired as rows on request:** the `extraRows` plugin parameter adds on/off rows for subtitles, speaker_names, subtitle_barks, subtitle_hold, captions_sfx, hold_to_toggle, auto_repeat, narration, readable_font; they set `GameAccess.settings().access.<name>` and your game acts on them. **Left to you:** colour-blind palettes, difficulty, game speed and timing have no row (they are choices or numbers that mean something only to your game): add one the way GameAccess does (a ConfigManager property, a `Window_Options` command, one more in `Scene_Options.maxCommands`) |
+| Versioned saves with migration (SOP-19 step 3) | **Wired:** MZ's save contents carry `kitSave` (the kit's version), older ones run `GameShell.MIGRATIONS` on load, newer ones refuse to load. Replace the kit's template `MIGRATIONS` with your own, and set the plugin parameter `unmarkedSaveVersion` to the version your saves had before the plugin (empty: unmarked saves count as current). **Left to you:** MZ's own save screens show no message for a refused save (it fails to load); test your migrations in Node with `GameShell.saveMigrate` |
 | Rebinding and prompts (SOP-19 step 4) | **Left to you:** Input.keyMapper and Input.gamepadMapper hold MZ's bindings; a rebinding screen is a plugin (community plugins exist, check their license); `GameShell.rebind` and `glyphName` give the swap rule and the prompt names. Prompts in messages use icons or text codes |
 | Localization (SOP-19 step 5) | **Left to you:** database text and messages live in data/*.json: keep the source language there and load per-locale JSON in a plugin with `GameShell.tr`; run `GameShell.pseudo` over the extracted strings in Node for the pseudo-locale check |
-| Scripted runs (`--drive`) | **Not here:** MZ's smoke has no `--drive` scenarios (menus, pseudo, access): they need MZ's own screens driven in a real MZ project (verify). Use `--query` with your own markers, and play the Options screen by hand |
+| Scripted runs (`--drive`) | **Built, not yet run on a real MZ project (verify):** `smoke --drive menus` opens each of MZ's screens (title, menu, item, skill, equip, status, options, save, load, game end), `--drive access` turns every kit row on the Options screen and checks it reached the saved config, `--drive crash` plants an error and must fail (tools/mz_drives.js; tested in Node against stand-ins). **Not here:** `pseudo` (MZ has no kit-owned text screens to expand: run `GameShell.pseudo` over your extracted strings in Node) |
 
 ## Packaging (release)
 - `python tools/dev.py build` makes `build/web/`, a plain copy for browsers (itch.io: zip the folder's contents).

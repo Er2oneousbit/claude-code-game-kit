@@ -24,8 +24,9 @@ game/js/plugins/GameJuice.js  the kit's juice rules (shake, hitstop, easing, fol
                           spring and squash, flash limiter, hold toggle, auto repeat), engine-free, golden-tested.
 game/js/plugins/GameShell.js  the kit's shell rules (settings with repair, effectiveShake, bindings and glyph names,
                           i18n with the pseudo-locale, versioned saves), engine-free, golden-tested.
-game/js/plugins/GameAccess.js MZ glue: the settings in MZ's config file, four options on MZ's Options screen, MZ's
-                          Shake Screen and Flash Screen through them (verify in MZ).
+game/js/plugins/GameAccess.js MZ glue: the settings in MZ's config file, five options on MZ's Options screen (more on
+                          request), MZ's Shake Screen, Flash Screen and battle animation flashes through them, window line
+                          height with Text Size, the save version in MZ's save contents (verify in MZ).
 game/js/plugins/GameMain.js   MZ glue: plugin commands, scene hooks, the BOOT_OK marker. Yours.
 game/js/plugins/KitShaders.js the kit's shader recipes as PIXI filters (generated: tools/shaders/; turn it on in
                           the Plugin Manager to use it)
@@ -40,7 +41,9 @@ build/web/                a web-browser copy of the game (git-ignored)
 Keeping the MZ project in `game/` means the editor's Deployment exports the game and none of the kit's docs or tools.
 MZ keeps its own title, options, save and load screens: the kit ships the juice and shell RULES as plugins and
 GameAccess puts the accessibility settings that fit onto MZ's Options screen; ENGINE_FLOW ("The shell, juice and
-accessibility in MZ") says what is wired and what is left to you. There are no `--drive` scenarios here.
+accessibility in MZ") says what is wired and what is left to you. `smoke --drive menus | access | crash`
+(tools/mz_drives.js) walks MZ's real screens, Options included; written against the fake MZ in the kit's tests and not yet
+run against a real MZ project **(verify)**.
 
 ## Conventions
 - **Rules in GameCore, MZ in GameMain.** GameCore must stay loadable by Node (tests); anything that touches RPG Maker
