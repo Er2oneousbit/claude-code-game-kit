@@ -31,6 +31,8 @@
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
 //           bloodEnabled() and cleanLanguage(); CLDR 46 plurals with the .other fallback per locale, @clean lookups,
 //           maskWords and matureWords (#171, #207); MZ's Options window shows neither switch yet
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compileWords and maskWordSet; tr and trPlural take a
+//           compiled set too, so a plugin folds its word list once (#207)
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -375,7 +377,8 @@
 
     function finish(text, args, clean, words) {
         const out = fill(text, args);
-        return clean && words.length > 0 ? maskWords(out, words) : out;
+        if (!clean) return out;
+        return words instanceof Set ? maskWordSet(out, words) : maskWords(out, words);
     }
 
     // A string through the fallback chain; a missing key returns the key itself, so it shows. clean: each locale
@@ -487,13 +490,21 @@
     const codePoints = (s) => Array.from(s, (c) => c.codePointAt(0));
     const foldKey = (cps) => cps.map(foldChar).join(",");
 
-    // text with every whole word that is in words (case folded) replaced by a same-length grawlix
-    function maskWords(text, words) {
+    // The folded set the mask matches against: build it once per word list, pass it to tr/trPlural as words
+    function compileWords(words) {
         const wanted = new Set();
         for (const w of words) {
             const cps = codePoints(w);
             if (cps.length > 0 && cps.every(isWordChar)) wanted.add(foldKey(cps));
         }
+        return wanted;
+    }
+
+    // text with every whole word that is in words (case folded) replaced by a same-length grawlix
+    const maskWords = (text, words) => maskWordSet(text, compileWords(words));
+
+    // maskWords with the list compiled already (compileWords)
+    function maskWordSet(text, wanted) {
         if (wanted.size === 0) return text;
         const cps = codePoints(text);
         let out = "";
@@ -684,7 +695,7 @@
         bloodEnabled, cleanLanguage,
         groupOf, rebind, glyphSet, glyphName, promptBinding, findConflicts, narrationLine,
         FALLBACK_LOCALE, PSEUDO_LOCALE, localeChain, fill, lookup, tr, plural, trPlural, pseudo,
-        CLEAN_SUFFIX, GRAWLIX, pluralFamily, lookupPlural, maskWords, matureWords,
+        CLEAN_SUFFIX, GRAWLIX, pluralFamily, lookupPlural, maskWords, matureWords, compileWords, maskWordSet,
         SAVE_VERSION, SAVE_FORMAT, MIGRATIONS, parseSave, saveMigrate, saveLoad, saveText,
         DISPLAY_APPLY_ORDER, DISPLAY_CONFIRM_FIELDS, DISPLAY_CONFIRM_S, DisplayStaging,
     };

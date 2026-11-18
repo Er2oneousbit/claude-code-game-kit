@@ -10,6 +10,7 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (#308)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
 //           mask_words and mature_words (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): tr with a compiled word set masks like the list
 // ---------------------------------------------------------------------------
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -108,6 +109,14 @@ const { golden, run } = runGolden(test, "shell.json", RUNNERS);
 
 test("shell.json: the save version the vectors were written for is this file's", () => {
     assert.equal(GameShell.SAVE_VERSION, golden.save_version);
+});
+
+test("tr with a compiled word set masks like the list, and a new list is a new set (#207)", () => {
+    const tables = { en: { bye: "Damn, bye {name}." } };
+    const set = GameShell.compileWords(["damn"]);
+    assert.equal(GameShell.tr(tables, "en", "bye", { name: "Bob" }, true, set), "#@$%, bye Bob.");
+    assert.equal(GameShell.tr(tables, "en", "bye", { name: "Bob" }, true, ["damn"]), "#@$%, bye Bob.");
+    assert.equal(GameShell.tr(tables, "en", "bye", { name: "Bob" }, true, GameShell.compileWords(["bob"])), "Damn, bye #@$.");
 });
 
 test("a case type with no runner fails instead of passing silently", () => {
