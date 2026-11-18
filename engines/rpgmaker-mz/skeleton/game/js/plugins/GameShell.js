@@ -30,7 +30,7 @@
 //           keep-or-revert confirm, held to shell.json (#308); MZ's Options window does not use it yet
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
 //           bloodEnabled() and cleanLanguage(); CLDR 46 plurals with the .other fallback per locale, @clean lookups,
-//           maskWords and matureWords (#171, #207); MZ's Options window shows neither switch yet
+//           maskWords and matureWords (#171, #207); GameAccess puts both switches on MZ's Options
 // Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compileWords and maskWordSet; tr and trPlural take a
 //           compiled set too, so a plugin folds its word list once (#207)
 // ---------------------------------------------------------------------------

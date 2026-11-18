@@ -11,6 +11,8 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): battle animation flashes, window line height, the Line
 //           Spacing row and extraRows, and the kit's version in MZ's save contents (#280)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean Language rows write content.*
+//           and their Show parameters hide them (#171, #207)
 // ---------------------------------------------------------------------------
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -164,20 +166,37 @@ test("the settings ride in MZ's config data and are repaired on load", () => {
     assert.deepEqual(c.GameAccess.settings(), GameShell.defaultSettings());
 });
 
-test("the Options screen gets the five rows after MZ's, and room for them", () => {
+test("the Options screen gets the seven rows after MZ's, and room for them", () => {
     const { c } = load({ shakeText: "Tremblement" });
     const w = new c.Window_Options();
     assert.deepEqual(w.list.map((x) => x.symbol), ["bgmVolume", "kitReduceMotion", "kitShakeScale", "kitFlashLimit",
-        "kitTextScale", "kitLineSpacing"]);
+        "kitTextScale", "kitLineSpacing", "kitBlood", "kitCleanLanguage"]);
     assert.equal(w.list[2].name, "Tremblement", "labels are plugin parameters");
-    assert.equal(new c.Scene_Options().maxCommands(), MZ_OPTIONS + 5);
+    assert.equal(new c.Scene_Options().maxCommands(), MZ_OPTIONS + 7);
+});
+
+test("Blood and Clean Language write content.*, and a game can hide either (#171, #207)", () => {
+    const { c } = load();
+    c.ConfigManager.applyData({});
+    const w = new c.Window_Options();
+    w.select("kitBlood");
+    assert.equal(w.statusText(w.index()), "ON");
+    w.processOk();
+    assert.equal(c.GameAccess.settings().content.blood, false);
+    assert.equal(GameShell.bloodEnabled(c.GameAccess.settings()), false);
+    w.select("kitCleanLanguage");
+    w.cursorRight();
+    assert.equal(GameShell.cleanLanguage(c.GameAccess.settings()), true);
+    assert.equal(c.ConfigManager.makeData().kit.content.clean_language, true, "saved with the rest");
+    const hidden = new (load({ showBlood: "false", showCleanLanguage: "false" }).c.Window_Options)();
+    assert.ok(!hidden.list.some((x) => x.symbol === "kitBlood" || x.symbol === "kitCleanLanguage"));
 });
 
 test("extraRows adds on/off rows a game asked for, reports unknown names", () => {
     const { c, logs } = load({ extraRows: '["subtitles", "hold_to_toggle", "nonsense"]' });
     const w = new c.Window_Options();
     assert.deepEqual(w.list.slice(-2).map((x) => [x.symbol, x.name]), [["kitSubtitles", "Subtitles"], ["kitHoldToToggle", "Hold To Toggle"]]);
-    assert.equal(new c.Scene_Options().maxCommands(), MZ_OPTIONS + 7);
+    assert.equal(new c.Scene_Options().maxCommands(), MZ_OPTIONS + 9);
     assert.ok(logs.some((l) => l.includes('"nonsense" is not one of')), logs.join("\n"));
     const was = c.GameAccess.settings().access.subtitles;
     w.select("kitSubtitles");
