@@ -64,7 +64,7 @@ shipped exe lives there. Scenarios:
 | `pseudo-plant` | the same with one planted label too small for its text: must fail naming `plant.too_small` | yes |
 | `bug` | presses F8 on the main menu (debug builds) and checks the `bug_<time>/` files: `DRIVE_BUG <path>` | yes |
 | `display` | the Display tab's Apply (#308): stages a window size, Back warns, Apply sets it (settings.json waits for Keep) and opens the confirm, which reverts by itself after 15 **real** seconds (the run waits on the wall clock), then two Backs discard a staged change; `DRIVE_DISPLAY` lines (staged, warned, applied, reverted, discarded). On a real window (2026-11-14, a 1920x1200 screen, the run in a window with the automated-run guard lifted, the window read back from the OS): 2560x1440 gave a 1902x1093 window inside the screen's work area (fitted with its frame and centred; before, it was only clamped to the monitor and ran past the bottom edge) and borderless a 1920x1200 window without a title bar, each put back after 15.0 s. On Windows "fullscreen" is borderless too: winit panicked when Windows refused the exclusive mode change, and now the same Apply gives a borderless window. The confirm's once-a-second "Entity despawned" warning (its overlay despawned twice) is gone | no |
-| `show:<screen>` | opens `title`, `main_menu`, `settings`, `pause`, `help`, `history`, `credits`, `subtitle`, `juice` (a hit landed: flash, ring, squash), `apply` (a Display change waiting, Apply focused) or `confirm` ("Keep these display settings?"), then ends; add `--screenshot build/x.png` | yes |
+| `show:<screen>` | opens `title`, `main_menu`, `settings`, `content` (the Blood and Clean language rows), `pause`, `help`, `history`, `credits`, `subtitle`, `juice` (a hit landed: flash, ring, squash), `apply` (a Display change waiting, Apply focused) or `confirm` ("Keep these display settings?"), then ends; add `--screenshot build/x.png` | yes |
 | `access[:res=WxH,scale=N,pad,read]` | the accessibility sweep's tour: every screen measured (`ACCESS_SCREEN`), the one-handed layout applied and reset, the subtitle hold, the prompts' device; `python tools/access/sweep.py` runs the four standard runs | yes |
 
 A drive that cannot finish (a menu that never opens, an item it cannot focus) logs an `ERROR` line naming the step
@@ -143,3 +143,11 @@ the binary to accept `--smoke N`, print `BOOT_OK` on its first frame and `SMOKE_
 
 ## Field notes (reported, unverified)
 None recorded yet. Add notes from videos, forums or your own runs here, with an `E##` id in `docs/EVIDENCE.md`.
+
+## Content switches
+- Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING` in `src/shell/screens.rs` hide them in a game
+  without blood or strong language. The game reads `Shell::blood_enabled()` (off: a neutral hit effect, SOP-18
+  step 4); with `settings::clean_language` on, `Shell::t_args()` and `tn()` pick `<key>@clean` lines and mask
+  the words of `data/i18n/mature/<locale>.json` (`set_mature()` replaces the lists). `smoke --drive show:content
+  --screenshot build/content.png` pictures both rows.

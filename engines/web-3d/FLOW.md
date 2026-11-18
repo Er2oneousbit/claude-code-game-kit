@@ -87,6 +87,11 @@ crash screens. Settings > Controls offers one-handed layouts (`data/input/preset
   overlay (or to it) carries across by copying the file.
 - **Narration:** `narrator.ts` puts a line for every focus change, value change and screen into an ARIA live region
   (always) and speaks it with `speechSynthesis` when `access.narration` is on.
+- **Content switches** (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING` in `src/shell/settingsScreen.ts` hide them in a
+  game without blood or strong language. The game reads `bloodEnabled(shell.settings)` (off: a neutral hit
+  effect, SOP-18 step 4); with `cleanLanguage(settings)` on, `i18n.t()` and `tn()` pick `<key>@clean` lines and
+  mask the words of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot` pictures both.
 - **Screens are HTML over the canvas**, built in code: real text layout, so text size, wrapping and the pseudo-locale
   check behave like any web page. A theme: a file named `theme_default.css` in the `public/assets/ui` folder (loaded
   after the built-in `src/shell/shell.css`). Prompt glyphs: `public/assets/ui/glyphs/<glyph_name>.png` (key_space,
