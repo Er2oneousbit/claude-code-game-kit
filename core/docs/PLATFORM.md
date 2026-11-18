@@ -11,8 +11,11 @@ The rules live in one reference, `tools/golden_vectors.py` (`achievements_load`,
 file in its unit tests and must reproduce every case exactly, as the juice and shell ports do (`SOP-18`, `SOP-19`).
 Change the reference first, run `python tools/golden_vectors.py --write`, then fix the ports.
 
-Status: phase 1 (#84) is this spec, the reference and its cases. The engine ports and the Steam adapters are phase 2,
-not written yet.
+Status (#84): the reference and its cases (phase 1); a port in every engine, each with the null backend, its golden
+tests, the pause and save hooks and the cached state file; and a Steam adapter per engine, off until you turn it on
+(section 6). No adapter has run against Steam yet: their mappings pass tests with fake bindings, and the C++ and Unreal
+ones compile against an SDK header (E163, K01). The shell flushes on the pause menu and on quit; call `flush()` at
+your own checkpoints (level end) too.
 
 ## 1. The pieces
 ```
@@ -119,7 +122,7 @@ not fit the definitions is dropped and counted (an unknown or repeated unlock, a
 pending id that is unknown, repeated or not unlocked, a pending cloud path that is local); a stat out of range is
 clamped, not counted.
 
-## 4. The backend interface (phase 2 writes these)
+## 4. The backend interface
 | Call | Null backend | Steam adapter |
 |---|---|---|
 | `available()` | true | the SDK initialised (Steam running, the app owned) |
@@ -136,10 +139,7 @@ and stat without a call. It keeps every call in order, so tests and a debug over
 sent"; with
 `--debug` a port may also write them, one JSON array per line, to `<user-data>/platform_calls.jsonl`.
 
-Candidate adapters, all **(verify)** for version and licence before use: GodotSteam (Godot), Steamworks.NET or
-Facepunch.Steamworks (Unity), the Online Subsystem Steam plugin (Unreal), the steamworks crate or bevy_steamworks
-(Bevy), luasteam (LÖVE), the Steamworks SDK directly (C++/SDL2), steamworks.js or Greenworks for NW.js and Electron
-builds (web, RPG Maker MZ). A plain browser build has no Steam and keeps the null backend.
+The adapters are in section 6. A plain browser build has no Steam and keeps the null backend.
 
 ## 5. Steam housekeeping
 - **Test with app 480** (Valve's Spacewar) before you have your own app id: put `480` in
@@ -153,3 +153,27 @@ builds (web, RPG Maker MZ). A plain browser build has no Steam and keeps the nul
   adapter finds it there; the game's docs say where.
 - Achievements and stats are defined on the App Admin page (E78); data/achievements.json mirrors them, it does not
   create them.
+
+## 6. The ports and the Steam adapters
+Every port runs every case of data/golden/platform.json, owns one service (the rules, the backend, the cached
+state file), flushes when the pause menu opens and on quit, gets `saved()` from its save store after the atomic
+write, and opens the pause menu when the store overlay opens over play. With no data/achievements.json nothing is
+written and every call answers `unknown`. `python tools/doctor.py` says, once the file exists, where your engine's
+adapter expects the SDK. Bindings and licences were read on 2026-11-18 (E163); recheck them before you ship
+**(verify)**.
+
+| Engine | Where the layer lives | Steam adapter | Binding (licence) | Turned on by |
+|---|---|---|---|---|
+| Godot | `scripts/core/platform_layer.gd`, `Shell.platform` | `scripts/core/platform_steam.gd` | GodotSteam (MIT) | installing GodotSteam: `Engine.has_singleton("Steam")` at run time |
+| Unity | `Core/Platform.cs`, `Shell.I.Platform` | `Core/PlatformSteam.cs` + `Scripts/Steam/` | Steamworks.NET (MIT) | the scripting define `GAMEKIT_STEAM` (Game.Steam.asmdef's define constraint) |
+| Unreal | `GameKitPlatform.h`, the shell model's `Platform()` | `GameKitPlatformSteam.h` + `GameKitPlatformBackends.cpp` | the Steamworks SDK Unreal bundles (its Steamworks module) | `WithSteam` in GameKitShellUI.Build.cs, or `GAMEKIT_STEAM=1` when building |
+| Bevy | `logic::platform`, `shell.platform` | `logic::platform_steam` | the steamworks crate (MIT / Apache-2.0); bevy_steamworks 0.17 targets Bevy 0.19 | `cargo build --features steam` |
+| C++/SDL2 | `core::Platform`, `shell.platform()` | `src/core/PlatformSteam.*` | the Steamworks SDK directly | `cmake -DGAMEKIT_STEAM=ON` with `STEAMWORKS_SDK` |
+| LÖVE | `src/core/platform.lua`, `app.platform` | `src/core/platform_steam.lua` | luasteam v6 (MIT) | the luasteam native module next to the executable |
+| RPG Maker MZ | `GamePlatform.js` (plugin), `GamePlatform.service` | `GreenworksBackend` in the same plugin | Greenworks (MIT), NW.js desktop builds | Greenworks next to `game/index.html` |
+| web, web-3d | `src/core/platform.ts`, `shell.platform` | none: a browser has no Steam | | |
+
+What each adapter does not see **(verify)**: a store that fails after `StoreStats` returned true (the
+UserStatsStored callback); stats are read at start without RequestCurrentStats (Steamworks 1.61 and later load them
+at init). Greenworks stores asynchronously (a late failure takes the layer offline at the next frame), has no rich
+presence call and does not read unlocks back. Automated runs (`dev.py smoke`, tests) never start Steam.

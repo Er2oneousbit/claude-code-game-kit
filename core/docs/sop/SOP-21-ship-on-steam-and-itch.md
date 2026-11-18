@@ -87,8 +87,9 @@ are from Valve's own documentation read on 2026-11-01 (F39), itch.io facts from 
 - **The kit's platform layer** (`docs/PLATFORM.md`, #84): achievements, stats, rich presence, the overlay's pause hook
   and the cloud-save hooks go through one engine-neutral layer with a null backend that records every call, so tests
   and smoke never need Steam. Its rules (unlock once, stat limits, the offline queue and its replay, which files go to
-  the cloud) are golden-tested (`data/golden/platform.json`). Phase 1 is the spec and the reference; the engine ports
-  and the Steam adapters come next, so until then a game calls its engine's Steamworks wrapper behind those rules.
+  the cloud) are golden-tested (`data/golden/platform.json`) in every engine. Each engine has a Steam adapter, off
+  until you turn it on (`docs/PLATFORM.md` section 6 names the binding and the switch); none has run against Steam yet,
+  so test the wiring with app 480 first **(verify)**.
 - **Achievements** (E78): defined on the App Admin page; unlock with `SetAchievement` then `StoreStats`; reset for
   testing with `ResetAllStats(true)` or the Steam console. Up to 100 at first. All-ages names and icons. Before release
   they do not show in the Community, so the game should show what was earned. Tip: design them as goals that point at
