@@ -36,6 +36,7 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the feel recipe helpers SOP-18's table builds on
 #           (#170, #164): impact (hit confirm scaled by damage), float_text (a damage number's ease), trail_push,
 #           trail_shrink and trail_length (a tracer's point history by distance), and their juice.json cases
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): impact's docstring says how a game honours content.blood (#171)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -295,7 +296,9 @@ def impact(damage, full, hitstop_min=0.03, hitstop_max=0.1, trauma_min=0.15, tra
     """Hit confirm scaled by damage: f = damage / full clamped to 0..1 (full <= 0 counts every hit as full), then
     hitstop and trauma linear from their min at the smallest hit to their max at a full one, and flash when
     f >= flash_at. No damage (<= 0) is no confirm at all. The flash is a request: it still goes through the flash
-    limiter and the player's flash_limit, and the trauma through the shake's intensity (effective_shake)."""
+    limiter and the player's flash_limit, and the trauma through the shake's intensity (effective_shake). Blood is
+    not part of the confirm: what the hit leaves (blood, or with blood_enabled(settings) off a neutral spark or dust,
+    #171) is the game's own, at the same moment and size (SOP-18 step 4, "Blood on a hit")."""
     if damage <= 0.0:
         return {"hitstop": 0.0, "trauma": 0.0, "flash": False}
     f = 1.0 if full <= 0.0 else min(max(damage / full, 0.0), 1.0)

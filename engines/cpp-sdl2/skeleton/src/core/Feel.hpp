@@ -19,6 +19,8 @@
 //   trail_push: < 2 points: append; head spacing past the point before it: append; else move the head; cut to length
 //   trail_shrink: cut the trail to (length - amount) from the tail
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): impact is the same with blood on or off; what a
+//           hit leaves is the game's: blood, or (blood_enabled off) a neutral spark or dust (SOP-18 step 4, #171)
 // ---------------------------------------------------------------------------
 #pragma once
 
