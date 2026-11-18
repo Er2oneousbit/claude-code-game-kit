@@ -26,6 +26,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning goes with the next Display change
 //           (it stayed up after the player stepped back to the applied value, with nothing left to apply); the
 //           confirm closing cancels a rebind still waiting for its key
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows (content.*,
+//           #171, #207), each hidden by its SHOW_ constant for a game without blood or strong language
 // ---------------------------------------------------------------------------
 import presetData from "../../data/input/presets.json";
 import { DEFAULT_BINDINGS, GLYPH_SETS, findConflicts, glyphName, glyphSet, rebind } from "../core/bindings";
@@ -39,6 +41,8 @@ import { Menu, buttonItem, el, glyph, tl, valueRow, type Item } from "./ui";
 // ---- Tunables ----------------------------------------------------------------
 export const TABS = ["display", "audio", "controls", "access", "language"] as const;
 const REBINDABLE = Object.keys(DEFAULT_BINDINGS).filter((a) => !a.startsWith("ui_")); // ui_* stay fixed
+export const SHOW_BLOOD_SETTING = true; // false: a game with no blood hides the Blood row (SOP-18)
+export const SHOW_LANGUAGE_SETTING = true; // false: a game with no strong language hides Clean language (SOP-19)
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
@@ -78,8 +82,8 @@ function choiceRow<T extends string | number>(c: Ctx, key: string, values: reado
   c.list.append(c.menu.add(row.item).el);
 }
 
-function boolRow(c: Ctx, key: string, get: (s: Settings) => boolean, set: (s: Settings, v: boolean) => void): void {
-  choiceRow(c, key, [false, true].map(String), (s) => String(get(s)), (s, v) => set(s, v === "true"), (v) => (v === "true" ? "opt.on" : "opt.off"), undefined, "toggle");
+function boolRow(c: Ctx, key: string, get: (s: Settings) => boolean, set: (s: Settings, v: boolean) => void, after?: () => void): void {
+  choiceRow(c, key, [false, true].map(String), (s) => String(get(s)), (s, v) => set(s, v === "true"), (v) => (v === "true" ? "opt.on" : "opt.off"), after, "toggle");
 }
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
@@ -206,6 +210,11 @@ function section(c: Ctx, tab: (typeof TABS)[number]): void {
       numRow(c, "access.timing_scale", (s) => a(s).timing_scale, (s, v) => (a(s).timing_scale = v), 1, 3, 0.5, times);
       boolRow(c, "access.auto_repeat", (s) => a(s).auto_repeat, (s, v) => (a(s).auto_repeat = v));
       boolRow(c, "access.narration", (s) => a(s).narration, (s, v) => (a(s).narration = v)); // #165
+      // #171 and #207: what the game shows (content.*); clean language changes text, so the screen redraws
+      if (SHOW_BLOOD_SETTING) boolRow(c, "content.blood", (s) => s.content.blood, (s, v) => (s.content.blood = v));
+      if (SHOW_LANGUAGE_SETTING) {
+        boolRow(c, "content.clean_language", (s) => s.content.clean_language, (s, v) => (s.content.clean_language = v), () => shell.rerender());
+      }
       break;
     }
     case "language": {
