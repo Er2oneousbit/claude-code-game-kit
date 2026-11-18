@@ -27,7 +27,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : UE_ROOT  engine install folder (contains Engine/)
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Run against UE 5.8 on Windows (2026-10-20) with VS 2022 Build Tools:
@@ -71,6 +72,8 @@
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes
 #           (Content/Python/kit_shaders): `check` compiles them as materials, `smoke --shaders` draws and compares
 #           them, both in the full editor off-screen (the pythonscript commandlet has only the Null RHI)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --shaders also draws the translucent materials
+#           and the Post Process variants of the recipes and compares each with its golden image (#260)
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): check builds an enabled GameKitShell in a
 #           Blueprint-only project (the UnrealEditor target with -Project puts it in the plugin's Binaries/)
 #           instead of refusing it; test/smoke/exec exit 2 with "run check first" while its module is missing
@@ -106,6 +109,9 @@
 #           the help (the Display tab's Apply, #308)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): test and smoke build first when a C++ source is newer
 #           than its built module (they ran the old binaries and passed on code that was never compiled)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -175,6 +181,7 @@ SHADER_PY = "kit_shaders/shader_check.py"    # the same file as `py` finds it on
 SHADER_LOG = ROOT / "Saved" / "Logs" / "dev_shaders.log"
 SHADER_OUT = "Saved/ShaderCheck"          # smoke --shaders pictures, compared by tools/shaders/shader_ref.py
 SHADER_TIMEOUT_S = 1800                   # editor start, material compiles (a fresh shader cache is slow), draws
+SHADER_VARIANTS = (("translucent", ("sprite", "lighting")), ("post", ("post",)))   # #260: folder under SHADER_OUT, groups
 SHADER_LINE = re.compile(r"LogPython: (SHADER_(?:OK|FAIL|CHECK_DONE)\b.*)$")
 SHIP_SITE = None   # the web build `ship --kind static` publishes unless --site is given (None: none)
 DEBUG = False
@@ -736,10 +743,29 @@ def shader_pass(args):
         return rc
     rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir])
     print(out.rstrip())
-    if rc:
-        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+    worst = rc
+    for folder, groups in SHADER_VARIANTS:         # #260: the materials a game really uses, same golden images
+        names = shader_variant_names(groups)
+        if not names:
+            continue
+        print(f"[info] {folder} variants:")
+        rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare",
+                            out_dir / folder, "--only"] + names)
+        print(out.rstrip())
+        worst = max(worst, rc)
+    if worst:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if worst == 1 else
               "[error] shader_ref.py compare could not run")
-    return rc
+    return worst
+
+
+def shader_variant_names(groups):
+    """The recipes of these groups, from tools/shaders/recipes.json ([] when it cannot be read)."""
+    try:
+        data = json.loads((ROOT / "tools" / "shaders" / "recipes.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [n for n, r in data.get("recipes", {}).items() if r.get("group") in groups]
 
 
 def run_tool(cmd):
@@ -1432,7 +1458,7 @@ def build_parser():
                         "display (the Display tab's Apply: stage, warn, apply, the 15 s confirm reverts in real time, "
                         "discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, main_menu, settings, pause, help, history, credits, loading, subtitle, "
+                        "show:<screen> (title, main_menu, settings, content, pause, help, history, credits, loading, subtitle, "
                         "juice, apply, confirm; add --screenshot)")
     p.add_argument("--screenshot", default="", help="with --drive show:<screen>: save the screen as this PNG (relative to the "
                                                    "project; the editor draws it off-screen, a GPU)")
@@ -1453,8 +1479,8 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     p.add_argument("--deep", action="store_true", help="also remove DerivedDataCache/ (slow to rebuild)")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

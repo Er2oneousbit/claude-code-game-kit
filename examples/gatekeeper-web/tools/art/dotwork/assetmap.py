@@ -18,6 +18,8 @@
 #                particles, transitions, normal maps, Pixelorama tilemaps; any PNG left -> image
 #             assets sorted by kind and name; written only when the text changed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the left pivot (a muzzle flash's barrel tip) and an
+#           animated_sprite's light and tracer from its frames' rows (spec 1.2.0, #164)
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -64,6 +66,8 @@ def pivot_of(anchor, w, h):
         return [_num(w / 2), h]
     if a == "right":                      # projectile trails: the head of the trail
         return [w, _num(h / 2)]
+    if a == "left":                       # a muzzle flash: the barrel tip, pointing right (#164)
+        return [0, _num(h / 2)]
     if a == "top_left":
         return [0, 0]
     return [_num(w / 2), _num(h / 2)]
@@ -136,6 +140,7 @@ class Writer:
         stem = posixpath.basename(key)[:-len(".tres")] if key.endswith(".tres") else posixpath.basename(key)
         stem = re.sub(r"_frames$", "", stem)
         clips, blend, used = [], "normal", []
+        fx = {}                                   # light / tracer the lane put on the frames' rows (spec 1.2.0)
         for anim, (files, fps, loop, holds) in anims.items():
             paths = [posixpath.join(frames_dir, f) for f in files]
             if not paths or not all(self.exists(p) and self.arel(p) for p in paths):
@@ -149,6 +154,11 @@ class Writer:
             anchor = next((self.by_file[p]["anchor"] for p in paths if self.by_file.get(p, {}).get("anchor")), None)
             if any(self.by_file.get(p, {}).get("blend") == "add" for p in paths):
                 blend = "add"
+            for field in ("light", "tracer"):
+                got = next((self.by_file[p][field] for p in paths
+                            if isinstance(self.by_file.get(p, {}).get(field), dict)), None)
+                if got and field not in fx:
+                    fx[field] = dict(got)
             sheet = self.find_sheet(anim, frames_dir, stem, fw, fh, len(paths), used)
             frames = []
             for i, p in enumerate(paths):
@@ -163,6 +173,15 @@ class Writer:
             used += paths + ([sheet, sheet[:-4] + ".json"] if sheet else [])
         if not clips:
             return
+        light = fx.get("light")
+        if light:
+            tex = posixpath.join(frames_dir, light.get("texture", ""))
+            if self.exists(tex) and self.arel(tex) and light.get("clip") in {c["name"] for c in clips}:
+                light["texture"] = self.arel(tex)
+                used.append(tex)
+            else:
+                self.warnings.append(f"{key}: light names a texture or clip that is not there; left out")
+                fx.pop("light")
         dirs = {}
         for c in clips:
             m = DIR_CLIP.match(c["name"])
@@ -170,7 +189,8 @@ class Writer:
                 dirs.setdefault(m.group(1), {})[m.group(2)] = c["name"]
         self.use(*used)
         self.add({"kind": "animated_sprite", "name": stem, "role": self.role(frames_dir + "/x"),
-                  "blend": blend, "clips": clips, "directions": dirs or None, "godot": self.godot_ref(key)})
+                  "blend": blend, "clips": clips, "directions": dirs or None, "light": fx.get("light"),
+                  "tracer": fx.get("tracer"), "godot": self.godot_ref(key)})
 
     def find_sheet(self, anim, frames_dir, stem, fw, fh, n, claimed):
         """The horizontal strip Dotwork ships beside the frames for other engines: the sheet row naming this

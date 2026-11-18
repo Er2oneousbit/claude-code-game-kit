@@ -16,16 +16,24 @@
 //   -> run the case's steps or points through src/core -> compare every result with the expected value
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words; plural cases read their key from the case (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): WordCache folds once and follows new lists, and its
+//           cost against folding per call (#207)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's
 //           Apply and its keep-or-revert confirm (core::DisplayStaging, #308)
+//           2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (core::impact,
+//           core::float_text, the trail point history; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <exception>
 #include <map>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -36,6 +44,7 @@
 #include "core/CoyoteTimer.hpp"
 #include "core/DisplayStaging.hpp"
 #include "core/Ease.hpp"
+#include "core/Feel.hpp"
 #include "core/FlashLimiter.hpp"
 #include "core/FollowCamera.hpp"
 #include "core/Hitstop.hpp"
@@ -265,6 +274,39 @@ void check_flash_limiter(const json& c) {
     }
 }
 
+void check_impact(const json& c) {
+    const json& k = c.at("params");
+    for (const json& p : c.at("points")) {
+        const core::Impact r = core::impact(p[0], p[1], k.at("hitstop_min"), k.at("hitstop_max"), k.at("trauma_min"),
+                                            k.at("trauma_max"), k.at("flash_at"));
+        expect_same(json::array({p[0], p[1], r.hitstop, r.trauma, r.flash}), p, "impact" + p.dump());
+    }
+}
+
+void check_float_text(const json& c) {
+    const json& k = c.at("params");
+    for (const json& p : c.at("points")) {
+        const core::FloatText r = core::float_text(p[0], k.at("life"), k.at("rise"), k.at("pop_s"));
+        expect_same(json::array({p[0], r.dy, r.scale, r.alpha, r.done}), p, "float_text" + p.dump());
+    }
+}
+
+void check_trail(const json& c) {
+    const json& k = c.at("params");
+    core::Trail pts;
+    for (const json& step : c.at("steps")) {
+        if (step.at("call") == "push") {
+            pts = core::trail_push(pts, step.at("x"), step.at("y"), k.at("spacing"), k.at("max_len"));
+        } else if (step.at("call") == "shrink") {
+            pts = core::trail_shrink(pts, step.at("amount"));
+        } else {
+            unknown_call(step);
+            continue;
+        }
+        expect_same({{"points", pts}, {"length", core::trail_length(pts)}}, step.at("expect"), "trail" + step.dump());
+    }
+}
+
 // ---- shell.json -------------------------------------------------------------------------
 
 void check_defaults(const json& c) {
@@ -281,6 +323,8 @@ void check_settings_load(const json& c) {
     CHECK_MESSAGE(r.problems.size() == c.at("problems").get<std::size_t>(), "problems:" << listed);
     expect_same(core::effective_shake(r.settings), c.at("effective_shake"), "effective_shake");
     expect_same(core::telemetry_allowed(r.settings), c.at("telemetry_allowed"), "telemetry_allowed");
+    expect_same(core::blood_enabled(r.settings), c.at("blood_enabled"), "blood_enabled");
+    expect_same(core::clean_language(r.settings), c.at("clean_language"), "clean_language");
 }
 
 void check_rebind(const json& c) {
@@ -341,7 +385,59 @@ void check_plural(const json& c) {
     for (const json& p : c.at("points")) {
         const auto n = p[1].get<long long>();
         expect_same(core::plural(text(p[0]), n), p[2], "plural" + p.dump());
-        expect_same(core::tr_plural(tables, text(p[0]), kPluralKey, n), p[3], "tr_plural" + p.dump());
+        expect_same(core::tr_plural(tables, text(p[0]), c.value("key", kPluralKey), n), p[3], "tr_plural" + p.dump());
+    }
+}
+
+void check_plural_rules(const json& c) {
+    for (const json& s : c.at("sweep")) {
+        std::istringstream cats(text(s[2]));
+        long long n = s[1].get<long long>();
+        std::string cat;
+        while (cats >> cat) {
+            expect_same(core::plural(text(s[0]), n), cat, "plural_rules " + text(s[0]) + " n=" + std::to_string(n));
+            ++n;
+        }
+    }
+    for (const json& p : c.at("points")) {
+        expect_same(core::plural(text(p[0]), p[1].get<long long>()), p[2], "plural_rules" + p.dump());
+    }
+}
+
+core::WordList words_from(const json& j) {
+    core::WordList out;
+    for (const json& w : j) {
+        out.push_back(w.get<std::string>());
+    }
+    return out;
+}
+
+void check_tr_clean(const json& c) {
+    const core::StringTables tables = core::string_tables_from_json(c.at("tables"));
+    for (const json& p : c.at("points")) {
+        const bool clean = p[4].get<bool>();
+        const core::WordList words = words_from(p[5]);
+        const std::string got = p[2].is_null()
+            ? core::tr(tables, text(p[0]), text(p[1]), args_from(p[3]), clean, words)
+            : core::tr_plural(tables, text(p[0]), text(p[1]), p[2].get<long long>(), args_from(p[3]), clean, words);
+        expect_same(got, p[6], "tr_clean" + p.dump());
+    }
+}
+
+void check_mask_words(const json& c) {
+    CHECK(std::string(core::kGrawlix) == text(c.at("grawlix")));
+    for (const json& p : c.at("points")) {
+        expect_same(core::mask_words(text(p[0]), words_from(p[1])), p[2], "mask_words" + p.dump());
+    }
+}
+
+void check_mature_words(const json& c) {
+    for (const json& p : c.at("points")) {
+        json parsed;
+        if (p[0].is_string()) {
+            parsed = json::parse(text(p[0]), nullptr, false);   // a file that is not JSON: discarded, no words
+        }
+        expect_same(json(core::mature_words(parsed)), p[1], "mature_words" + p.dump());
     }
 }
 
@@ -460,6 +556,7 @@ TEST_CASE("golden vectors: juice.json") {
         {"noise", check_noise}, {"shake", check_shake}, {"hitstop", check_hitstop}, {"ease", check_ease},
         {"follow", check_follow}, {"input_buffer", check_input_buffer}, {"coyote", check_coyote},
         {"spring", check_spring}, {"squash", check_squash}, {"flash_limiter", check_flash_limiter},
+        {"impact", check_impact}, {"float_text", check_float_text}, {"trail", check_trail},
     });
 }
 
@@ -471,6 +568,8 @@ TEST_CASE("golden vectors: shell.json") {
         {"glyph_set", check_glyph_set}, {"glyph_name", check_glyph_name}, {"prompt_binding", check_prompt_binding},
         {"save_load", check_save_load}, {"tr", check_tr}, {"plural", check_plural}, {"pseudo", check_pseudo},
         {"narration", check_narration}, {"display_staging", check_display_staging},
+        {"plural_rules", check_plural_rules}, {"tr_clean", check_tr_clean}, {"mask_words", check_mask_words},
+        {"mature_words", check_mature_words},
     });
     int staging = 0;   // the five Apply scripts (#308): a filter typo must not pass with none run
     for (const json& c : vectors.at("cases")) {
@@ -484,6 +583,51 @@ TEST_CASE("golden vectors: credits.json") {
 }
 
 // ---- What the vectors cannot express: the error paths ----
+
+TEST_CASE("the pseudo locale picks @clean lines too, and the shipped word list is empty (#207)") {
+    const core::StringTables tables = {{"en", {{"bye", "Damn, bye."}, {"bye@clean", "Bye."}}}};
+    CHECK(core::tr_pseudo(tables, "bye", {}, false) == "[Damn, bye.~~~~]");
+    CHECK(core::tr_pseudo(tables, "bye", {}, true) == "[Bye.~~]");
+    const auto list = core::path_from_utf8(GOLDEN_DIR) / ".." / "i18n" / "mature" / "en.json";
+    const json shipped = json::parse(core::read_file(list).value_or(""), nullptr, false);
+    CHECK(shipped.is_object());
+    CHECK(core::mature_words(shipped).empty());
+}
+
+TEST_CASE("the word cache folds once per locale and list, and follows new lists (#207)") {
+    core::WordCache cache;
+    cache.set_lists({{"en", {"damn"}}});
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "#@$%, bob");
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "#@$%, bob");
+    CHECK(cache.folds() == 1);                                  // the second get() reused the fold
+    cache.set_lists({{"en", {"bob"}}, {"fr", {"merde"}}});      // a new list: the old fold must go
+    CHECK(core::mask_word_set("Damn, bob", cache.get("en")) == "Damn, #@$");
+    CHECK(core::mask_word_set("Merde, bob", cache.get("fr")) == "#@$%#, #@$");   // a new chain: fr's words join
+    CHECK(cache.folds() == 3);
+}
+
+TEST_CASE("t() with clean language and 3000 words costs a tenth of folding per call or less (#207)") {
+    core::WordList words;
+    for (int k = 0; k < 3000; ++k) {
+        words.push_back("word" + std::to_string(k));
+    }
+    const core::StringTables tables = {{"en", {{"label", "A settings label with {name} in it"}}}};
+    core::WordCache cache;
+    cache.set_lists({{"en", words}});
+    const auto now = [] { return std::chrono::steady_clock::now(); };
+    auto t0 = now();
+    for (int k = 0; k < 100; ++k) {
+        (void)core::tr(tables, "en", "label", {{"name", "x"}}, true, words);
+    }
+    const double uncached = std::chrono::duration<double, std::milli>(now() - t0).count();
+    t0 = now();
+    for (int k = 0; k < 100; ++k) {
+        (void)core::tr(tables, "en", "label", {{"name", "x"}}, true, cache.get("en"));
+    }
+    const double cached = std::chrono::duration<double, std::milli>(now() - t0).count();
+    MESSAGE("T_COST 100 labels, 3000 words: uncached " << uncached << " ms, cached " << cached << " ms");
+    CHECK(cached < uncached / 10);
+}
 
 TEST_CASE("an unknown easing name is an error, not a silent linear") {
     CHECK_FALSE(core::ease_from_name("out_wobble").has_value());

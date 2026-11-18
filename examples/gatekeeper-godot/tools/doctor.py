@@ -23,6 +23,8 @@
 #           present but src/main.ts never reaches it through its imports (the shell sits there unused)
 # Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the kit's own resources under the media folder (a
 #           GameKit folder: the Unity shell's font) are not the game's media (#168)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): a game with data/achievements.json gets an [info] line
+#           saying where its engine's Steam adapter expects the Steamworks SDK or binding (docs/PLATFORM.md, #84)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -249,6 +251,39 @@ def check_shell_wired(warnings, debug):
                     "or delete src/shell/ if the game wants no shell")
 
 
+# The platform layer's Steam adapter per engine (docs/PLATFORM.md): where the SDK or the binding is expected
+ACHIEVEMENTS_FILES = ("data/achievements.json", "game/data/achievements.json")   # RPG Maker MZ: under game/
+STEAM_SDK_ENV = "STEAMWORKS_SDK"
+STEAM_EXPECTED = {
+    "godot": "GodotSteam (the GDExtension in addons/godotsteam, or the GodotSteam editor); it carries the SDK's library",
+    "unity": "Steamworks.NET (its package) plus the scripting define GAMEKIT_STEAM",
+    "unreal": "the engine's own Steamworks module (UE_ROOT/Engine/Source/ThirdParty/Steamworks); turn WithSteam on in "
+              "GameKitShellUI.Build.cs (or GAMEKIT_STEAM=1 when building)",
+    "bevy": "cargo build --features steam (the steamworks crate brings the SDK's redistributables)",
+    "cpp-sdl2": STEAM_SDK_ENV + "=<the Steamworks SDK's sdk/ folder> and cmake -DGAMEKIT_STEAM=ON",
+    "love2d": "the luasteam native module (luasteam.dll / .so) next to the game's executable",
+    "rpgmaker-mz": "Greenworks (greenworks.js and its lib/ folder) next to game/index.html, in an NW.js build",
+    "web": "none: a browser build has no Steam (the null backend)",
+    "web-3d": "none: a browser build has no Steam (the null backend)",
+}
+
+
+def check_steam_sdk(infos):
+    """With data/achievements.json: say where the engine's Steam adapter expects the SDK (never committed)."""
+    if not any((ROOT / f).is_file() for f in ACHIEVEMENTS_FILES):
+        return
+    engine = ""
+    try:
+        engine = json.loads((ROOT / ".game-kit.json").read_text(encoding="utf-8")).get("engine", "")
+    except (OSError, ValueError, AttributeError):
+        pass
+    where = STEAM_EXPECTED.get(engine, "see docs/PLATFORM.md for your engine's adapter")
+    sdk = os.environ.get(STEAM_SDK_ENV, "")
+    infos.append(f"platform: data/achievements.json found; the null backend runs until the Steam adapter is turned on. "
+                 f"Steam needs: {where}. {STEAM_SDK_ENV} is {'set to ' + sdk if sdk else 'not set'}. The Steamworks "
+                 f"SDK is never committed (docs/PLATFORM.md)")
+
+
 def check_doc_links(warnings, debug, ignore):
     """Warn about markdown links and backticked paths that point nowhere (tools/check_links.py)."""
     broken = check_links.scan(ROOT, [], [], ignore)
@@ -280,7 +315,7 @@ def main():
     if args.assets_dir is None:
         args.assets_dir = default_assets_dir(ROOT)
 
-    problems, warnings = [], []
+    problems, warnings, infos = [], [], []
     checks = [
         ("required files", lambda: check_required(problems)),
         ("placeholders", lambda: check_placeholders(problems, args.debug, args.ignore)),
@@ -288,6 +323,7 @@ def main():
         ("asset log", lambda: check_assets(warnings, args.assets_dir, args.debug)),
         ("web shell", lambda: check_shell_wired(warnings, args.debug)),
         ("doc links", lambda: check_doc_links(warnings, args.debug, args.ignore)),
+        ("steam sdk", lambda: check_steam_sdk(infos)),
     ]
     crashed = False
     for name, check in checks:
@@ -303,6 +339,8 @@ def main():
         print(f"[FAIL] {p}")
     for w in warnings:
         print(f"[WARN] {w}")
+    for i in infos:
+        print(f"[info] {i}")
     if not problems and not warnings and not crashed:
         print("[ OK ] project scaffold looks healthy")
     if crashed:

@@ -6,6 +6,7 @@
 //           the difficulty the game was started on). Replace it with your game's own steps; keep one step
 //           per version and never edit a step that has shipped (old saves still need it).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): on_saved after a successful save (#84)
 // ---------------------------------------------------------------------------
 #include "core/SaveStore.hpp"
 
@@ -142,7 +143,13 @@ bool SaveStore::save(const json& data, std::string* error) const {
         std::filesystem::remove(temp_path_for(file_), ec);
         return false;
     }
-    return commit_temp(file_, error);
+    if (!commit_temp(file_, error)) {
+        return false;
+    }
+    if (on_saved) {
+        on_saved(path_to_utf8(file_.filename()));
+    }
+    return true;
 }
 
 }  // namespace core

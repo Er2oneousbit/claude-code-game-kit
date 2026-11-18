@@ -99,8 +99,10 @@ widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does
 |---|---|
 | `GameKitShake.h`, `GameKitHitstop.h`, `GameKitEase.h`, `GameKitFollowCamera.h` | trauma screen shake and its noise, hitstop (`ScaledDt`), 14 easing curves by enum or name, deadzone and look-ahead camera follow |
 | `GameKitInputBuffer.h`, `GameKitCoyoteTimer.h`, `GameKitSpring.h`, `GameKitFlashLimiter.h` | buffered presses, coyote time, a damped spring plus `GameKit::Squash`, at most three full-screen flashes per second |
+| `GameKitFeel.h` | the SOP-18 recipe helpers: `Impact` (a hit confirm scaled by damage), `FloatText` (a damage number's rise, pop and fade), `TrailPush` / `TrailShrink` / `TrailLength` (a tracer's path, by distance) |
 | `GameKitSettings.h`, `GameKitBindings.h` | settings defaults and validated loading (bad fields fixed and listed), rebinding with swaps, button-glyph names |
 | `GameKitSaveStore.h`, `GameKitAtomicFile.h` | versioned saves with migrations, a `.bak` of the last good save, crash-safe writes (`.tmp`, flush, rename) |
+| `GameKitPlatform.h` | the platform layer (docs/PLATFORM.md): achievements, stats, rich presence, the overlay's pause hook, cloud-save hooks, the null backend; the shell model owns one (`Model->Platform()`, `SaveSlot()`) |
 | `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
 | `GameKitAudioDirector.h`, `GameKitMusicDirector.h`, `GameKitAudioAccess.h` | Wavesmith's audio rules (tools/audio/wavesmith): which take of a sound event plays at what pitch and volume, voice caps, cooldowns and dialogue ducking; music transition plans on the exact sample (beat, bar, phrase, loop end, fades, stingers, synced entry; start sounds on them with a Quartz clock); settings sliders per bus, never twice down one branch, and the arrow for a caption whose sound is off screen |
 
@@ -149,6 +151,14 @@ same rule on every engine). Keep `data/golden/` in the repo.
   Linux and macOS are untested, and so is turning the plugin on from the editor's Plugins window (Edit > Plugins,
   then restart); in a Blueprint-only project run `check` before opening the editor, or it reports the module as
   missing **(verify)**.
+
+**Dotwork tile animation (GameKitDotwork, #286).** The plugin's third module plays the animated tiles of tile maps the
+Dotwork importer made (Paper2D has no tile animation): each animated tile's user data says `anim=<frames>@<fps>`,
+and `UDotworkTileAnimatorSubsystem` (a world subsystem, game and PIE worlds) finds every `PaperTileMapComponent`
+at BeginPlay and plays those cells on a copy of its map, so the asset stays as imported. A tile map spawned later:
+`GetWorld()->GetSubsystem<UDotworkTileAnimatorSubsystem>()->Register(Component)`. It depends on Paper2D (an engine
+plugin, on by default). `GameKit.Dotwork.*` tests check the user data, the frame clock and, once the golden pack is
+imported, the golden yard's water switching frames. In the editor viewport tiles show their first frame.
 
 ## Shell screens (GameKitShellUI)
 The plugin's second module draws the shell's screens over your game, the same set as the Godot, LÖVE and web
@@ -331,3 +341,11 @@ place on the editor's Python path (kit_shaders/shader_check.py under `Content/Py
 
 ## Field notes (reported, unverified)
 **One-prompt AAA-style FPS (E27).** A creator reports Claude building a one-mission tactical FPS in Unreal Engine 5 with Blender assets from a single big prompt in about 4 hours, with graphics, menus and settings that worked, and weak spots in the surrounding level and enemy tuning. He says it located Unreal and Blender itself without an MCP. Treat as "possible", not a recipe. For real work, start with one feature, keep the `dev.py` command contract, and read `docs/sop/SOP-09` for the interaction smoke checklist. Needs a strong GPU and about 50 GB of install.
+
+## Content switches
+- Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `FGameKitShellModel::bShowBloodSetting` / `bShowLanguageSetting` hide them in a game without
+  blood or strong language. The game reads `GetModel()->BloodEnabled()` (off: a neutral hit effect, SOP-18
+  step 4); with `GameKit::CleanLanguage(settings)` on, the model's `T()` picks `<key>@clean` lines and masks the
+  words of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot captures/content.png`
+  pictures both rows.

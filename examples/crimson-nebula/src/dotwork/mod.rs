@@ -24,8 +24,9 @@
 //           pixels, y up; an Anchor is the pivot. Names are unique per pack; lookups take the first pack (sorted by
 //           file name) that has the name. A broken manifest or asset logs an ERROR (dev.py smoke fails on it) and
 //           is left out; an unknown kind logs one WARN.
-//           Blend "add" is recorded (AnimatedSprite::additive) but drawn with normal blending: Bevy 0.20 sprites
-//           have no additive mode. Tiles are one sprite per cell under the map entity (no tilemap crate; add
+//           Blend "add" (AnimatedSprite::additive): Bevy 0.20 sprites have no additive mode, so spawn_clip draws
+//           such a clip as a mesh quad with DotworkAdditiveMaterial (additive.rs; switch its clip with
+//           additive_clip_bundle). Tiles are one sprite per cell under the map entity (no tilemap crate; add
 //           bevy_ecs_tilemap through an ADR if a map gets big enough to need it), on both shapes at the spec's cell
 //           centres (y flipped), so an isometric map needs no tilemap of its own. The extra kinds stop at the image
 //           handle and the data: the emitter, the scrolling background and the lit sprite are the game's objects
@@ -39,7 +40,9 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the extra kinds
 //           exposed (background images with a repeating sampler), stamps and isometric maps through spawn_map
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blend "add" clips draw additively (additive.rs, #286)
 // ---------------------------------------------------------------------------
+pub mod additive;
 pub mod assets;
 pub mod autotile;
 mod defs;
@@ -55,7 +58,9 @@ use bevy::image::{
 };
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
+use bevy::sprite_render::Material2dPlugin;
 
+pub use additive::{AdditiveBlend, DotworkAdditive, DotworkAdditiveMaterial};
 pub use manifest::{
     AnimatedSprite, Background, BackgroundLayer, BitmapFont, Clip, ClipTexture, Collider, Icon, ImageAsset, LayerKind,
     MapCell, MapLayer, NormalMap, Pack, Particles, Portrait, SpriteAsset, TileMap, Tileset, Transition, UiKit,
@@ -93,7 +98,11 @@ impl Plugin for DotworkPlugin {
         if !app.is_plugin_added::<DotworkLibraryPlugin>() {
             app.add_plugins(DotworkLibraryPlugin);
         }
-        app.init_resource::<DotworkCache>().add_systems(Update, animate);
+        if !app.is_plugin_added::<Material2dPlugin<DotworkAdditiveMaterial>>() {
+            app.add_plugins(Material2dPlugin::<DotworkAdditiveMaterial>::default());
+        }
+        app.init_resource::<DotworkCache>()
+            .add_systems(Update, (animate, additive::animate_additive));
     }
 }
 
@@ -294,6 +303,9 @@ pub struct Dotwork<'w> {
     server: Res<'w, AssetServer>,
     layouts: ResMut<'w, Assets<TextureAtlasLayout>>,
     cache: ResMut<'w, DotworkCache>,
+    /// Quads and materials of additive clips (present with DotworkPlugin; without them they draw as sprites).
+    meshes: Option<ResMut<'w, Assets<Mesh>>>,
+    additive: Option<ResMut<'w, Assets<DotworkAdditiveMaterial>>>,
 }
 
 impl Dotwork<'_> {
@@ -412,10 +424,72 @@ impl Dotwork<'_> {
         Some((sprite_component, c.anchor, anim))
     }
 
-    /// Spawns a clip playing. None when it is not in the library.
+    /// Spawns a clip playing; a `blend: add` clip as an additive quad (additive_clip_bundle). None when it is not
+    /// in the library.
     pub fn spawn_clip(&mut self, commands: &mut Commands, sprite: &str, clip: &str) -> Option<Entity> {
+        if self.library.animated(sprite)?.additive {
+            if let Some(bundle) = self.additive_clip_bundle(sprite, clip) {
+                return Some(commands.spawn(bundle).id());
+            }
+            warn!("dotwork: {sprite} is additive but DotworkPlugin's material is missing; drawn as a sprite");
+        }
         let bundle = self.clip_bundle(sprite, clip)?;
         Some(commands.spawn(bundle).id())
+    }
+
+    /// Mesh, additive material, animation and frame rects for one clip drawn additively (`blend: add`), from its
+    /// first frame: a frame-sized quad with the pivot on the origin. Insert it on an additive entity to switch
+    /// clips. None when the clip is not in the library or the plugin's assets are missing.
+    pub fn additive_clip_bundle(
+        &mut self,
+        sprite: &str,
+        clip: &str,
+    ) -> Option<(
+        Mesh2d,
+        MeshMaterial2d<DotworkAdditiveMaterial>,
+        DotworkAnimation,
+        DotworkAdditive,
+    )> {
+        let c = self.library.animated(sprite)?.clip(clip)?.clone();
+        let (texture, uv, additive, frames) = match &c.texture {
+            ClipTexture::Sheet { image, layout } => (
+                self.image(image),
+                additive::frame_uv(layout.textures[0], layout.size),
+                DotworkAdditive {
+                    rects: layout.textures.clone(),
+                    sheet: layout.size,
+                },
+                (0..c.frame_count()).map(FrameImage::Atlas).collect(),
+            ),
+            ClipTexture::Files { images, .. } => {
+                let handles: Vec<Handle<Image>> = images.iter().map(|p| self.image(p)).collect();
+                (
+                    handles[0].clone(),
+                    Default::default(),
+                    DotworkAdditive::default(),
+                    handles.into_iter().map(FrameImage::Image).collect(),
+                )
+            }
+        };
+        let offset = additive::pivot_offset(c.anchor.0, c.frame_size);
+        let mesh =
+            Mesh::from(Rectangle::new(c.frame_size.x as f32, c.frame_size.y as f32)).translated_by(offset.extend(0.0));
+        let mesh = self.meshes.as_mut()?.add(mesh);
+        let material = self.additive.as_mut()?.add(DotworkAdditiveMaterial {
+            base: ColorMaterial {
+                texture: Some(texture),
+                uv_transform: uv,
+                ..default()
+            },
+            extension: AdditiveBlend {},
+        });
+        let anim = DotworkAnimation {
+            sprite: sprite.into(),
+            clip: clip.into(),
+            player: FramePlayer::new(c.durations.clone(), c.looping),
+            frames,
+        };
+        Some((Mesh2d(mesh), MeshMaterial2d(material), anim, additive))
     }
 
     /// Sprite, Anchor and DotworkColliders of a still sprite (a prop, an enemy).

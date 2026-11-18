@@ -18,6 +18,8 @@
 //   for primary, then backup: parse -> missing | unreadable | not a save | bad version | newer -> next
 //   the first good one is migrated step by step up to SAVE_VERSION and returned with its source
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): OnSaved, called with the file name after a slot was
+//           written (the platform layer's cloud hook, PlatformService.Saved, #84)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -161,6 +163,9 @@ namespace graveyard_shift.Core
 
         private readonly string _folder;
         private readonly HashSet<string> _newer = new HashSet<string>();
+        /// <summary>Runs with the slot's file name (save_1.json) after it was written: Shell.Saves points it at
+        /// Shell.I.Platform.Saved, so a cloud-API game can send the file (docs/PLATFORM.md).</summary>
+        public Action<string> OnSaved;
 
         /// <summary>Slots as save_&lt;slot&gt;.json in folder (Application.persistentDataPath in a game).</summary>
         public SaveStore(string folder)
@@ -210,6 +215,7 @@ namespace graveyard_shift.Core
                 throw new InvalidOperationException($"{path} was written by a newer version of the game: not overwriting it");
             }
             AtomicFile.Write(path, EnvelopeText(data), true, old => ParseSave(old, out _) != null);
+            OnSaved?.Invoke(Path.GetFileName(path));
         }
     }
 }

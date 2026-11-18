@@ -19,8 +19,12 @@
 // Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): audio, music and access vectors
 // Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): the narration cases run too
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the credits_text cases (#284)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words; plural cases read their key from the case (#171, #207)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases, the Display tab's Apply
 //           and its keep-or-revert confirm (logic::display_staging, #308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (logic::feel: impact,
+//           float_text, trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 use std::path::Path;
 
@@ -30,6 +34,7 @@ use project_crimson_nebula::logic::audio_access;
 use project_crimson_nebula::logic::audio_director::{AudioDirector, PlayResult};
 use project_crimson_nebula::logic::coyote::Coyote;
 use project_crimson_nebula::logic::display_staging::{self, DisplayStaging};
+use project_crimson_nebula::logic::feel::{self, FloatTuning, ImpactTuning};
 use project_crimson_nebula::logic::flash_limiter::FlashLimiter;
 use project_crimson_nebula::logic::follow::Follow;
 use project_crimson_nebula::logic::hitstop::Hitstop;
@@ -46,7 +51,7 @@ const AUDIO: &str = "audio.json";
 const MUSIC: &str = "music.json";
 const ACCESS: &str = "access.json";
 const CREDITS: &str = "credits.json";
-const JUICE_TYPES: [&str; 10] = [
+const JUICE_TYPES: [&str; 13] = [
     "noise",
     "shake",
     "hitstop",
@@ -57,8 +62,15 @@ const JUICE_TYPES: [&str; 10] = [
     "spring",
     "squash",
     "flash_limiter",
+    "impact",
+    "float_text",
+    "trail",
 ];
-const SHELL_TYPES: [&str; 12] = [
+const SHELL_TYPES: [&str; 16] = [
+    "plural_rules",
+    "tr_clean",
+    "mask_words",
+    "mature_words",
     "display_staging",
     "defaults",
     "settings_load",
@@ -207,6 +219,9 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "spring" => spring_steps(case, exam),
         "squash" => squash(case, exam),
         "flash_limiter" => flash_limiter(case, exam),
+        "impact" => impact_points(case, exam),
+        "float_text" => float_text_points(case, exam),
+        "trail" => trail_steps(case, exam),
         "defaults" => exam.check("defaults", settings::defaults(), &case["expect"]),
         "settings_load" => settings_load(case, exam),
         "rebind" => rebind(case, exam),
@@ -216,6 +231,10 @@ fn check_case(kind: &str, case: &Value, exam: &mut Exam) {
         "save_load" => save_load(case, exam),
         "tr" => tr(case, exam),
         "plural" => plural(case, exam),
+        "plural_rules" => plural_rules(case, exam),
+        "tr_clean" => tr_clean(case, exam),
+        "mask_words" => mask_words(case, exam),
+        "mature_words" => mature_words(case, exam),
         "pseudo" => pseudo(case, exam),
         "narration" => narration(case, exam),
         "display_staging" => display_staging_steps(case, exam),
@@ -391,6 +410,64 @@ fn flash_limiter(case: &Value, exam: &mut Exam) {
     }
 }
 
+fn impact_points(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let t = ImpactTuning {
+        hitstop_min: f(&pr["hitstop_min"]),
+        hitstop_max: f(&pr["hitstop_max"]),
+        trauma_min: f(&pr["trauma_min"]),
+        trauma_max: f(&pr["trauma_max"]),
+        flash_at: f(&pr["flash_at"]),
+    };
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let r = feel::impact(f(&p[0]), f(&p[1]), &t);
+        exam.check(
+            &format!("impact({}, {})", p[0], p[1]),
+            json!([r.hitstop, r.trauma, r.flash]),
+            &json!([p[2], p[3], p[4]]),
+        );
+    }
+}
+
+fn float_text_points(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let k = FloatTuning {
+        life: f(&pr["life"]),
+        rise: f(&pr["rise"]),
+        pop_s: f(&pr["pop_s"]),
+    };
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let r = feel::float_text(f(&p[0]), &k);
+        exam.check(
+            &format!("float_text({})", p[0]),
+            json!([r.dy, r.scale, r.alpha, r.done]),
+            &json!([p[1], p[2], p[3], p[4]]),
+        );
+    }
+}
+
+fn trail_steps(case: &Value, exam: &mut Exam) {
+    let pr = &case["params"];
+    let mut pts: Vec<[f64; 2]> = Vec::new();
+    for (n, st, call) in steps(case) {
+        match call {
+            "push" => pts = feel::trail_push(&pts, f(&st["x"]), f(&st["y"]), f(&pr["spacing"]), f(&pr["max_len"])),
+            "shrink" => pts = feel::trail_shrink(&pts, f(&st["amount"])),
+            other => {
+                exam.fail(format!("step {n}: unknown call {other:?}"));
+                continue;
+            }
+        }
+        exam.check(
+            &format!("step {n}"),
+            json!({"points": pts, "length": feel::trail_length(&pts)}),
+            &st["expect"],
+        );
+    }
+}
+
 // ---- Shell ---------------------------------------------------------------------
 fn settings_load(case: &Value, exam: &mut Exam) {
     let (loaded, problems) = settings::load(case["input"].as_str());
@@ -399,12 +476,16 @@ fn settings_load(case: &Value, exam: &mut Exam) {
         "problems": problems.len(),
         "effective_shake": settings::effective_shake(&loaded),
         "telemetry_allowed": settings::telemetry_allowed(&loaded),
+        "blood_enabled": settings::blood_enabled(&loaded),
+        "clean_language": settings::clean_language(&loaded),
     });
     let want = json!({
         "settings": case["expect"],
         "problems": case["problems"],
         "effective_shake": case["effective_shake"],
         "telemetry_allowed": case["telemetry_allowed"],
+        "blood_enabled": case["blood_enabled"],
+        "clean_language": case["clean_language"],
     });
     exam.check("load", got, &want);
 }
@@ -490,8 +571,87 @@ fn plural(case: &Value, exam: &mut Exam) {
     for p in arr(&case["points"]) {
         let p = arr(p);
         let (locale, n) = (s(&p[0]), i(&p[1]));
-        let got = json!([i18n::plural(locale, n), i18n::tr_plural(&t, locale, PLURAL_KEY, n, &[])]);
+        let key = case["key"].as_str().unwrap_or(PLURAL_KEY);
+        let got = json!([i18n::plural(locale, n), i18n::tr_plural(&t, locale, key, n, &[])]);
         exam.check(&format!("plural({}, {})", p[0], p[1]), got, &json!([p[2], p[3]]));
+    }
+}
+
+fn plural_rules(case: &Value, exam: &mut Exam) {
+    for sw in arr(&case["sweep"]) {
+        let sw = arr(sw);
+        let (locale, start) = (s(&sw[0]), i(&sw[1]));
+        for (k, cat) in s(&sw[2]).split(' ').enumerate() {
+            let n = start + k as i64;
+            exam.check(
+                &format!("plural({locale}, {n})"),
+                json!(i18n::plural(locale, n)),
+                &json!(cat),
+            );
+        }
+    }
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        exam.check(
+            &format!("plural({}, {})", p[0], p[1]),
+            json!(i18n::plural(s(&p[0]), i(&p[1]))),
+            &p[2],
+        );
+    }
+}
+
+fn words_of(v: &Value) -> Vec<String> {
+    arr(v).iter().map(|w| s(w).to_string()).collect()
+}
+
+fn tr_clean(case: &Value, exam: &mut Exam) {
+    let t = tables(case);
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let args: Vec<(String, String)> = p[3]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.as_str().map_or(v.to_string(), str::to_string)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let args: Vec<(&str, &str)> = args.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+        let clean = p[4].as_bool().unwrap_or(false);
+        let words = words_of(&p[5]);
+        let got = if p[2].is_null() {
+            i18n::tr_clean(&t, s(&p[0]), s(&p[1]), &args, clean, &words)
+        } else {
+            i18n::tr_plural_clean(&t, s(&p[0]), s(&p[1]), i(&p[2]), &args, clean, &words)
+        };
+        exam.check(&format!("tr_clean({}, {}, {})", p[0], p[1], p[4]), json!(got), &p[6]);
+    }
+}
+
+fn mask_words(case: &Value, exam: &mut Exam) {
+    exam.check("grawlix", json!(i18n::GRAWLIX), &case["grawlix"]);
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        exam.check(
+            &format!("mask_words({})", p[0]),
+            json!(i18n::mask_words(s(&p[0]), &words_of(&p[1]))),
+            &p[2],
+        );
+    }
+}
+
+fn mature_words(case: &Value, exam: &mut Exam) {
+    for p in arr(&case["points"]) {
+        let p = arr(p);
+        let parsed: Value = p[0]
+            .as_str()
+            .and_then(|t| serde_json::from_str(t).ok())
+            .unwrap_or(Value::Null);
+        exam.check(
+            &format!("mature_words({})", p[0]),
+            json!(i18n::mature_words(&parsed)),
+            &p[1],
+        );
     }
 }
 
@@ -756,6 +916,9 @@ golden! {
     juice_spring: JUICE, "spring";
     juice_squash: JUICE, "squash";
     juice_flash_limiter: JUICE, "flash_limiter";
+    juice_impact: JUICE, "impact";
+    juice_float_text: JUICE, "float_text";
+    juice_trail: JUICE, "trail";
     shell_defaults: SHELL, "defaults";
     shell_settings_load: SHELL, "settings_load";
     shell_rebind: SHELL, "rebind";

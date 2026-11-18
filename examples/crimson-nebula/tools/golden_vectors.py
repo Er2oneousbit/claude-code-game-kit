@@ -7,7 +7,9 @@
 #           HTML comments out of CREDITS.md, then the text every credits screen shows) and the writer of the
 #           golden-vector files every engine port is tested against: data/golden/juice.json, data/golden/shell.json,
 #           data/golden/telemetry.json (only the ports that
-#           write telemetry.csv read it) and data/golden/credits.json (only the ports with a credits screen read it).
+#           write telemetry.csv read it) and data/golden/credits.json (only the ports with a credits screen read it);
+#           platform services (achievements, stats, rich presence, the overlay's pause hook, the cloud-save hooks, the
+#           offline queue: docs/PLATFORM.md) in data/golden/platform.json, for the ports of that layer (#84).
 # Usage   : python tools/golden_vectors.py --check        # are the vector files current? (exit 1 if not)
 #           python tools/golden_vectors.py --write        # rewrite them after changing this reference
 #           python tools/golden_vectors.py --show shake   # print one module's cases
@@ -23,6 +25,18 @@
 #           credits screen strips (heading marks, list markers, emphasis stars), credits.json's credits_text cases (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply with a
 #           keep-or-revert confirm, and shell.json's display_staging cases (#308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the platform services layer (#84 phase 1):
+#           achievements_load, Platform (unlock once, stat rules, offline queue and replay, presence, cloud hooks),
+#           NullBackend, cloud_partition, overlay_action, platform_state_load, and platform.json's cases
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (#171 blood, #207 clean language),
+#           CLDR 46 plural() for whole numbers with an .other fallback per locale, @clean lookups in tr and
+#           tr_plural, mask_words and mature_words, and shell.json's plural_rules, tr_clean, mask_words cases
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compile_words and mask_word_set, so a shell folds its
+#           word list once, not on every t() (#207)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the feel recipe helpers SOP-18's table builds on
+#           (#170, #164): impact (hit confirm scaled by damage), float_text (a damage number's ease), trail_push,
+#           trail_shrink and trail_length (a tracer's point history by distance), and their juice.json cases
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): impact's docstring says how a game honours content.blood (#171)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -272,6 +286,87 @@ class FlashLimiter:
         return False
 
 
+# ------------------------------------------------------------------------------------------ feel recipes
+# The small engine-free helpers SOP-18's recipe table builds on (#170): pure functions, no settings read, no clock and
+# no random number generator. The rest of the recipes are compositions a game writes itself (SOP-18 step 4).
+# Their tunables are the keyword defaults below (the ports use the same defaults); a game passes its own.
+
+
+def impact(damage, full, hitstop_min=0.03, hitstop_max=0.1, trauma_min=0.15, trauma_max=0.6, flash_at=0.5):
+    """Hit confirm scaled by damage: f = damage / full clamped to 0..1 (full <= 0 counts every hit as full), then
+    hitstop and trauma linear from their min at the smallest hit to their max at a full one, and flash when
+    f >= flash_at. No damage (<= 0) is no confirm at all. The flash is a request: it still goes through the flash
+    limiter and the player's flash_limit, and the trauma through the shake's intensity (effective_shake). Blood is
+    not part of the confirm: what the hit leaves (blood, or with blood_enabled(settings) off a neutral spark or dust,
+    #171) is the game's own, at the same moment and size (SOP-18 step 4, "Blood on a hit")."""
+    if damage <= 0.0:
+        return {"hitstop": 0.0, "trauma": 0.0, "flash": False}
+    f = 1.0 if full <= 0.0 else min(max(damage / full, 0.0), 1.0)
+    return {"hitstop": hitstop_min + (hitstop_max - hitstop_min) * f,
+            "trauma": trauma_min + (trauma_max - trauma_min) * f, "flash": f >= flash_at}
+
+
+def float_text(t, life=0.8, rise=24.0, pop_s=0.12):
+    """A damage number's motion at age t (game time): it rises by `rise` px on out_cubic over its life (dy is
+    negative: y down), pops in with out_back over pop_s (scale overshoots 1, then settles at 1) and fades on in_cubic
+    (alpha 1 to 0). done once t >= life. reduce motion: pass rise 0 and pop_s 0 (no pop: scale 1 from the start)."""
+    u = min(max(t / life, 0.0), 1.0) if life > 0.0 else 1.0
+    scale = ease("out_back", t / pop_s) if pop_s > 0.0 else 1.0
+    return {"dy": -rise * ease("out_cubic", u), "scale": scale, "alpha": 1.0 - ease("in_cubic", u),
+            "done": t >= life}
+
+
+def _seg(a, b):
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    return math.sqrt(dx * dx + dy * dy)
+
+
+def trail_length(points):
+    """Total length of a trail's points, tail (first) to head (last)."""
+    total = 0.0   # a plain running sum, as every port adds: sum() compensates its rounding since Python 3.12
+    for i in range(len(points) - 1):
+        total += _seg(points[i], points[i + 1])
+    return total
+
+
+def _trim_to(points, keep):
+    """Drop length from the tail until the trail is `keep` long: whole segments go, the last one is cut where the
+    length runs out (the tail point slides toward the head). keep <= 0 leaves the head alone."""
+    pts = [list(p) for p in points]
+    excess = trail_length(pts) - max(keep, 0.0)
+    while excess > 1e-12 and len(pts) > 1:
+        s = _seg(pts[0], pts[1])
+        if s <= excess + 1e-12:
+            pts.pop(0)
+            excess -= s
+        else:
+            k = excess / s
+            pts[0] = [pts[0][0] + (pts[1][0] - pts[0][0]) * k, pts[0][1] + (pts[1][1] - pts[0][1]) * k]
+            excess = 0.0
+    return pts
+
+
+def trail_push(points, x, y, spacing=6.0, max_len=48.0):
+    """A tracer's point history (#164), in world space: the last point is the head and follows (x, y) every frame; a
+    new point is kept once the head is `spacing` px past the point before it, so the history is by distance, not by
+    frame (the same path at 30 and 144 fps), and a curving or homing shot leaves a curve. Longer than max_len, the
+    tail is cut. Returns a new list of [x, y], tail first."""
+    pts = [list(p) for p in points]
+    if len(pts) < 2:
+        pts.append([x, y])
+    elif _seg(pts[-2], pts[-1]) >= spacing:
+        pts.append([x, y])
+    else:
+        pts[-1] = [x, y]
+    return _trim_to(pts, max_len)
+
+
+def trail_shrink(points, amount):
+    """The tail catching up after the shot dies: remove `amount` px (speed * dt) from the tail. Down to the head
+    alone, the trail is gone: draw nothing for fewer than two points."""
+    return _trim_to(points, trail_length(points) - amount)
+
+
 # ----------------------------------------------------------------------------------------------- shell
 
 DIFFICULTIES = ["story", "easy", "normal", "hard"]
@@ -310,6 +405,9 @@ DEFAULT_SETTINGS = {
                "narration": False},
     "input": {"bindings": DEFAULT_BINDINGS, "deadzone": 0.2, "invert_y": False, "glyphs": "auto"},
     "telemetry": {"consent": "unset"},
+    # #171 and #207: what the game shows, not how. blood: the game's blood effects (off: a neutral hit effect in
+    # their place, SOP-18); clean_language: the string tables' @clean variants and the word mask (SOP-19)
+    "content": {"blood": True, "clean_language": False},
 }
 
 # per field: ("num", lo, hi) | ("bool",) | ("enum", values) | ("res",) | ("lang",); the default comes from above
@@ -326,6 +424,7 @@ SCHEMA = {
                "timing_scale": ("num", 1.0, 3.0), "auto_repeat": ("bool",), "narration": ("bool",)},
     "input": {"deadzone": ("num", 0.0, 0.9), "invert_y": ("bool",), "glyphs": ("enum", GLYPH_SETS)},
     "telemetry": {"consent": ("enum", CONSENT)},
+    "content": {"blood": ("bool",), "clean_language": ("bool",)},
 }
 SCHEMA["audio"]["mono"] = ("bool",)
 
@@ -438,6 +537,16 @@ def effective_shake(settings):
 
 def telemetry_allowed(settings):
     return settings["telemetry"]["consent"] == "yes"
+
+
+def blood_enabled(settings):
+    """#171: may the game show blood? The effect is the game's own; off swaps it for a neutral one (SOP-18)."""
+    return settings["content"]["blood"]
+
+
+def clean_language(settings):
+    """#207: the translator picks @clean variants and masks the game's word list (tr's clean flag, SOP-19)."""
+    return settings["content"]["clean_language"]
 
 
 def group_of(action):
@@ -588,30 +697,302 @@ def _fill(text, args):
     return "".join(out)
 
 
-def tr(tables, locale, key, args=None):
+CLEAN_SUFFIX = "@clean"                             # "guard.insult@clean": the line with the clean-language setting
+                                                     # on (#207); '@' is reserved in key names for this
+
+
+def _pick(table, key, clean):
+    """One locale's text for key: its @clean variant first when clean is on, else (or when there is none) the key."""
+    if clean and key + CLEAN_SUFFIX in table:
+        return table[key + CLEAN_SUFFIX]
+    return table.get(key)
+
+
+def _finish(text, args, clean, words):
+    out = _fill(text, args or {})
+    return mask_words(out, words) if clean and words else out
+
+
+def tr(tables, locale, key, args=None, clean=False, words=None):
     """A string through the fallback chain (fr-CA -> fr -> en); a missing key returns the key itself, so it shows.
     Argument values are whole numbers or strings: format a float yourself before passing it (languages print 2.0
-    differently), and count text in code points, not UTF-16 units."""
+    differently), and count text in code points, not UTF-16 units.
+    clean (#207, the content.clean_language setting): each locale of the chain is asked for key@clean, then key,
+    before the next locale, so a French line without a clean variant stays French (the player's language wins; the
+    audit, check_i18n.py, lists the gap) and an English @clean never replaces a French line. Then the filled text
+    (placeholder values included: a player's name is text too) goes through mask_words with words, the game's
+    word list for the chain (mature_words). clean off: words are ignored, the text is as written."""
     for loc in locale_chain(locale):
-        table = tables.get(loc, {})
-        if key in table:
-            return _fill(table[key], args or {})
+        text = _pick(tables.get(loc, {}), key, clean)
+        if text is not None:
+            return _finish(text, args, clean, words)
     return key
 
 
+# ---- CLDR plural rules ------------------------------------------------------------------------------------------
+# Cardinal rules for whole numbers (CLDR operands i = n, v = 0), from CLDR 46 common/supplemental/plurals.xml
+# (release-46, checked 2026-11-17 by sweeping n = 0..2000 and every multiple of a million up to 10^8 through an
+# evaluator of that file's rules). A language is a family; the family is the rule. Unknown languages get "one"
+# (n == 1). n is a whole number; a negative one uses its absolute value (CLDR's n). "other" is in every family's
+# list because it is the fallback key every plural set needs, even where a whole number never reaches it (ru, pl).
+PLURAL_FAMILIES = {                                  # family -> the categories it can return, CLDR order
+    "other": ("other",),
+    "one": ("one", "other"),                         # n = 1
+    "zero_one": ("one", "other"),                    # n = 0, 1
+    "one_many": ("one", "many", "other"),            # n = 1; many: a non-zero multiple of 1000000
+    "zero_one_many": ("one", "many", "other"),       # n = 0, 1; many: a non-zero multiple of 1000000
+    "one_21": ("one", "other"),                      # n % 10 = 1 and n % 100 != 11 (21, 31, 101 ...)
+    "fil": ("one", "other"),                         # n % 10 not 4, 6, 9 (0 and 1-3 too)
+    "east_slavic": ("one", "few", "many", "other"),  # 1, 21; few 2-4, 22-24; many 0, 5-20, 25-30
+    "pl": ("one", "few", "many", "other"),           # 1; few 2-4, 22-24 (not 12-14); many the rest
+    "cs": ("one", "few", "other"),                   # 1; few 2-4 (CLDR's many is for fractions only)
+    "lt": ("one", "few", "other"),                   # 1, 21; few 2-9, 22-29 (not 11-19); many is for fractions
+    "balkan": ("one", "few", "other"),               # 1, 21; few 2-4, 22-24 (not 12-14)
+    "ro": ("one", "few", "other"),                   # 1; few 0 and n % 100 = 1-19
+    "lv": ("zero", "one", "other"),                  # zero n % 10 = 0 or n % 100 = 11-19; one 1, 21 (not 11)
+    "he": ("one", "two", "other"),
+    "sl": ("one", "two", "few", "other"),            # n % 100 = 1; 2; 3-4
+    "ga": ("one", "two", "few", "many", "other"),    # 1; 2; 3-6; 7-10
+    "ar": ("zero", "one", "two", "few", "many", "other"),   # 0; 1; 2; n % 100 = 3-10; n % 100 = 11-99
+    "cy": ("zero", "one", "two", "few", "many", "other"),   # 0; 1; 2; 3; 6
+}
+PLURAL_LANGUAGES = {                                 # family -> languages (base language codes, lower case)
+    "other": "ja zh ko vi th id ms lo my km yo ig jv su",
+    "one": "en de nl sv da nb nn no fi et gl el hu tr bg eu af sq ka kk ky mn az uz ur sw ta te ml mr",
+    "zero_one": "hi bn fa gu kn hy",
+    "one_many": "es it ca",
+    "zero_one_many": "fr pt",
+    "one_21": "is mk",
+    "fil": "fil tl",
+    "east_slavic": "ru uk be",
+    "pl": "pl",
+    "cs": "cs sk",
+    "lt": "lt",
+    "balkan": "hr sr bs",
+    "ro": "ro mo",
+    "lv": "lv",
+    "he": "he",
+    "sl": "sl",
+    "ga": "ga",
+    "ar": "ar",
+    "cy": "cy",
+}
+PLURAL_LOCALE_FAMILIES = {"pt-pt": "one_many"}       # a region with its own rule: European Portuguese 0 is "other"
+PLURAL_FAMILY_OF = {lang: fam for fam, langs in PLURAL_LANGUAGES.items() for lang in langs.split()}
+MILLION = 1000000
+
+
+def plural_family(locale):
+    """The rule family for a locale: its full name first (pt-PT, case and '_' or '-' do not matter), then its
+    language, then "one"."""
+    norm = locale.replace("_", "-").lower()
+    for name, fam in PLURAL_LOCALE_FAMILIES.items():
+        if norm == name or norm.startswith(name + "-"):
+            return fam
+    return PLURAL_FAMILY_OF.get(norm.split("-")[0], "one")
+
+
+def plural_categories(locale):
+    """Every category plural() can return for this locale, plus "other": what a translation must provide."""
+    return PLURAL_FAMILIES[plural_family(locale)]
+
+
 def plural(locale, n):
-    base = locale.split("-")[0].split("_")[0]
-    if base in ("ja", "zh", "ko"):
+    """The CLDR plural category of whole number n in locale: zero, one, two, few, many or other."""
+    fam = plural_family(locale)
+    n = abs(int(n))
+    m10, m100 = n % 10, n % 100
+    if fam == "other":
         return "other"
-    if base == "fr":
-        return "one" if n in (0, 1) else "other"
-    return "one" if n == 1 else "other"
+    if fam == "one":
+        return "one" if n == 1 else "other"
+    if fam == "zero_one":
+        return "one" if n <= 1 else "other"
+    if fam in ("one_many", "zero_one_many"):
+        if n == 1 or (n == 0 and fam == "zero_one_many"):
+            return "one"
+        return "many" if n != 0 and n % MILLION == 0 else "other"
+    if fam == "one_21":
+        return "one" if m10 == 1 and m100 != 11 else "other"
+    if fam == "fil":
+        return "other" if m10 in (4, 6, 9) else "one"
+    if fam in ("east_slavic", "balkan"):
+        if m10 == 1 and m100 != 11:
+            return "one"
+        if 2 <= m10 <= 4 and not 12 <= m100 <= 14:
+            return "few"
+        return "many" if fam == "east_slavic" else "other"
+    if fam == "pl":
+        if n == 1:
+            return "one"
+        return "few" if 2 <= m10 <= 4 and not 12 <= m100 <= 14 else "many"
+    if fam == "cs":
+        return "one" if n == 1 else "few" if 2 <= n <= 4 else "other"
+    if fam == "lt":
+        if 11 <= m100 <= 19:
+            return "other"
+        return "one" if m10 == 1 else "few" if m10 >= 2 else "other"
+    if fam == "ro":
+        if n == 1:
+            return "one"
+        return "few" if n == 0 or 1 <= m100 <= 19 else "other"
+    if fam == "lv":
+        if m10 == 0 or 11 <= m100 <= 19:
+            return "zero"
+        return "one" if m10 == 1 else "other"
+    if fam == "he":
+        return "one" if n == 1 else "two" if n == 2 else "other"
+    if fam == "sl":
+        return "one" if m100 == 1 else "two" if m100 == 2 else "few" if m100 in (3, 4) else "other"
+    if fam == "ga":
+        return ("one" if n == 1 else "two" if n == 2 else "few" if 3 <= n <= 6 else "many" if 7 <= n <= 10
+                else "other")
+    if fam == "ar":
+        if n <= 2:
+            return ("zero", "one", "two")[n]
+        return "few" if 3 <= m100 <= 10 else "many" if m100 >= 11 else "other"
+    if fam == "cy":
+        return {0: "zero", 1: "one", 2: "two", 3: "few", 6: "many"}.get(n, "other")
+    raise ValueError(fam)
 
 
-def tr_plural(tables, locale, key, n, args=None):
+def tr_plural(tables, locale, key, n, args=None, clean=False, words=None):
+    """key.<category> through the chain, each locale with its own category: in each locale, key.<its category>, then
+    key.other (a table without the few or many form still shows its other form, never a raw key), then the next
+    locale. @clean variants as in tr: key.few@clean before key.few. Nothing anywhere: the key with the requested
+    locale's category, so it shows."""
     a = dict(args or {})
     a["n"] = n
-    return tr(tables, locale, key + "." + plural(locale, n), a)
+    for loc in locale_chain(locale):
+        table = tables.get(loc, {})
+        for cat in dict.fromkeys((plural(loc, n), "other")):
+            text = _pick(table, key + "." + cat, clean)
+            if text is not None:
+                return _finish(text, a, clean, words)
+    return key + "." + plural(locale, n)
+
+
+# ---- the word mask (#207) -------------------------------------------------------------------------------------
+# A pinned, code-point-exact algorithm, so Lua, C++ and Rust (bytes), C# and Unreal (UTF-16) and Python agree: no
+# str.lower(), isalpha() or unicodedata (Python's Unicode tables change between versions; no port has the same).
+# Word characters: ASCII letters and digits, and every code point from U+0080 up except the ranges below
+# (punctuation, symbols, spaces, emoji, variation selectors; combining marks are word characters). A word is a
+# maximal run of word characters. Matching folds case with the table in fold_char (ASCII, Latin-1, Latin
+# Extended-A, Greek, Cyrillic; everything else matches exactly) and compares the whole word with each listed word,
+# so "class" never matches "ass". No normalization: a precomposed and a decomposed "é" are different words. The
+# limits (SOP-19): Chinese and Japanese have no spaces, so a run of ideographs is one word, and a German compound
+# is one word, so list the compounds themselves. A listed entry that is empty or holds a non-word character (two
+# words, a hyphen) never matches. The mask is a same-length grawlix: GRAWLIX repeated, one per code point,
+# starting again with each word.
+GRAWLIX = "#@$%"
+MASK_BOUNDARY_RANGES = [                             # inclusive code point ranges that are never word characters
+    (0x0080, 0x00BF),                                # Latin-1 controls, no-break space, punctuation and signs
+    (0x00D7, 0x00D7), (0x00F7, 0x00F7),              # multiplication and division signs
+    (0x2000, 0x2BFF),                                # spaces, punctuation (curly quotes), symbols, arrows, dingbats
+    (0x2E00, 0x2E7F),                                # supplemental punctuation
+    (0x3000, 0x303F),                                # CJK symbols and punctuation (the ideographic space and stops)
+    (0xFE00, 0xFE0F),                                # variation selectors
+    (0xFE10, 0xFE1F), (0xFE30, 0xFE6F),              # vertical and small forms
+    (0xFEFF, 0xFEFF),                                # zero-width no-break space
+    (0xFF00, 0xFF0F), (0xFF1A, 0xFF20), (0xFF3B, 0xFF40), (0xFF5B, 0xFF65),   # fullwidth punctuation
+    (0x1F000, 0x1FAFF),                              # emoji and pictographs
+]
+
+
+def is_word_char(cp):
+    if cp < 0x80:
+        return 0x30 <= cp <= 0x39 or 0x41 <= cp <= 0x5A or 0x61 <= cp <= 0x7A
+    return not any(lo <= cp <= hi for lo, hi in MASK_BOUNDARY_RANGES)
+
+
+def fold_char(cp):
+    """The pinned case fold: one code point to one code point (lower case; final sigma to sigma)."""
+    if 0x41 <= cp <= 0x5A or (0xC0 <= cp <= 0xDE and cp != 0xD7):
+        return cp + 0x20
+    if cp == 0x130:                                  # capital I with dot -> i
+        return 0x69
+    if cp == 0x178:                                  # Y with diaeresis -> its Latin-1 small letter
+        return 0xFF
+    if ((0x100 <= cp <= 0x12F or 0x132 <= cp <= 0x137 or 0x14A <= cp <= 0x177) and cp % 2 == 0) or \
+            ((0x139 <= cp <= 0x148 or 0x179 <= cp <= 0x17E) and cp % 2 == 1):
+        return cp + 1                                # Latin Extended-A pairs: capital, then small
+    if 0x391 <= cp <= 0x3AB and cp != 0x3A2:         # Greek capitals (with dialytika) -> small
+        return cp + 0x20
+    if cp == 0x386:
+        return 0x3AC
+    if 0x388 <= cp <= 0x38A:
+        return cp + 0x25
+    if cp == 0x38C:
+        return 0x3CC
+    if cp in (0x38E, 0x38F):
+        return cp + 0x3F
+    if cp == 0x3C2:                                  # final sigma matches sigma
+        return 0x3C3
+    if 0x400 <= cp <= 0x40F:                         # Cyrillic capitals with marks -> small
+        return cp + 0x50
+    if 0x410 <= cp <= 0x42F:                         # Cyrillic capitals -> small
+        return cp + 0x20
+    return cp
+
+
+def _fold(cps):
+    return tuple(fold_char(c) for c in cps)
+
+
+def compile_words(words):
+    """The folded set mask_word_set matches against. Build it once per word list and locale (the shells cache it:
+    t() runs for every label every frame, and folding a few thousand words each time is the cost, not the scan)."""
+    wanted = set()
+    for w in words or ():
+        cps = [ord(c) for c in w]
+        if cps and all(is_word_char(c) for c in cps):
+            wanted.add(_fold(cps))
+    return frozenset(wanted)
+
+
+def mask_words(text, words):
+    """text with every whole word that is in words (case folded) replaced by a same-length grawlix."""
+    return mask_word_set(text, compile_words(words))
+
+
+def mask_word_set(text, wanted):
+    """mask_words with the word list compiled already (compile_words)."""
+    if not wanted:
+        return text
+    cps = [ord(c) for c in text]
+    out, i = [], 0
+    while i < len(cps):
+        if not is_word_char(cps[i]):
+            out.append(chr(cps[i]))
+            i += 1
+            continue
+        j = i
+        while j < len(cps) and is_word_char(cps[j]):
+            j += 1
+        word = cps[i:j]
+        if _fold(word) in wanted:
+            out.extend(GRAWLIX[k % len(GRAWLIX)] for k in range(len(word)))
+        else:
+            out.extend(chr(c) for c in word)
+        i = j
+    return "".join(out)
+
+
+MATURE_DIR = "data/i18n/mature"                      # <locale>.json per language: the game's own word list
+
+
+def mature_words(text):
+    """A word list file's words: {"words": ["...", ...]} (other keys, such as a "_note", are ignored). Strings
+    only; anything unreadable or of another shape is no words. A game loads the file of every locale in the
+    chain and passes all of them (a fallback line can come from any of them)."""
+    try:
+        raw = json.loads(text) if text is not None else {}
+    except ValueError:
+        return []
+    words = raw.get("words") if isinstance(raw, dict) else None
+    if not isinstance(words, list):
+        return []
+    return [w for w in words if isinstance(w, str)]
 
 
 PSEUDO_GROWTH = 0.40                                 # translated English runs about 40 % longer (SOP-19)
@@ -960,6 +1341,50 @@ def build_juice():
         steps.append({"call": "request", "now": now, "expect": {"result": fl.request(now)}})
     cases.append({"type": "flash_limiter", "name": "three per second", "params": {"max_flashes": 3, "window_s": 1.0},
                   "steps": steps})
+    # feel recipes (#170): every case passes every argument, so a port's defaults are not what is tested
+    imp = dict(hitstop_min=0.03, hitstop_max=0.1, trauma_min=0.15, trauma_max=0.6, flash_at=0.5)
+    pts = []
+    for dmg, full in [(0.0, 10.0), (-3.0, 10.0), (1.0, 10.0), (4.0, 10.0), (5.0, 10.0), (10.0, 10.0), (25.0, 10.0),
+                      (3.0, 0.0), (2.5, -1.0)]:
+        r = impact(dmg, full, **imp)
+        pts.append([dmg, full, r["hitstop"], r["trauma"], r["flash"]])
+    cases.append({"type": "impact", "name": "hit confirm scaled by damage", "params": imp, "points": pts})
+    imp2 = dict(hitstop_min=0.05, hitstop_max=0.05, trauma_min=0.0, trauma_max=1.0, flash_at=1.0)
+    pts = []
+    for dmg, full in [(0.5, 2.0), (1.999, 2.0), (2.0, 2.0)]:
+        r = impact(dmg, full, **imp2)
+        pts.append([dmg, full, r["hitstop"], r["trauma"], r["flash"]])
+    cases.append({"type": "impact", "name": "flat hitstop, flash only at full", "params": imp2, "points": pts})
+    for name, params, ts in [("damage number", {"life": 0.8, "rise": 24.0, "pop_s": 0.12},
+                              [0.0, 0.03, 0.06, 0.12, 0.2, 0.4, 0.7, 0.8, 1.0, -0.1]),
+                             ("reduce motion: no rise, no pop", {"life": 0.5, "rise": 0.0, "pop_s": 0.0},
+                              [0.0, 0.25, 0.5]),
+                             ("no life", {"life": 0.0, "rise": 10.0, "pop_s": 0.1}, [0.0, 0.05])]:
+        pts = []
+        for t in ts:
+            r = float_text(t, **params)
+            pts.append([t, r["dy"], r["scale"], r["alpha"], r["done"]])
+        cases.append({"type": "float_text", "name": name, "params": params, "points": pts})
+    for name, params, script in [
+            ("straight shot by distance", {"spacing": 6.0, "max_len": 20.0},
+             [["push", x, 0.0] for x in (0.0, 2.0, 4.0, 7.0, 9.0, 15.0, 30.0, 33.0)]
+             + [["shrink", 5.0], ["shrink", 2.5], ["shrink", 100.0]]),
+            ("curving shot keeps a curve", {"spacing": 4.0, "max_len": 30.0},
+             [["push", 10.0 * math.cos(a / 4.0), 10.0 * math.sin(a / 4.0)] for a in range(10)]
+             + [["shrink", 12.0], ["push", 0.0, 0.0]]),
+            ("one point is no trail", {"spacing": 3.0, "max_len": 0.0},
+             [["push", 1.0, 1.0], ["push", 5.0, 1.0], ["shrink", 1.0]])]:
+        pts, steps = [], []
+        for op in script:
+            if op[0] == "push":
+                pts = trail_push(pts, op[1], op[2], params["spacing"], params["max_len"])
+                step = {"call": "push", "x": op[1], "y": op[2]}
+            else:
+                pts = trail_shrink(pts, op[1])
+                step = {"call": "shrink", "amount": op[1]}
+            step["expect"] = {"points": [list(p) for p in pts], "length": trail_length(pts)}
+            steps.append(step)
+        cases.append({"type": "trail", "name": name, "params": params, "steps": steps})
     return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
             "cases": cases}
 
@@ -971,6 +1396,82 @@ TABLES = {
     "fr-CA": {"menu.play": "Jouer!"},
     "ja": {"menu.play": "プレイ", "apples.other": "りんご{n}個"},
 }
+
+# CLDR plurals: ru has every form, uk lacks many (its other shows), pl has no table (English with English's rule)
+PLURAL_TABLES = {
+    "en": {"hits.one": "{n} hit", "hits.other": "{n} hits"},
+    "ru": {"hits.one": "{n} удар", "hits.few": "{n} удара", "hits.many": "{n} ударов", "hits.other": "{n} удара"},
+    "uk": {"hits.one": "{n} удар", "hits.few": "{n} удари", "hits.other": "{n} ударів"},
+    "ar": {"hits.zero": "لا ضربات", "hits.one": "ضربة واحدة", "hits.two": "ضربتان", "hits.few": "{n} ضربات",
+           "hits.many": "{n} ضربة", "hits.other": "{n} ضربة"},
+    "fr": {"hits.one": "{n} coup", "hits.many": "{n} de coups", "hits.other": "{n} coups"},
+    "cs": {"hits.one": "{n} zásah", "hits.few": "{n} zásahy", "hits.other": "{n} zásahů"},
+    "de": {"hits.one": "{n} Treffer", "hits.other": "{n} Treffer"},
+    "ja": {"hits.other": "{n}ヒット"},
+}
+PLURAL_SWEEP_LOCALES = ["en", "de", "fr", "fr-CA", "pt", "pt-BR", "pt-PT", "pt_PT", "es", "it", "ca", "ru", "RU",
+                        "uk", "be", "pl", "cs", "sk", "lt", "hr", "sr", "ro", "lv", "he", "sl", "ga", "ar", "cy",
+                        "is", "fil", "hi", "ja", "zh", "ko", "xx"]
+PLURAL_SWEEP_N = 131                                 # 0..130: every last-two-digits rule, and 101..130 again
+PLURAL_BIG_N = (-1, -3, 211, 1011, 1000000, 2000000, 1000001, 3000005)
+
+# #207: en has clean variants, fr has its own for one line only, so "fr has the line, only en has @clean" shows
+# the per-locale rule (the French line stays, the mask does the rest)
+CLEAN_TABLES = {
+    "en": {"guard.insult": "Get lost, you {name}!", "guard.insult@clean": "Get lost, you pest!",
+           "guard.bye": "Damn, bye.", "shout": "Hell yes", "coins.one": "{n} damn coin", "coins.one@clean": "{n} coin",
+           "coins.other": "{n} damn coins"},
+    "fr": {"guard.insult": "Dégage, espèce de {name} !", "guard.bye": "Merde, salut.", "guard.bye@clean": "Bon, salut.",
+           "coins.one": "{n} pièce", "coins.other": "{n} pièces"},
+    # the category beats @clean inside a locale: few (plain) before other@clean
+    "ru": {"coins.few": "{n} монеты", "coins.other@clean": "{n} монет"},
+}
+CLEAN_POINTS = [                                     # locale, key, n (None: tr), args, clean, words
+    ("en", "guard.insult", None, {"name": "Ana"}, False, []),
+    ("en", "guard.insult", None, {"name": "Ana"}, True, []),
+    ("fr", "guard.insult", None, {"name": "crétin"}, True, ["CRÉTIN"]),
+    ("fr", "guard.insult", None, {"name": "crétin"}, False, ["crétin"]),
+    ("fr", "guard.bye", None, {}, True, ["merde"]),
+    ("fr", "guard.bye", None, {}, False, ["merde"]),
+    ("fr-CA", "guard.bye", None, {}, True, []),
+    ("de", "guard.bye", None, {}, True, ["damn"]),
+    ("de", "shout", None, {}, True, ["hell", "yes"]),
+    ("en", "missing.key", None, {}, True, ["missing", "key"]),
+    ("en", "coins", 1, {}, True, ["damn"]),
+    ("en", "coins", 2, {}, True, ["damn"]),
+    ("en", "coins", 2, {}, False, ["damn"]),
+    ("fr", "coins", 0, {}, True, ["pièce"]),
+    ("ru", "coins", 3, {}, True, ["damn"]),
+    ("ru", "coins", 5, {}, True, []),
+    ("ru", "nothing", 5, {}, True, []),              # nowhere: the key with the requested locale's category
+]
+MASK_POINTS = [                                      # text, words
+    ("What the hell?", ["hell"]),
+    ("HELL, Hell, hElL!", ["hell"]),
+    ("hello shell hell", ["hell"]),
+    ("ass class bass", ["ass", "", "two words", "x-y"]),
+    ("Scheiße! scheiße", ["scheiße"]),
+    ("ÉCRASÉ écrasé", ["écrasé"]),
+    ("Łajdak łajdak", ["ŁAJDAK"]),
+    ("СУКА сука Сука", ["сука"]),
+    ("ΒΛΑΚΑΣ ΣΚΑΤΆ", ["βλακας", "σκατά"]),
+    ("İSTANBUL", ["istanbul"]),
+    ("ÿ Ÿ", ["ÿ"]),
+    ("Ä×Ä÷ä", ["ä"]),
+    ("damn’s damn's", ["damn"]),
+    ("x-damn-x damn_it", ["damn"]),
+    ("crap crap", ["crap"]),
+    ("café café", ["café"]),
+    ("\U0001D521\U0001D51E\U0001D52A\U0001D52B damn", ["\U0001D521\U0001D51E\U0001D52A\U0001D52B"]),
+    ("damn\U0001F600 \U0001F600damn", ["damn"]),
+    ("他妈的 他妈", ["他妈"]),
+    ("Scheißkerl", ["scheiß"]),
+    ("h4x0r h4x", ["h4x"]),
+    ("¿Àx?", ["àx"]),
+    ("a⯿b aⰀb", ["a", "b"]),
+    ("", ["x"]),
+    ("nothing listed", []),
+]
 
 
 def build_shell():
@@ -1005,15 +1506,26 @@ def build_shell():
         ("no file", None),
         ("foreign version and spelled-out values", json.dumps({"version": 7, "future": True, "display": {
             "vsync": "true", "frame_cap": "60"}})),
+        # #171 and #207: the content switches, a file from before them (the defaults), bad values and a bad section
+        ("content switches flipped", json.dumps({"content": {"blood": False, "clean_language": True}})),
+        ("content bad values", json.dumps({"content": {"blood": "no", "clean_language": 1, "gore": "max"}})),
+        ("content not an object", json.dumps({"content": "off", "access": {"subtitles": False}})),
     ]
     for name, text in inputs:
         s, problems = settings_load(text)
         cases.append({"type": "settings_load", "name": name, "input": text, "expect": s,
                       "problems": len(problems), "effective_shake": effective_shake(s),
-                      "telemetry_allowed": telemetry_allowed(s)})
+                      "telemetry_allowed": telemetry_allowed(s), "blood_enabled": blood_enabled(s),
+                      "clean_language": clean_language(s)})
     s, _ = settings_load(json.dumps({"telemetry": {"consent": "yes"}}))
     cases.append({"type": "settings_load", "name": "consent given", "input": json.dumps({"telemetry": {"consent": "yes"}}),
-                  "expect": s, "problems": 0, "effective_shake": effective_shake(s), "telemetry_allowed": True})
+                  "expect": s, "problems": 0, "effective_shake": effective_shake(s), "telemetry_allowed": True,
+                  "blood_enabled": True, "clean_language": False})
+    flipped, _ = settings_load(json.dumps({"content": {"blood": False, "clean_language": True}}))
+    cases.append({"type": "settings_load", "name": "content switches survive a save and a load",
+                  "input": json.dumps(flipped), "expect": flipped, "problems": 0,
+                  "effective_shake": effective_shake(flipped), "telemetry_allowed": False, "blood_enabled": False,
+                  "clean_language": True})
     for name, action, slot, binding in [("free key", "jump", 0, "key:k"), ("swap in group", "jump", 0, "key:j"),
                                         ("other group is fine", "ui_accept", 0, "key:space"),
                                         ("pad swap", "attack", 1, "pad:south"),
@@ -1068,6 +1580,35 @@ def build_shell():
         for n in (0, 1, 2, 5):
             pts.append([loc, n, plural(loc, n), tr_plural(TABLES, loc, "apples", n)])
     cases.append({"type": "plural", "name": "one and other", "key": "apples", "tables": TABLES, "points": pts})
+    pts = []
+    for loc, ns in [("ru", (1, 3, 5, 11, 21, 22, 25, 101, 111)), ("uk", (2, 14)), ("pl", (1, 3, 5, 22)),
+                    ("ar", (0, 1, 2, 3, 11, 100)), ("fr", (0, 1000000)), ("cs", (4, 5)), ("de", (1, 3)),
+                    ("ru-RU", (2,)), ("ja", (1,))]:
+        for n in ns:
+            pts.append([loc, n, plural(loc, n), tr_plural(PLURAL_TABLES, loc, "hits", n)])
+    cases.append({"type": "plural", "name": "CLDR forms, each locale with its own rule, other when a form is missing",
+                  "key": "hits", "tables": PLURAL_TABLES, "points": pts})
+    sweep = []
+    for loc in PLURAL_SWEEP_LOCALES:
+        sweep.append([loc, 0, " ".join(plural(loc, n) for n in range(PLURAL_SWEEP_N))])
+    cases.append({"type": "plural_rules", "name": "CLDR 46 categories for 0..%d" % (PLURAL_SWEEP_N - 1),
+                  "sweep": sweep, "points": [[loc, n, plural(loc, n)] for loc in PLURAL_SWEEP_LOCALES
+                                             for n in PLURAL_BIG_N],
+                  "categories": [[loc, list(plural_categories(loc))] for loc in PLURAL_SWEEP_LOCALES]})
+    pts = []
+    for loc, key, n, args, clean, words in CLEAN_POINTS:
+        if n is None:
+            out = tr(CLEAN_TABLES, loc, key, args, clean, words)
+        else:
+            out = tr_plural(CLEAN_TABLES, loc, key, n, args, clean, words)
+        pts.append([loc, key, n, args, clean, words, out])
+    cases.append({"type": "tr_clean", "name": "@clean variants per locale, then the word mask (#207)",
+                  "tables": CLEAN_TABLES, "points": pts})
+    cases.append({"type": "mask_words", "name": "whole words, folded case, same-length grawlix", "grawlix": GRAWLIX,
+                  "points": [[text, words, mask_words(text, words)] for text, words in MASK_POINTS]})
+    cases.append({"type": "mature_words", "name": "the word list file", "points": [
+        [text, mature_words(text)] for text in ('{"words": ["damn", 3, "hell"], "_note": "the game\'s own list"}',
+                                                '{"words": []}', "[]", "not json", '{"words": "damn"}', None)]})
     cases.append({"type": "narration", "name": "what a focused control says", "points": [
         [label, role, value, narration_line(label, role, value)] for label, role, value in [
             ("Music volume", "slider", "70 percent"), ("Play", "button", ""), ("Subtitles", "toggle", "on"),
@@ -1156,6 +1697,631 @@ def build_credits():
             "cases": cases}
 
 
+# ----------------------------------------------------------------------------------------------- platform services
+# The engine-neutral platform layer (#84; docs/PLATFORM.md is the spec, SOP-21 section 4 cites it): achievements,
+# stats, rich presence, the overlay's pause hook and the cloud-save hooks, in front of a backend (the null backend
+# that records every call, by default; a store adapter such as Steam's later). Self-contained on purpose: it reads
+# nothing from the shell's tables above. Every list is ordered (definition order, unlock order, first-save order),
+# so no rule depends on the order of a JSON object's keys.
+PLATFORM_FORMAT = "platform_state"                   # the local state file's "format"
+PLATFORM_STATE_FILE = "platform_state.json"          # in the user-data folder; never synced to the cloud
+PLATFORM_STATE_VERSION = 1
+PLATFORM_ID_MAX = 64                                 # achievement, stat and presence key names: a letter, then
+                                                     # letters, digits and '_' (ASCII), at most 64
+STAT_TYPES = ["int", "float"]
+PRESENCE_MAX_KEYS = 30                               # Steam's k_cchMaxRichPresenceKeys (verify)
+PRESENCE_MAX_VALUE_BYTES = 255                       # UTF-8 bytes; Steam's 256 counts the closing NUL (verify)
+CLOUD_MODES = ["auto", "api"]                        # auto: the store syncs the folder (Steam Auto-Cloud, no calls);
+                                                     # api: the layer calls cloud_write after every cloud save
+CLOUD_LOCAL_NAMES = ["settings.json", PLATFORM_STATE_FILE, "telemetry.csv", "log_tail.txt"]  # machine-specific
+CLOUD_LOCAL_SUFFIXES = [".tmp", ".log"]              # half-written saves and logs
+CLOUD_LOCAL_DIRS = ["logs", "crashes", "captures"]   # a first folder named so stays on the machine
+OVERLAY_PAUSE_SCREENS = ["play"]                     # the overlay opening over these opens the pause menu
+_ASCII_LETTERS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+_ID_CHARS = _ASCII_LETTERS + "0123456789_"
+
+
+def platform_id_ok(v):
+    """An achievement, stat or presence key name: a string, 1 to 64 ASCII characters, a letter first."""
+    return (isinstance(v, str) and 0 < len(v) <= PLATFORM_ID_MAX and v[0] in _ASCII_LETTERS
+            and all(c in _ID_CHARS for c in v))
+
+
+def _num_ok(v):
+    """A finite number that is not a boolean (JSON true is not 1 here, in any port)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _whole(v):
+    """Integer-valued, judged by the value, never by the type: 5 and 5.0 are the same in JavaScript and Lua."""
+    return _num_ok(v) and math.floor(v) == v
+
+
+def _stat_value(sdef, v):
+    """A stat value as every port stores it: an int stat as a whole number, a float stat as a float."""
+    return int(v) if sdef["type"] == "int" else float(v)
+
+
+def _clamp_stat(sdef, v):
+    lo, hi = sdef["min"], sdef["max"]
+    v = max(v, lo)
+    return min(v, hi) if hi is not None else v
+
+
+def stat_initial(sdef):
+    """A stat's value before anything happened: 0, clamped into [min, max]."""
+    return _stat_value(sdef, _clamp_stat(sdef, 0))
+
+
+def achievements_load(text):
+    """data/achievements.json -> (definitions, problems), in settings_load's style: a bad entry is dropped and counted,
+    the rest still load; no file (None or "") is no achievements and no problems. Shape:
+      {"stats": [{"id", "type": "int"|"float" (int), "min" (0), "max" (none), "increment_only" (false)}],
+       "achievements": [{"id", "name", "description" (""), "stat" (none), "threshold", "progress_every" (none)}]}
+    name and description are localization keys (tr shows the key when a table lacks it, so plain words work too).
+    Stats and achievements have their own id namespaces. A bound achievement (stat set) needs a threshold above the
+    stat's initial value and at most its max (whole for an int stat); progress_every, if set, is above 0 and below
+    the threshold (whole for an int stat)."""
+    empty = {"version": PLATFORM_STATE_VERSION, "stats": [], "achievements": []}
+    if not text:
+        return empty, 0
+    try:
+        raw = json.loads(text)
+    except ValueError:
+        return empty, 1
+    if not isinstance(raw, dict):
+        return empty, 1
+    problems = 0
+    stats, achievements = [], []
+    raw_stats = raw.get("stats", [])
+    if not isinstance(raw_stats, list):
+        raw_stats, problems = [], problems + 1
+    for s in raw_stats:
+        ok = isinstance(s, dict) and platform_id_ok(s.get("id")) and all(s.get("id") != t["id"] for t in stats)
+        if ok:
+            kind = s.get("type", "int")
+            lo, hi, inc = s.get("min", 0), s.get("max"), s.get("increment_only", False)
+            whole = _whole if kind == "int" else _num_ok
+            ok = (kind in STAT_TYPES and whole(lo) and (hi is None or (whole(hi) and hi >= lo))
+                  and isinstance(inc, bool))
+        if not ok:
+            problems += 1
+            continue
+        conv = int if kind == "int" else float
+        stats.append({"id": s["id"], "type": kind, "min": conv(lo), "max": None if hi is None else conv(hi),
+                      "increment_only": inc})
+    by_id = {s["id"]: s for s in stats}
+    raw_ach = raw.get("achievements", [])
+    if not isinstance(raw_ach, list):
+        raw_ach, problems = [], problems + 1
+    for a in raw_ach:
+        ok = (isinstance(a, dict) and platform_id_ok(a.get("id")) and all(a.get("id") != b["id"] for b in achievements)
+              and isinstance(a.get("name"), str) and a.get("name") != ""
+              and isinstance(a.get("description", ""), str))
+        stat, threshold, every = (a.get("stat"), a.get("threshold"), a.get("progress_every")) if ok else (None,) * 3
+        if ok and stat is not None:
+            sdef = by_id.get(stat) if isinstance(stat, str) else None
+            whole = _whole if sdef and sdef["type"] == "int" else _num_ok
+            ok = (sdef is not None and whole(threshold) and threshold > stat_initial(sdef)
+                  and (sdef["max"] is None or threshold <= sdef["max"])
+                  and (every is None or (whole(every) and 0 < every < threshold)))
+        elif ok:
+            ok = threshold is None and every is None          # a threshold without a stat is a mistake
+        if not ok:
+            problems += 1
+            continue
+        sdef = by_id.get(stat)
+        achievements.append({"id": a["id"], "name": a["name"], "description": a.get("description", ""),
+                             "stat": stat, "threshold": None if stat is None else _stat_value(sdef, threshold),
+                             "progress_every": None if every is None else _stat_value(sdef, every)})
+    return {"version": PLATFORM_STATE_VERSION, "stats": stats, "achievements": achievements}, problems
+
+
+def cloud_partition(path):
+    """Which of the user-data folder's files sync to the cloud: "cloud" or "local". path is relative to that folder
+    ('/' or '\\'), compared without case. Local: settings.json (the display settings belong to this machine, E79), the
+    platform layer's own state, telemetry and logs, half-written *.tmp, and a first folder named logs, crashes or
+    captures. Everything else (the save slots and their .bak) is "cloud"."""
+    folded = "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in path)   # ASCII only, in every port
+    parts = [p for p in folded.replace("\\", "/").split("/") if p not in ("", ".")]
+    if not parts:
+        return "local"
+    name = parts[-1]
+    if (len(parts) > 1 and parts[0] in CLOUD_LOCAL_DIRS) or name in CLOUD_LOCAL_NAMES \
+            or any(name.endswith(s) for s in CLOUD_LOCAL_SUFFIXES):
+        return "local"
+    return "cloud"
+
+
+def overlay_action(active, screen):
+    """The store overlay opened (active) or closed: "pause" opens the pause menu, "none" does nothing. Opening over
+    gameplay pauses (as focus loss does, SOP-19 section 6); closing never resumes: the player resumes from the pause
+    menu, which is still open."""
+    return "pause" if active and screen in OVERLAY_PAUSE_SCREENS else "none"
+
+
+def _utf8_len(text):
+    return len(text.encode("utf-8"))
+
+
+class Platform:
+    """The platform layer's game-facing half (#84). Every operation returns (out, calls): calls are what it sent to
+    the backend during that operation, in order, as lists ([name, args...]). The rules:
+    - unlock(id): "unknown", "already" (no call, ever: an achievement unlocks once), or "unlocked": it is unlocked
+      locally at once and, online, flushed at once (so the store's popup shows).
+    - set_stat(id, v) / add_stat(id, d): "unknown"; "refused" (not a finite number, not whole for an int stat, or
+      lower than now on an increment_only stat: the value stays); "same" (no change, nothing pending); "ok" or
+      "clamped" (into [min, max]). A change is pending until a flush. Every achievement bound to the stat whose
+      threshold the new value reaches unlocks, in definition order; online, a bound achievement whose progress_every
+      step the value just crossed (and whose threshold it did not reach) sends indicate_progress at once. Stats wait
+      for flush() (level end, pause, quit) unless an unlock flushed them.
+    - flush(): "offline" (kept), "nothing", "sent" or "failed". Sends set_stat for every pending stat (definition
+      order, the latest value only), set_achievement for every pending unlock (unlock order), one store_stats, then
+      cloud_write for every pending cloud file (first-save order). The pending lists clear only when store_stats
+      succeeds; a failed store keeps them all and the layer goes offline until connect().
+    - set_presence(key, value): "refused" (a bad key, a value that is not a string or longer than 255 UTF-8 bytes,
+      a 31st key), "same" (unchanged: nothing is resent) or "ok". "" removes the key. Sent at once when online;
+      offline only the map changes, and connect() sends the map as it is then, keys sorted, never the history.
+      clear_presence(): "same" when empty, else "ok" and clear_presence when online.
+    - saved(path): after the game wrote a file (SOP-19's atomic write done): its cloud_partition. In "api" cloud mode
+      a cloud file is cloud_write now (online) or queued once (offline); "auto" mode sends nothing.
+    - connect(remote): the backend came (back): remote unlocks join the local ones without a call (dropped from
+      pending); a remote stat replaces the local one unless a local change is pending, and on an increment_only stat
+      the larger wins (pending drops when the remote is at least as far); bound achievements are checked again
+      (no progress popups here); then flush() and the presence map. disconnect(): offline.
+    - reset_all(): testing only; "offline" (refused: a reset is never queued), else everything back to the initial
+      values, the pending lists emptied, reset_all_stats sent."""
+
+    def __init__(self, defs, online=False, cloud="auto"):
+        self.defs = defs
+        self.stat_defs = {s["id"]: s for s in defs["stats"]}
+        self.ach_defs = {a["id"]: a for a in defs["achievements"]}
+        self.online = online
+        self.cloud = cloud
+        self.store_failures = 0                      # the null backend's test hook: fail the next N store_stats
+        self.presence = {}
+        self._reset_local()
+
+    def _reset_local(self):
+        self.unlocked = []
+        self.stats = {s["id"]: stat_initial(s) for s in self.defs["stats"]}
+        self.pending_stats, self.pending_unlocks, self.pending_cloud = [], [], []
+
+    # --- what ports compare after every step
+    def state(self):
+        return {"format": PLATFORM_FORMAT, "version": PLATFORM_STATE_VERSION, "unlocked": list(self.unlocked),
+                "stats": dict(self.stats), "pending": {"stats": [s["id"] for s in self.defs["stats"]
+                                                                 if s["id"] in self.pending_stats],
+                                                       "unlocks": list(self.pending_unlocks),
+                                                       "cloud": list(self.pending_cloud)}}
+
+    # --- achievements and stats
+    def _unlock_local(self, aid):
+        self.unlocked.append(aid)
+        self.pending_unlocks.append(aid)
+
+    def unlock(self, aid):
+        if aid not in self.ach_defs:
+            return "unknown", []
+        if aid in self.unlocked:
+            return "already", []
+        self._unlock_local(aid)
+        return "unlocked", (self.flush()[1] if self.online else [])
+
+    def _check(self, sid, old, new, notify, calls):
+        """Unlock what the new value reaches; online and notify: progress popups for steps just crossed."""
+        unlocked = False
+        for a in self.defs["achievements"]:
+            if a["stat"] != sid or a["id"] in self.unlocked:
+                continue
+            if new >= a["threshold"]:
+                self._unlock_local(a["id"])
+                unlocked = True
+            elif notify and self.online and a["progress_every"] is not None \
+                    and math.floor(new / a["progress_every"]) > math.floor(old / a["progress_every"]):
+                calls.append(["indicate_progress", a["id"], new, a["threshold"]])
+        return unlocked
+
+    def set_stat(self, sid, v):
+        sdef = self.stat_defs.get(sid)
+        if sdef is None:
+            return "unknown", []
+        if not _num_ok(v) or (sdef["type"] == "int" and not _whole(v)):
+            return "refused", []
+        c = _stat_value(sdef, _clamp_stat(sdef, v))
+        old = self.stats[sid]
+        if sdef["increment_only"] and c < old:
+            return "refused", []
+        if c == old:
+            return "same", []
+        self.stats[sid] = c
+        if sid not in self.pending_stats:
+            self.pending_stats.append(sid)
+        calls = []
+        if self._check(sid, old, c, True, calls) and self.online:
+            calls += self.flush()[1]
+        return ("clamped" if c != v else "ok"), calls
+
+    def add_stat(self, sid, d):
+        sdef = self.stat_defs.get(sid)
+        if sdef is None:
+            return "unknown", []
+        if not _num_ok(d) or (sdef["type"] == "int" and not _whole(d)):
+            return "refused", []
+        return self.set_stat(sid, self.stats[sid] + d)
+
+    def flush(self):
+        if not self.online:
+            return "offline", []
+        if not (self.pending_stats or self.pending_unlocks or self.pending_cloud):
+            return "nothing", []
+        calls = []
+        if self.pending_stats or self.pending_unlocks:
+            calls += [["set_stat", s["id"], self.stats[s["id"]]] for s in self.defs["stats"]
+                      if s["id"] in self.pending_stats]
+            calls += [["set_achievement", aid] for aid in self.pending_unlocks]
+            calls.append(["store_stats"])
+            if self.store_failures > 0:              # the store said no: keep everything, wait for connect()
+                self.store_failures -= 1
+                self.online = False
+                return "failed", calls
+            self.pending_stats, self.pending_unlocks = [], []
+        calls += [["cloud_write", p] for p in self.pending_cloud]
+        self.pending_cloud = []
+        return "sent", calls
+
+    # --- rich presence
+    def set_presence(self, key, value):
+        if not platform_id_ok(key) or not isinstance(value, str) or _utf8_len(value) > PRESENCE_MAX_VALUE_BYTES:
+            return "refused", []
+        if value == "":
+            if key not in self.presence:
+                return "same", []
+            del self.presence[key]
+        else:
+            if self.presence.get(key) == value:
+                return "same", []
+            if key not in self.presence and len(self.presence) >= PRESENCE_MAX_KEYS:
+                return "refused", []
+            self.presence[key] = value
+        return "ok", ([["set_presence", key, value]] if self.online else [])
+
+    def clear_presence(self):
+        if not self.presence:
+            return "same", []
+        self.presence = {}
+        return "ok", ([["clear_presence"]] if self.online else [])
+
+    # --- cloud saves
+    def saved(self, path):
+        part = cloud_partition(path)
+        calls = []
+        if part == "cloud" and self.cloud == "api":
+            if self.online:
+                calls.append(["cloud_write", path])
+            elif path not in self.pending_cloud:
+                self.pending_cloud.append(path)
+        return part, calls
+
+    # --- the backend coming and going
+    def connect(self, remote):
+        self.online = True
+        for aid in remote.get("unlocked", []):
+            if aid in self.ach_defs and aid not in self.unlocked:
+                self.unlocked.append(aid)
+            if aid in self.pending_unlocks:
+                self.pending_unlocks.remove(aid)
+        rstats = remote.get("stats", {})
+        for s in self.defs["stats"]:
+            sid = s["id"]
+            r = rstats.get(sid)
+            if not _num_ok(r) or (s["type"] == "int" and not _whole(r)):
+                continue
+            r = _stat_value(s, _clamp_stat(s, r))
+            old = self.stats[sid]
+            if s["increment_only"]:
+                if r >= old and sid in self.pending_stats:
+                    self.pending_stats.remove(sid)
+                new = max(old, r)
+            else:
+                new = old if sid in self.pending_stats else r
+            self.stats[sid] = new
+            self._check(sid, old, new, False, [])
+        calls = self.flush()[1]
+        if self.online:                              # a failed store on the way back leaves presence for later
+            calls += [["set_presence", k, self.presence[k]] for k in sorted(self.presence)]
+        return ("online" if self.online else "failed"), calls
+
+    def disconnect(self):
+        self.online = False
+        return "offline", []
+
+    def reset_all(self):
+        if not self.online:
+            return "offline", []
+        self._reset_local()
+        return "reset", [["reset_all_stats", True]]
+
+
+class NullBackend:
+    """The backend every game runs by default (#84): it accepts every call, keeps them in order in `calls` (what
+    would have been sent), and keeps what a store would hold, so remote() can be handed to Platform.connect.
+    set_stat and set_achievement are staged and land in the stored copy only at store_stats (E78: SetAchievement,
+    then StoreStats); fail_stores makes the next N store_stats fail, and a failed store lands nothing. send()
+    returns whether the call succeeded (only store_stats can fail)."""
+
+    def __init__(self):
+        self.calls = []
+        self.unlocked, self.stats = [], {}
+        self.staged_unlocks, self.staged_stats = [], {}
+        self.presence, self.cloud = {}, []
+        self.fail_stores = 0
+
+    def send(self, call):
+        self.calls.append(list(call))
+        name, args = call[0], call[1:]
+        if name == "set_achievement":
+            if args[0] not in self.staged_unlocks:
+                self.staged_unlocks.append(args[0])
+        elif name == "set_stat":
+            self.staged_stats[args[0]] = args[1]
+        elif name == "store_stats":
+            if self.fail_stores > 0:
+                self.fail_stores -= 1
+                return False
+            self.unlocked += [a for a in self.staged_unlocks if a not in self.unlocked]
+            self.stats.update(self.staged_stats)
+            self.staged_unlocks, self.staged_stats = [], {}
+        elif name == "reset_all_stats":
+            self.unlocked, self.stats, self.staged_unlocks, self.staged_stats = [], {}, [], {}
+        elif name == "set_presence":
+            if args[1] == "":
+                self.presence.pop(args[0], None)
+            else:
+                self.presence[args[0]] = args[1]
+        elif name == "clear_presence":
+            self.presence = {}
+        elif name == "cloud_write" and args[0] not in self.cloud:
+            self.cloud.append(args[0])
+        return True
+
+    def remote(self):
+        """What connect() gets: the stored unlocks (in the order stored) and stats."""
+        return {"unlocked": list(self.unlocked), "stats": dict(self.stats)}
+
+
+def platform_state_load(defs, text):
+    """platform_state.json -> (state, problems). No file: the initial state, no problems. Not JSON, not an object,
+    another format or another version: the initial state and 1 problem (the store's own copy is the truth; the
+    queue is rebuilt from play). Otherwise every entry that does not fit the definitions is dropped and counted:
+    an unknown or repeated unlock, an unknown stat or a value that is not a number (not whole for an int stat;
+    out of range is clamped, not counted), a pending id that is unknown, repeated or (for an unlock) not unlocked,
+    a pending cloud path that is not a string or not a cloud file."""
+    p = Platform(defs)
+    if not text:
+        return p.state(), 0
+    try:
+        raw = json.loads(text)
+    except ValueError:
+        return p.state(), 1
+    if not isinstance(raw, dict) or raw.get("format") != PLATFORM_FORMAT or \
+            raw.get("version") != PLATFORM_STATE_VERSION:
+        return p.state(), 1
+    problems = 0
+
+    def items(v, kind):
+        nonlocal problems
+        if isinstance(v, kind):
+            return v
+        if v is not None:
+            problems += 1
+        return kind()
+    for aid in items(raw.get("unlocked"), list):
+        if isinstance(aid, str) and aid in p.ach_defs and aid not in p.unlocked:
+            p.unlocked.append(aid)
+        else:
+            problems += 1
+    for sid, v in items(raw.get("stats"), dict).items():
+        sdef = p.stat_defs.get(sid)
+        if sdef is None or not _num_ok(v) or (sdef["type"] == "int" and not _whole(v)):
+            problems += 1
+            continue
+        p.stats[sid] = _stat_value(sdef, _clamp_stat(sdef, v))
+    pending = items(raw.get("pending"), dict)
+    for sid in items(pending.get("stats"), list):
+        if isinstance(sid, str) and sid in p.stat_defs and sid not in p.pending_stats:
+            p.pending_stats.append(sid)
+        else:
+            problems += 1
+    for aid in items(pending.get("unlocks"), list):
+        if isinstance(aid, str) and aid in p.unlocked and aid not in p.pending_unlocks:
+            p.pending_unlocks.append(aid)
+        else:
+            problems += 1
+    for path in items(pending.get("cloud"), list):
+        if isinstance(path, str) and cloud_partition(path) == "cloud" and path not in p.pending_cloud:
+            p.pending_cloud.append(path)
+        else:
+            problems += 1
+    return p.state(), problems
+
+
+SAMPLE_ACHIEVEMENTS = {
+    "stats": [{"id": "enemies_defeated", "type": "int", "min": 0, "max": 1000000, "increment_only": True},
+              {"id": "coins", "type": "int", "max": 999},
+              {"id": "best_time_s", "type": "float", "min": 0, "max": 3600}],
+    "achievements": [{"id": "first_win", "name": "ach_first_win", "description": "ach_first_win_desc"},
+                     {"id": "defeat_1", "name": "ach_defeat_1", "stat": "enemies_defeated", "threshold": 1},
+                     {"id": "defeat_100", "name": "ach_defeat_100", "stat": "enemies_defeated", "threshold": 100,
+                      "progress_every": 25},
+                     {"id": "coins_500", "name": "ach_coins_500", "stat": "coins", "threshold": 500}]}
+
+
+def _platform_case(name, script, online=False, cloud="auto", defs=None):
+    """Run a script of [op, args...] steps; record each step's out, its backend calls and the state after it."""
+    defs = defs or achievements_load(json.dumps(SAMPLE_ACHIEVEMENTS))[0]
+    p = Platform(defs, online=online, cloud=cloud)
+    steps = []
+    for op in script:
+        kind, args = op[0], op[1:]
+        if kind == "fail_store":                     # the null backend's hook: its next store_stats fails
+            p.store_failures += 1
+            out, calls = None, []
+        elif kind == "overlay":
+            out, calls = overlay_action(*args), []
+        else:
+            out, calls = getattr(p, kind)(*args)
+        steps.append({"op": op, "out": out, "calls": calls, "state": p.state(),
+                      "presence": [[k, p.presence[k]] for k in sorted(p.presence)], "online": p.online})
+    return {"type": "platform_script", "name": name, "defs": defs, "online": online, "cloud": cloud, "steps": steps}
+
+
+def build_platform():
+    cases = [{"type": "platform_format", "name": "names and limits", "state_format": PLATFORM_FORMAT,
+              "state_file": PLATFORM_STATE_FILE, "state_version": PLATFORM_STATE_VERSION, "id_max": PLATFORM_ID_MAX,
+              "stat_types": STAT_TYPES, "presence_max_keys": PRESENCE_MAX_KEYS,
+              "presence_max_value_bytes": PRESENCE_MAX_VALUE_BYTES, "cloud_modes": CLOUD_MODES,
+              "cloud_local_names": CLOUD_LOCAL_NAMES, "cloud_local_suffixes": CLOUD_LOCAL_SUFFIXES,
+              "cloud_local_dirs": CLOUD_LOCAL_DIRS, "overlay_pause_screens": OVERLAY_PAUSE_SCREENS}]
+    sample = json.dumps(SAMPLE_ACHIEVEMENTS)
+    loads = [
+        ("the sample", sample),
+        ("no file", None),
+        ("empty file", ""),
+        ("not json", "{achievements"),
+        ("not an object", "[1, 2]"),
+        ("only achievements, no stats", '{"achievements": [{"id": "win", "name": "Win"}]}'),
+        ("defaults filled in", '{"stats": [{"id": "s"}], "achievements": [{"id": "a", "name": "A", "stat": "s", '
+                               '"threshold": 3}]}'),
+        ("a whole float is an int", '{"stats": [{"id": "s", "min": 0.0, "max": 10.0}], "achievements": '
+                                    '[{"id": "a", "name": "A", "stat": "s", "threshold": 5.0, '
+                                    '"progress_every": 2.0}]}'),
+        ("bad stats dropped and counted",
+         '{"stats": [{"id": "ok"}, {"id": "ok"}, {"id": "9lives"}, {"id": "x y"}, {"id": "t", "type": "double"}, '
+         '{"id": "u", "min": 5, "max": 1}, {"id": "v", "min": 0.5}, {"id": "w", "increment_only": 1}, '
+         '{"id": "f", "type": "float", "min": -1.5, "max": 2.25}, "s", {"id": "' + "s" * 65 + '"}]}'),
+        ("bad achievements dropped and counted",
+         '{"stats": [{"id": "s", "max": 10}, {"id": "g", "type": "float", "max": 1}], "achievements": ['
+         '{"id": "a", "name": "A"}, {"id": "a", "name": "A again"}, {"id": "b"}, {"id": "c", "name": ""}, '
+         '{"id": "d", "name": "D", "stat": "nope", "threshold": 1}, {"id": "e", "name": "E", "stat": "s"}, '
+         '{"id": "f", "name": "F", "stat": "s", "threshold": 0}, '
+         '{"id": "h", "name": "H", "stat": "s", "threshold": 11}, '
+         '{"id": "i", "name": "I", "stat": "s", "threshold": 2.5}, {"id": "j", "name": "J", "threshold": 3}, '
+         '{"id": "k", "name": "K", "stat": "s", "threshold": 4, "progress_every": 4}, '
+         '{"id": "m", "name": "M", "stat": "g", "threshold": 0.5, "progress_every": 0.25}, '
+         '{"id": "n", "name": "N", "description": 7}, {"id": "o", "name": "O", "stat": "s", "threshold": true}]}'),
+        ("stats and achievements not lists", '{"stats": {"id": "s"}, "achievements": "none"}'),
+    ]
+    pts = []
+    for name, text in loads:
+        defs, problems = achievements_load(text)
+        pts.append([name, text, defs, problems])
+    cases.append({"type": "achievements_load", "name": "data/achievements.json as every port reads it", "points": pts})
+    cases.append({"type": "cloud_partition", "name": "which user-data files sync", "points": [
+        [path, cloud_partition(path)] for path in [
+            "save_1.json", "save_1.json.bak", "save_1.json.tmp", "slots/2.save", "settings.json", "Settings.JSON",
+            "platform_state.json", "telemetry.csv", "log_tail.txt", "game.log", "logs/today.txt", "crashes/1.txt",
+            "captures/a.png", "sub/logs/x.txt", "saves\\slot_3.json", "./save_2.json", "", "notes/settings.json",
+            "LOGS/A.TXT", "Ärger/save.json", "SpeicherstÄnde/GAME.LOG"]]})
+    cases.append({"type": "overlay", "name": "the overlay's pause hook", "points": [
+        [active, screen, overlay_action(active, screen)]
+        for active in (True, False) for screen in ("play", "pause", "menu", "title", "settings")]})
+    cases.append(_platform_case("an achievement unlocks once and flushes at once", [
+        ["unlock", "first_win"], ["unlock", "first_win"], ["unlock", "no_such"], ["flush"]], online=True))
+    cases.append(_platform_case("stats wait for a flush; thresholds unlock in definition order", [
+        ["add_stat", "enemies_defeated", 0], ["set_stat", "coins", 120], ["flush"], ["flush"],
+        ["add_stat", "enemies_defeated", 30], ["add_stat", "enemies_defeated", 20], ["add_stat", "enemies_defeated", 1],
+        ["set_stat", "enemies_defeated", 100], ["add_stat", "enemies_defeated", 5]], online=True))
+    cases.append(_platform_case("refused, clamped and same", [
+        ["set_stat", "enemies_defeated", 10], ["set_stat", "enemies_defeated", 9], ["add_stat", "enemies_defeated", -1],
+        ["set_stat", "enemies_defeated", 2.5], ["set_stat", "enemies_defeated", "11"],
+        ["set_stat", "enemies_defeated", True],
+        ["set_stat", "enemies_defeated", 10.0], ["set_stat", "coins", 5000], ["set_stat", "coins", -3],
+        ["add_stat", "coins", 0.5], ["set_stat", "best_time_s", 61.25], ["set_stat", "best_time_s", 59],
+        ["set_stat", "best_time_s", 9999.5], ["set_stat", "nope", 1], ["add_stat", "nope", 1], ["flush"]],
+        online=True))
+    cases.append(_platform_case("offline: local at once, one replay when the backend returns", [
+        ["unlock", "first_win"], ["add_stat", "enemies_defeated", 1], ["add_stat", "enemies_defeated", 60],
+        ["set_stat", "coins", 40], ["set_stat", "coins", 30], ["flush"], ["set_presence", "status", "In the crypt"],
+        ["connect", {"unlocked": [], "stats": {}}], ["flush"]]))
+    cases.append(_platform_case("a failed store keeps the queue and waits for connect", [
+        ["set_stat", "coins", 7], ["fail_store"], ["flush"], ["set_stat", "coins", 8], ["unlock", "first_win"],
+        ["flush"], ["connect", {}], ["disconnect"], ["set_presence", "status", "Back"], ["set_stat", "coins", 9],
+        ["fail_store"], ["connect", {}], ["connect", {}]], online=True))
+    cases.append(_platform_case("connect merges what the store already has", [
+        ["add_stat", "enemies_defeated", 40], ["set_stat", "coins", 300], ["unlock", "first_win"],
+        ["connect", {"unlocked": ["first_win", "defeat_1", "not_ours"],
+                     "stats": {"enemies_defeated": 120, "coins": 999, "best_time_s": 42.5}}],
+        ["disconnect"], ["add_stat", "enemies_defeated", 5],
+        ["connect", {"unlocked": ["first_win", "defeat_1", "defeat_100"],
+                     "stats": {"enemies_defeated": 150, "coins": "lots", "best_time_s": 30}}]]))
+    cases.append(_platform_case("rich presence: limits, no resend, the map on reconnect", [
+        ["set_presence", "status", "Title screen"], ["set_presence", "status", "Title screen"],
+        ["set_presence", "status", "Level 2"], ["set_presence", "level", "2"], ["set_presence", "level", ""],
+        ["set_presence", "level", ""], ["set_presence", "bad key", "x"], ["set_presence", "note", "x" * 256],
+        ["set_presence", "note", "é" * 128], ["set_presence", "note", "é" * 127 + "a"],
+        ["set_presence", "count", 3], ["disconnect"], ["set_presence", "status", "Level 3"],
+        ["set_presence", "boss", "Lich"], ["clear_presence"], ["set_presence", "zone", "Crypt"],
+        ["set_presence", "act", "1"], ["connect", {}], ["clear_presence"], ["clear_presence"]], online=True))
+    cases.append(_platform_case("thirty presence keys and no more", [
+        *[["set_presence", "k%02d" % i, "v"] for i in range(PRESENCE_MAX_KEYS)], ["set_presence", "k99", "v"],
+        ["set_presence", "k00", "w"], ["set_presence", "k00", ""], ["set_presence", "k99", "v"]], online=True))
+    cases.append(_platform_case("cloud hooks in api mode", [
+        ["saved", "save_1.json"], ["saved", "settings.json"], ["saved", "save_1.json.tmp"], ["disconnect"],
+        ["saved", "save_1.json"], ["saved", "save_2.json"], ["saved", "save_1.json"], ["saved", "logs/x.log"],
+        ["connect", {}], ["saved", "save_2.json"]], online=True, cloud="api"))
+    cases.append(_platform_case("cloud hooks in auto mode send nothing", [
+        ["saved", "save_1.json"], ["saved", "settings.json"], ["disconnect"], ["saved", "save_1.json"],
+        ["connect", {}]], online=True, cloud="auto"))
+    cases.append(_platform_case("the overlay pauses gameplay only", [
+        ["overlay", True, "play"], ["overlay", False, "pause"], ["overlay", True, "menu"]], online=True))
+    cases.append(_platform_case("reset is for testing and never queued", [
+        ["add_stat", "enemies_defeated", 3], ["unlock", "first_win"], ["reset_all"], ["disconnect"],
+        ["set_stat", "coins", 5], ["reset_all"]], online=True))
+    cases.append(_platform_case("no achievements file: every call is unknown", [
+        ["unlock", "first_win"], ["set_stat", "coins", 1], ["flush"], ["set_presence", "status", "ok"]],
+        online=True, defs=achievements_load(None)[0]))
+    defs = achievements_load(sample)[0]
+    good = Platform(defs)
+    good.unlock("first_win")
+    good.add_stat("enemies_defeated", 7)
+    good.saved("save_1.json")
+    good.cloud = "api"
+    good.saved("save_2.json")
+    states = [
+        ("no file", None), ("empty file", ""), ("not json", "{"), ("not an object", '"state"'),
+        ("another format", json.dumps({"format": "save", "version": 1})),
+        ("a newer version", json.dumps({"format": PLATFORM_FORMAT, "version": 2, "unlocked": ["first_win"]})),
+        ("what dump wrote", json.dumps(good.state())),
+        ("entries that do not fit are dropped", json.dumps({
+            "format": PLATFORM_FORMAT, "version": 1, "unlocked": ["first_win", "first_win", "gone", 3],
+            "stats": {"enemies_defeated": 12, "coins": 2.5, "best_time_s": 5000, "gone": 1, "best": "x"},
+            "pending": {"stats": ["coins", "coins", "gone"], "unlocks": ["first_win", "defeat_1"],
+                        "cloud": ["save_1.json", "settings.json", 4, "save_1.json"]}})),
+        ("wrong shapes", json.dumps({"format": PLATFORM_FORMAT, "version": 1, "unlocked": "first_win",
+                                     "stats": [1], "pending": {"stats": {}, "unlocks": None}})),
+    ]
+    cases.append({"type": "platform_state_load", "name": "platform_state.json as every port reads it",
+                  "defs": defs, "points": [[name, text, *platform_state_load(defs, text)] for name, text in states]})
+    nb = NullBackend()
+    sends = []
+    for call in [["set_stat", "coins", 5], ["set_achievement", "first_win"], ["store_stats"],
+                 ["set_stat", "coins", 9], ["set_achievement", "defeat_1"], ["fail_next_store"], ["store_stats"],
+                 ["set_stat", "enemies_defeated", 3], ["store_stats"], ["set_presence", "status", "Menu"],
+                 ["set_presence", "level", "2"], ["set_presence", "status", ""], ["cloud_write", "save_1.json"],
+                 ["cloud_write", "save_1.json"], ["reset_all_stats", True], ["clear_presence"]]:
+        if call == ["fail_next_store"]:          # the test hook, not a call: ok is null and calls skip it
+            nb.fail_stores += 1
+            ok = None
+        else:
+            ok = nb.send(call)
+        sends.append([call, ok, nb.remote(), [[k, nb.presence[k]] for k in sorted(nb.presence)], list(nb.cloud)])
+    cases.append({"type": "null_backend", "name": "the null backend keeps what a store would hold",
+                  "sends": sends, "calls": nb.calls})
+    return {"version": VECTOR_VERSION, "tolerance": TOLERANCE, "generator": "tools/golden_vectors.py",
+            "cases": cases}
+
+
 def render(obj):
     return json.dumps(obj, indent=1, sort_keys=True, ensure_ascii=False) + "\n"
 
@@ -1170,6 +2336,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     files = {"juice.json": render(build_juice()), "shell.json": render(build_shell()),
              "telemetry.json": render(build_telemetry()), "credits.json": render(build_credits())}
+    files["platform.json"] = render(build_platform())     # the platform layer (#84): its own line, its own file
     out = Path(args.out)
     if args.show:
         for text in files.values():

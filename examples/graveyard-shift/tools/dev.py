@@ -12,7 +12,7 @@
 #                      also draws every kit shader recipe (GameKitShaders.Render) and compares it with its golden;
 #                      --drive SCENARIO runs a scripted visit of the shell's screens (menus, crash, pseudo,
 #                      pseudo-plant, bug, display, access[:res=WxH][,scale=N][,pad][,read],
-#                      show:<title|settings|pause|subtitle|juice|credits|apply|confirm>) through the Smoke_ShellDrive PlayMode
+#                      show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>) through the Smoke_ShellDrive PlayMode
 #                      test, with --data-dir and --locale for that run (Assets/Scripts/Shell/SmokeDrive.cs)
 #             exec     run a static editor method headless (scene builders: exec GameKitScenes.CreateStarterScene)
 #             build    headless player build via Assets/Editor/GameKitBuild.cs
@@ -21,7 +21,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : UNITY_EDITOR  full path to the Unity editor executable for this project's version
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : doctor/check/test/smoke/build/clean run against Unity 6000.6.6f1 on Windows
@@ -48,6 +49,9 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --shaders also draws every recipe through a
+#           camera (the active pipeline's own passes, HDRP included), compares it with the golden image and reports
+#           which pipeline it ran on (#260)
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (Assets/Shaders/Kit):
 #           `check` compiles them in the same editor run, `smoke --shaders` draws and compares them
 # Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): smoke --drive / --data-dir / --locale for the
@@ -66,6 +70,9 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply and show:confirm
 #           (the Display tab's Apply, #308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -101,7 +108,7 @@ SHADER_OUT = "Logs/shader_check"         # smoke --shaders pictures, compared by
 SHADER_TIMEOUT_S = 300
 # smoke --drive (#168): the shell's scripted runs (Assets/Scripts/Shell/SmokeDrive.cs), through one PlayMode test
 DRIVES = ("menus", "crash", "pseudo", "pseudo-plant", "bug", "display")
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits", "apply", "confirm")   # --drive show:<target>
+SHOW_TARGETS = ("title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply", "confirm")   # --drive show:<target>
 # Drives that fail on purpose (#275), with the line that proves the failure was the planted one
 EXPECTED_FAIL = {"crash": "CRASH_WRITTEN", "pseudo-plant": "PSEUDO_FAIL"}
 ACCESS_DRIVE = re.compile(r"access(:(res=[1-9]\d{2,4}x[1-9]\d{2,4}|scale=\d+(\.\d+)?|pad|read)"
@@ -429,12 +436,20 @@ def shader_pass():
         if bad is None:
             print(f"[FAIL] GameKitShaders.Render did not report (exit {rc}); the log is {LOG_FILE}")
         return 2 if rc == 2 else 1
+    pipeline = re.search(r"^SHADER_PIPELINE (\S+) (\S+)", log, re.M)
+    if pipeline:                              # #260: a result says which pipeline and graphics API it ran on
+        print(f"[info] shader check ran on the {pipeline.group(1)} pipeline ({pipeline.group(2)})")
     rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir])
     print(out.rstrip())
-    if rc:
-        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+    worst = rc
+    print("[info] through a camera (the pipeline's own passes):")
+    rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir / "camera"])
+    print(out.rstrip())
+    worst = max(worst, rc)
+    if worst:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if worst == 1 else
               "[error] shader_ref.py compare could not run")
-    return rc
+    return worst
 
 
 def run_tests(platform, filt, graphics=False, env=None, until=None, fail_on=None):
@@ -986,8 +1001,8 @@ def build_parser():
     p = sub.add_parser("clean", help="remove Library/ and Temp/")
     p.add_argument("--yes", action="store_true", help="skip confirmation")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

@@ -1,0 +1,10 @@
+info face="duo" size=5 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=0 padding=0,0,0,0 spacing=1,1
+common lineHeight=8 base=6 scaleW=8 scaleH=8 pages=2 packed=0
+page id=0 file="font_duo_0.png"
+page id=1 file="font_duo_1.png"
+chars count=3
+char id=32 x=0 y=0 width=0 height=0 xoffset=0 yoffset=0 xadvance=3 page=0 chnl=15
+char id=65 x=1 y=1 width=3 height=5 xoffset=1 yoffset=1 xadvance=5 page=1 chnl=15
+char id=66 x=1 y=1 width=3 height=5 xoffset=0 yoffset=0 xadvance=4 page=0 chnl=15
+kernings count=1
+kerning first=66 second=65 amount=-2

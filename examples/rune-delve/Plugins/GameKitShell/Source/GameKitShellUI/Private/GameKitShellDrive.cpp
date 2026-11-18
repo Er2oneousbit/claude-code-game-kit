@@ -15,6 +15,8 @@
 //           confirm and the play HUD in the text report, disabled rows not counted as controls (#308, #309)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old size while
 //           the confirm waits
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the Accessibility tab at the content rows
+//           (#171, #207)
 // ---------------------------------------------------------------------------
 #include "GameKitShellDrive.h"
 
@@ -27,7 +29,7 @@
 #include "HAL/PlatformTime.h"
 #include "Misc/Paths.h"
 
-const TCHAR* FGameKitShellDrive::ShowScreens[12] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("pause"), TEXT("help"),
+const TCHAR* FGameKitShellDrive::ShowScreens[13] = {TEXT("title"), TEXT("main_menu"), TEXT("settings"), TEXT("content"), TEXT("pause"), TEXT("help"),
                                                     TEXT("history"), TEXT("credits"), TEXT("loading"), TEXT("subtitle"), TEXT("juice"),
                                                     TEXT("apply"), TEXT("confirm")};
 const TCHAR* FGameKitShellDrive::AccessActions[7] = {TEXT("ui_up"), TEXT("ui_down"), TEXT("ui_left"), TEXT("ui_right"), TEXT("ui_accept"),
@@ -377,6 +379,11 @@ bool FGameKitShellDrive::Show(const FString& Screen)
 	{
 		return ToMenu() && Open(TEXT("settings"), TEXT("settings")) && ToTab(TEXT("audio")) && Press(TEXT("ui_down"))
 		       && Focus(TEXT("audio.master")) && Press(TEXT("ui_left")) && Frames(5);
+	}
+	if (Screen == TEXT("content"))   // the Blood and Clean language rows (#171, #207)
+	{
+		return ToMenu() && Open(TEXT("settings"), TEXT("settings")) && ToTab(TEXT("access")) && Press(TEXT("ui_down"))
+		       && Focus(TEXT("access.clean_language")) && Frames(5);
 	}
 	if (Screen == TEXT("credits"))
 	{

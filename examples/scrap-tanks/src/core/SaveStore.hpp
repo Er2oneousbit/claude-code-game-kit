@@ -23,10 +23,13 @@
 //     write <file>.tmp ; if the current <file> is a good save, copy it to <file>.bak (atomically)
 //     rename <file>.tmp over <file>
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): on_saved, called with the file name after a save
+//           succeeded (the platform layer's cloud hook, PlatformService::saved, #84)
 // ---------------------------------------------------------------------------
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -66,6 +69,9 @@ public:
     bool save(const nlohmann::json& data, std::string* error = nullptr) const;
 
     const std::filesystem::path& file() const { return file_; }
+    // Runs with the save's file name (relative to its folder) after save() succeeded: Shell::save_slot points it
+    // at the platform layer (shell.platform().saved), so a cloud-API game can send the file.
+    std::function<void(const std::string&)> on_saved;
     std::filesystem::path backup_file() const;
 
 private:

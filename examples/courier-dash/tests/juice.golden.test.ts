@@ -1,15 +1,19 @@
 // ---------------------------------------------------------------------------
 // juice.golden.test.ts
 // Purpose : Runs every case of data/golden/juice.json through the TypeScript juice modules (shake, hitstop,
-//           ease, follow camera, input buffer, coyote time, spring, squash, flash limiter).
+//           ease, follow camera, input buffer, coyote time, spring, squash, flash limiter, and the recipe helpers
+//           impact, floatText and the trail point history).
 // Usage   : python tools/dev.py test
 // Notes   : One test per case. A case type this file does not know fails, so a new vector type added to
 //           tools/golden_vectors.py cannot be skipped silently. Expected values come only from the JSON.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (impact, float_text,
+//           trail; SOP-18 step 4, #170, #164)
 // ---------------------------------------------------------------------------
 import { describe, expect, it } from "vitest";
 import { CoyoteTimer } from "../src/core/coyoteTimer";
 import { ease } from "../src/core/ease";
+import { floatText, impact, trailLength, trailPush, trailShrink, type Point } from "../src/core/feel";
 import { FlashLimiter } from "../src/core/flashLimiter";
 import { FollowCamera } from "../src/core/followCamera";
 import { Hitstop } from "../src/core/hitstop";
@@ -92,6 +96,29 @@ const RUNNERS: Record<string, Runner> = {
     c.steps.forEach((step: any, i: number) => {
       if (step.call !== "request") throw new Error(`step ${i}: unknown call ${step.call}`);
       expectClose({ result: fl.request(step.now) }, step.expect, TOL, `step ${i}`);
+    });
+  },
+  impact: (c) => {
+    const p = c.params;
+    c.points.forEach(([dmg, full, hs, tr, flash]: [number, number, number, number, boolean], i: number) => {
+      const r = impact(dmg, full, p.hitstop_min, p.hitstop_max, p.trauma_min, p.trauma_max, p.flash_at);
+      expectClose([r.hitstop, r.trauma, r.flash], [hs, tr, flash], TOL, `point ${i}`);
+    });
+  },
+  float_text: (c) => {
+    const p = c.params;
+    c.points.forEach(([t, dy, scale, alpha, done]: [number, number, number, number, boolean], i: number) => {
+      const r = floatText(t, p.life, p.rise, p.pop_s);
+      expectClose([r.dy, r.scale, r.alpha, r.done], [dy, scale, alpha, done], TOL, `point ${i} t=${t}`);
+    });
+  },
+  trail: (c) => {
+    let pts: Point[] = [];
+    c.steps.forEach((step: any, i: number) => {
+      if (step.call === "push") pts = trailPush(pts, step.x, step.y, c.params.spacing, c.params.max_len);
+      else if (step.call === "shrink") pts = trailShrink(pts, step.amount);
+      else throw new Error(`step ${i}: unknown call ${step.call}`);
+      expectClose({ points: pts, length: trailLength(pts) }, step.expect, TOL, `step ${i}`);
     });
   },
 };

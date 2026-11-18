@@ -25,6 +25,8 @@
 //           draws over the camera's picture instead of blacking it out (#277)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a player started with --drive runs the drive and quits
 //           when it ends (PlayerRun.ArmDrive, #308); before, Shell.cs documented it and nothing ran
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): Pause and QuitGame flush it,
+//           the store overlay opening over play pauses (PlatformRules.OverlayAction)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -80,6 +82,16 @@ namespace graveyard_shift.Shell
             BuildPanel();
             Shell.I.SettingsChanged += OnSettingsChanged;
             Shell.I.LocaleChanged += RebuildAll;
+            Shell.I.OverlayChanged += OnOverlay;
+        }
+
+        private void OnOverlay(bool active)
+        {
+            string screen = World != null && !_paused && Top() == null ? World.Name : "menu";
+            if (Shell.I.Platform.Overlay(active, screen) == "pause")
+            {
+                Pause();
+            }
         }
 
         private void Start()
@@ -483,6 +495,7 @@ namespace graveyard_shift.Shell
             _paused = true;
             Time.timeScale = 0f;
             Push(new PauseMenu(this));
+            Shell.I.Platform?.Flush();   // a checkpoint (docs/PLATFORM.md)
         }
 
         public void Resume()
@@ -507,6 +520,7 @@ namespace graveyard_shift.Shell
         {
             QuitRequested = true;
             Debug.Log("[INFO][shell] quit");
+            Shell.I.Platform?.Flush();
             if (!Application.isEditor)
             {
                 Application.Quit();

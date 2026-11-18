@@ -14,6 +14,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --target itch (#86) against a stand-in butler: the
 #           push command, channel, version source, dry run, login by presence, and that the key never shows
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a relative --site reaches butler as the scanned folder
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): --target steam (#86) against a stand-in steamcmd: the
+#           app build VDF, the dry run, the preview, the default-branch and steam_appid.txt guardrails, closed stdin
 # ---------------------------------------------------------------------------
 import contextlib
 import importlib.util
@@ -603,6 +605,305 @@ class ItchPush(unittest.TestCase):
         self.assertTrue(calls[0]["key_set"])                # butler got the key through its environment
         self.assertNotIn(FAKE_KEY, log.read_text(encoding="utf-8"))
         self.assertNotIn(FAKE_KEY, out.getvalue())
+
+
+# ---- #86: Steam with steamcmd (SteamPipe) ----------------------------------------------------
+STEAM_STAND_IN = '''import json, os, sys
+with open(os.environ["FAKE_STEAMCMD_LOG"], "a", encoding="utf-8") as f:
+    vdf = sys.argv[sys.argv.index("+run_app_build") + 1] if "+run_app_build" in sys.argv else None
+    f.write(json.dumps({"argv": sys.argv[1:], "stdin": sys.stdin.read() if sys.stdin else None,
+                        "vdf": open(vdf, encoding="utf-8").read() if vdf else None}) + "\\n")
+sys.exit(int(os.environ.get("FAKE_STEAMCMD_RC", "0")))
+'''
+
+
+class FakeSteamcmd:
+    """Stands in for ship.steamcmd(): records each argument list and the VDF it was handed."""
+
+    def __init__(self, rc=0):
+        self.calls, self.vdfs, self.rc = [], [], rc
+
+    def __call__(self, exe, args):
+        self.calls.append(list(args))
+        self.vdfs.append(Path(args[args.index("+run_app_build") + 1]).read_text(encoding="utf-8"))
+        return self.rc
+
+
+class SteamUpload(unittest.TestCase):
+    """ship.py --target steam: the app build VDF, the steamcmd line, the dry run, the preview, the guardrails."""
+
+    def setUp(self):
+        self.g = Game()
+        meta = {"slug": "ship_test", "game_name": "Ship Test", "engine": "godot"}
+        (self.g.root / ".game-kit.json").write_text(json.dumps(meta), encoding="utf-8")
+        (self.g.root / "project.godot").write_text('[application]\nconfig/version="0.4.1"\n', encoding="utf-8")
+        self.bin = self.g.root / "bin"
+        self.bin.mkdir()
+        self.exe = self.bin / ("steamcmd.exe" if os.name == "nt" else "steamcmd")
+        self.exe.write_text("not run: ship.steamcmd is patched\n", encoding="utf-8")
+        self.win = self.g.root / "build" / "windows"
+        self.win.mkdir(parents=True)
+        (self.win / "game.exe").write_bytes(b"MZ\0\0fake")
+        (self.win / "game.pdb").write_bytes(b"symbols")
+        self.lin = self.g.root / "build" / "linux"
+        self.lin.mkdir(parents=True)
+        (self.lin / "game.x86_64").write_bytes(b"\x7fELFfake")
+        self.fake = FakeSteamcmd()
+        self.env = unittest.mock.patch.dict(os.environ, {"STEAMCMD_BIN": str(self.exe), "STEAM_USER": ""})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.g.tmp.cleanup()
+
+    def steam(self, *argv, fake=None):
+        self.g.ship.steamcmd = fake or self.fake
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+            code = self.g.ship.main(["--target", "steam", *map(str, argv)])
+        return code, out.getvalue()
+
+    def vdf(self):
+        return (self.g.root / "deploy" / "steam" / "app_build_1234560.vdf").read_text(encoding="utf-8")
+
+    def test_the_dry_run_prints_the_vdf_and_the_command_and_runs_nothing(self):
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--branch", "beta",
+                               "--steam-user", "buildbot", "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fake.calls, [])                       # nothing ran
+        vdf = self.vdf()
+        self.assertIn(vdf.rstrip("\n"), out)                        # the exact VDF is printed
+        self.assertIn('"AppID" "1234560"', vdf)
+        self.assertIn('"Desc" "ship-test 0.4.1 (beta)"', vdf)       # the slug and the engine's version
+        self.assertIn('"SetLive" "beta"', vdf)
+        self.assertIn('"1234561"', vdf)
+        self.assertIn(f'"ContentRoot" "{os.path.join(str(self.win), "")}"', vdf)
+        self.assertIn('"LocalPath" "*"', vdf)
+        self.assertIn('"FileExclusion" "*.pdb"', vdf)               # debug symbols never ship
+        self.assertNotIn('"Preview"', vdf)
+        self.assertNotRegex(vdf.lower(), r"password|token")         # no login of any kind in the file
+        vdf_path = self.g.root / "deploy" / "steam" / "app_build_1234560.vdf"
+        self.assertIn("would run: " + self.g.ship.shown_command(
+            [str(self.exe), "+login", "buildbot", "+run_app_build", str(vdf_path), "+quit"]), out)
+        self.assertIn("nothing was run or uploaded", out)
+
+    def test_a_dry_run_needs_no_account_but_an_upload_does(self):
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("+login \"<build account>\"" if os.name == "nt" else "+login '<build account>'", out)
+        self.assertIn("no build account named yet", out)
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--yes")
+        self.assertEqual(code, 2, out)
+        self.assertIn("no Steam build account", out)
+        self.assertIn("Steam Guard", out)                            # says how to log in by hand
+        self.assertEqual(self.fake.calls, [])
+        with unittest.mock.patch.dict(os.environ, {"STEAM_USER": "buildbot"}):
+            code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--yes")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.fake.calls[0][:2], ["+login", "buildbot"])
+        self.assertEqual(self.fake.calls[0][2], "+run_app_build")
+        self.assertEqual(self.fake.calls[0][-1], "+quit")
+        self.assertNotIn('"SetLive"', self.fake.vdfs[0])             # no --branch: set live by hand
+        self.assertIn("set the build live by hand", out)
+
+    def test_two_depots_share_a_content_root(self):
+        code, out = self.steam("--app", 1234560, "--depot", f"1234561={self.win}", "--depot", f"1234562={self.lin}",
+                               "--steam-user", "buildbot", "--dry-run")
+        self.assertEqual(code, 0, out)
+        vdf = self.vdf()
+        self.assertIn(f'"ContentRoot" "{os.path.join(str(self.g.root / "build"), "")}"', vdf)
+        self.assertIn(f'"LocalPath" "{os.path.join("windows", "*")}"', vdf)
+        self.assertIn(f'"LocalPath" "{os.path.join("linux", "*")}"', vdf)
+        self.assertLess(vdf.index('"1234561"'), vdf.index('"1234562"'))   # in the order given
+
+    def test_the_preview_never_sets_a_branch_live_and_is_confirmed_like_an_upload(self):
+        # "Preview" "1" is not proven by a real run yet (verify): a preview asks like an upload and drops SetLive
+        argv = ["--app", 1234560, "--depot", 1234561, "--site", self.win, "--branch", "beta", "--steam-user",
+                "buildbot", "--preview"]
+        with unittest.mock.patch.object(self.g.ship.sys, "stdin", None):   # no terminal, no --yes
+            code, out = self.steam(*argv)
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass --yes", out)
+        self.assertEqual(self.fake.calls, [])
+        code, out = self.steam(*argv, "--yes")
+        self.assertEqual(code, 0, out)
+        self.assertIn('"Preview" "1"', self.fake.vdfs[0])
+        self.assertNotIn('"SetLive"', self.fake.vdfs[0])
+        self.assertIn("nothing uploaded", out)
+
+    def test_depots_on_two_drives_are_a_usage_error(self):
+        with unittest.mock.patch.object(self.g.ship.os.path, "commonpath",
+                                        unittest.mock.Mock(side_effect=ValueError("different drives"))):
+            code, out = self.steam("--app", 1234560, "--depot", f"1={self.win}", "--depot", f"2={self.lin}",
+                                   "--dry-run")
+        self.assertEqual(code, 2, out)
+        self.assertIn("different drives", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_a_prompt_that_reads_end_of_file_asks_for_yes(self):
+        # Windows reports the NUL device as a terminal, so input() can hit end-of-file: no traceback, exit 2
+        tty = unittest.mock.Mock()
+        tty.isatty.return_value = True
+        with unittest.mock.patch.object(self.g.ship.sys, "stdin", tty), \
+                unittest.mock.patch("builtins.input", unittest.mock.Mock(side_effect=EOFError)):
+            code, out = self.steam("--app", 1234560, "--depot", 1, "--site", self.win, "--steam-user", "buildbot")
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass --yes (nobody answered the prompt)", out)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_an_upload_never_goes_ahead_unasked(self):
+        with unittest.mock.patch.object(self.g.ship.sys, "stdin", None):
+            code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--steam-user",
+                                   "buildbot")
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass --yes", out)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_the_default_branch_is_never_set_live(self):
+        for branch in ("default", "Default", "public"):
+            with self.subTest(branch=branch):
+                code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--branch", branch,
+                                       "--dry-run")
+                self.assertEqual(code, 2, out)
+                self.assertIn("set live by hand", out)
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--branch", "Beta Two",
+                               "--dry-run")
+        self.assertEqual(code, 2, out)
+
+    def test_steam_appid_txt_and_secrets_never_ship(self):
+        (self.win / "Steam_AppID.txt").write_text("480\n", encoding="utf-8")
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 1, out)
+        self.assertIn("Steam_AppID.txt must not ship", out)
+        (self.win / "Steam_AppID.txt").unlink()
+        (self.win / "keys.pem").write_text("x", encoding="utf-8")
+        code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 1, out)
+        self.assertIn("keys.pem: a secret-type file", out)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_spacewar_is_for_api_tests_not_uploads(self):
+        code, out = self.steam("--app", 480, "--depot", 481, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Spacewar", out)
+        code, out = self.steam("--app", 480, "--depot", 481, "--site", self.win, "--steam-user", "buildbot", "--yes")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(self.fake.calls, [])
+
+    def test_bad_ids_folders_and_steps_are_usage_errors(self):
+        cases = [
+            ([], "needs --app"),
+            (["--app", "12ab", "--depot", "1", "--site", self.win], "the app id is a number"),
+            (["--app", "1234560"], "needs --depot"),
+            (["--app", "1234560", "--depot", "x1", "--site", self.win], "the depot id is a number"),
+            (["--app", "1234560", "--depot", "1234561"], "needs a build folder"),
+            (["--app", "1234560", "--depot", "1", "--depot", "1", "--site", self.win], "given twice"),
+            (["--app", "1234560", "--depot", "1", "--site", self.g.root / "nope"], "is no folder"),
+            (["--app", "1234560", "--depot", "1", "--site", self.win, "--userversion", 'a"b'], "--userversion"),
+            (["--app", "1234560", "--depot", "1", "--site", self.win, "--steam-user", "a b", "--yes"], "account name"),
+            (["--app", "1234560", "--depot", "1", "--site", self.win, "--plan"], "--target steam takes"),
+            (["--app", "1234560", "--depot", "1", "--site", self.win, "--status"], "--target steam takes"),
+        ]
+        for argv, msg in cases:
+            with self.subTest(argv=argv):
+                extra = [] if any(s in argv for s in ("--plan", "--status", "--yes")) else ["--dry-run"]
+                code, out = self.steam(*argv, *extra)
+                self.assertEqual(code, 2, out)
+                self.assertIn(msg, out)
+        empty = self.g.root / "build" / "empty"
+        empty.mkdir()
+        code, out = self.steam("--app", 1234560, "--depot", 1, "--site", empty, "--dry-run")
+        self.assertEqual((code, "is empty" in out), (2, True), out)
+
+    def test_a_quote_never_reaches_the_vdf(self):
+        odd = self.g.root / 'build' / 'we"ird'
+        if os.name == "nt":                                  # Windows folder names cannot hold a quote
+            with self.assertRaises(self.g.ship.ToolError):
+                self.g.ship.vdf_value("the content root", 'C:\\we"ird')
+            return
+        odd.mkdir()
+        (odd / "game").write_bytes(b"x")
+        code, out = self.steam("--app", 1234560, "--depot", 1, "--site", odd, "--dry-run")
+        self.assertEqual(code, 2, out)
+        self.assertIn("cannot go into a SteamPipe VDF", out)
+
+    def test_steam_never_needs_opentofu_and_preview_is_steam_only(self):
+        with unittest.mock.patch.dict(os.environ, {"TOFU_BIN": ""}), \
+                unittest.mock.patch.object(self.g.ship.shutil, "which", lambda name: None):
+            code, out = self.steam("--app", 1234560, "--depot", 1, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 0, out)
+        code, out = self.g.run("--target", "aws", "--kind", "static", "--site", self.g.site, "--preview")
+        self.assertEqual(code, 2, out)
+        self.assertIn("--preview is for --target steam", out)
+
+    def test_no_steamcmd_is_an_environment_problem_that_says_how_to_install_it(self):
+        with unittest.mock.patch.dict(os.environ, {"STEAMCMD_BIN": ""}), \
+                unittest.mock.patch.object(self.g.ship.shutil, "which", lambda name: None):
+            code, out = self.steam("--app", 1234560, "--depot", 1, "--site", self.win, "--dry-run")
+        self.assertEqual(code, 2, out)
+        self.assertIn("steamcmd not found", out)
+        self.assertIn("developer.valvesoftware.com/wiki/SteamCMD", out)
+
+    def test_steamcmd_gets_a_closed_stdin_outside_a_terminal(self):
+        """A login prompt with nobody to answer it must fail at once, not wait until the timeout (Windows reports
+        the NUL device as a terminal, so the stand-in cannot tell: the call itself is checked)."""
+        seen = []
+
+        def run(cmd, **kw):
+            seen.append(kw)
+            return subprocess.CompletedProcess(cmd, 0)
+        with unittest.mock.patch.object(self.g.ship.subprocess, "run", run):
+            with unittest.mock.patch.object(self.g.ship.sys, "stdin", io.StringIO("")):
+                self.g.ship.steamcmd(self.exe, ["+quit"])
+            tty = unittest.mock.Mock()
+            tty.isatty.return_value = True
+            with unittest.mock.patch.object(self.g.ship.sys, "stdin", tty):
+                self.g.ship.steamcmd(self.exe, ["+quit"])
+        self.assertIs(seen[0]["stdin"], subprocess.DEVNULL)
+        self.assertIsNone(seen[1]["stdin"])                             # a terminal: steamcmd may ask the user
+        self.assertEqual(seen[0]["timeout"], self.g.ship.STEAMCMD_TIMEOUT_S)
+
+    def test_a_failed_upload_is_a_failure(self):
+        code, out = self.steam("--app", 1234560, "--depot", 1, "--site", self.win, "--steam-user", "buildbot",
+                               "--yes", fake=FakeSteamcmd(rc=5))
+        self.assertEqual(code, 1, out)
+        self.assertIn("steamcmd failed (exit 5)", out)
+
+    def test_the_real_subprocess_through_a_stand_in_steamcmd(self):
+        """A real steamcmd process (a stand-in script) gets the login name and the VDF, never a password, and has
+        its stdin closed outside a terminal, so a login prompt cannot wait forever."""
+        script = self.bin / "fake_steamcmd.py"
+        script.write_text(STEAM_STAND_IN, encoding="utf-8")
+        if os.name == "nt":
+            wrapper = self.bin / "steamcmd.cmd"
+            wrapper.write_text(f'@"{sys.executable}" "%~dp0fake_steamcmd.py" %*\r\n', encoding="utf-8")
+        else:
+            wrapper = self.bin / "steamcmd-stand-in"
+            wrapper.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$(dirname "$0")/fake_steamcmd.py" "$@"\n',
+                               encoding="utf-8")
+            wrapper.chmod(0o755)
+        log = self.g.root / "steamcmd-calls.jsonl"
+        spec = importlib.util.spec_from_file_location("ship_real_steamcmd", self.g.root / "tools" / "cloud" /
+                                                      "ship.py")
+        ship = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(ship)
+        out = io.StringIO()
+        with unittest.mock.patch.dict(os.environ, {"STEAMCMD_BIN": str(wrapper), "FAKE_STEAMCMD_LOG": str(log)}), \
+                unittest.mock.patch.object(ship.sys, "stdin", io.StringIO("")):   # not a terminal
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                code = ship.main(["--target", "steam", "--app", "1234560", "--depot", "1234561", "--site",
+                                  str(self.win), "--branch", "beta", "--steam-user", "buildbot", "--yes"])
+            self.assertEqual(code, 0, out.getvalue())
+            with unittest.mock.patch.dict(os.environ, {"FAKE_STEAMCMD_RC": "6"}):
+                with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+                    self.assertEqual(ship.main(["--target", "steam", "--app", "1234560", "--depot", "1234561",
+                                                "--site", str(self.win), "--steam-user", "buildbot", "--yes"]), 1)
+        calls = [json.loads(l) for l in log.read_text(encoding="utf-8").splitlines()]
+        vdf_path = self.g.root / "deploy" / "steam" / "app_build_1234560.vdf"
+        self.assertEqual(calls[0]["argv"], ["+login", "buildbot", "+run_app_build", str(vdf_path), "+quit"])
+        self.assertEqual(calls[0]["stdin"], "")                          # closed: EOF at once, no waiting
+        self.assertIn('"SetLive" "beta"', calls[0]["vdf"])
+        self.assertIn("steamcmd failed (exit 6)", out.getvalue())
 
 
 @unittest.skipUnless(TOFU, "OpenTofu is not installed (TOFU_BIN or tofu on PATH)")

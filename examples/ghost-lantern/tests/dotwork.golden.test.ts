@@ -9,11 +9,13 @@
 //           The hash and roll vectors and the cell centres are the spec's own (ASSET_MANIFEST.md 1.1.0).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 cases (#285)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects' light and tracer (spec 1.2.0)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a font's page 1 glyphs (#286)
 // ---------------------------------------------------------------------------
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
-  bitmapFontData, canon, cellCentre, cellKey, cellMask, cellRoll, DotworkError, frameAt, hash32, loadedResult, pickVariant,
+  bitmapFontData, canon, fontAtlas, cellCentre, cellKey, cellMask, cellRoll, DotworkError, frameAt, hash32, loadedResult, pickVariant,
   planManifest, rectToWorld, resolvePath, tileAnimations, tileKey, tileOfGid, tileTransform,
 } from "../src/game/dotworkPlan";
 import { problems, readPlan } from "./helpers/dotworkFiles";
@@ -81,10 +83,23 @@ describe("golden pack (data/golden/dotwork)", () => {
 
   it("builds Phaser bitmap font data from chars", () => {
     const f = golden().plan.fonts.get("tiny")!;
-    const data = bitmapFontData(f, 16, 8);
+    const data = bitmapFontData(f, [[16, 8]]);
     expect(data.lineHeight).toBe(7);
     expect(data.chars[65]).toMatchObject({ x: 1, y: 1, width: 3, height: 5, xAdvance: 4, u0: 1 / 16, v0: 1 - 1 / 8, u1: 4 / 16, v1: 1 - 6 / 8 });
     expect(data.chars[66].kerning[65]).toBe(-1); // Phaser stores kerning on the second glyph
+  });
+
+  it("keeps the glyphs of every page: the pages stacked into one texture (#286)", () => {
+    // duo: 65 on page 1 (8 x 8, xoffset 1, yoffset 1), 66 on page 0; BitmapText draws from one texture
+    const f = golden().plan.fonts.get("duo")!;
+    expect(f.pages.length).toBe(2);
+    expect(fontAtlas([[8, 8], [8, 8]])).toEqual({ width: 8, height: 16, tops: [0, 8] });
+    const data = bitmapFontData(f, [[8, 8], [8, 8]]);
+    expect(Object.keys(data.chars).map(Number).sort((a, b) => a - b)).toEqual([32, 65, 66]);
+    expect(data.chars[65]).toMatchObject({ x: 1, y: 9, width: 3, height: 5, xOffset: 1, yOffset: 1, xAdvance: 5, u0: 1 / 8, v0: 1 - 9 / 16, u1: 4 / 8, v1: 1 - 14 / 16 });
+    expect(data.chars[66]).toMatchObject({ x: 1, y: 1, v0: 1 - 1 / 16 });
+    expect(data.chars[65].kerning[66]).toBe(-2);
+    expect(golden().plan.warnings.filter((w) => w.includes("font"))).toEqual([]);
   });
 
   it("loads the extra kinds by name, without a warning", () => {
@@ -104,6 +119,19 @@ describe("golden pack (data/golden/dotwork)", () => {
     expect(plan.textures.get(n.target)!.normal).toBe(n.image);
     expect(plan.files).toContain(n.image);
     expect(n.convention).toBe("opengl");
+  });
+
+  it("keeps the shooting effects' light and tracer for the game (spec 1.2.0, #164)", () => {
+    const { plan } = golden();
+    expect(plan.warnings).toEqual([]);
+    const muzzle = plan.animatedSprites.get("vfx_muzzle")!;
+    expect([muzzle.blend, muzzle.clips[0].pivot, muzzle.clips[0].origin]).toEqual(["add", [0, 4], [0, 0.5]]);
+    const light = plan.animatedSprites.get("vfx_muzzle_light")!.light!;
+    expect(light.energy).toEqual([1.2, 0.6, 0]);
+    expect(plan.textures.has(light.texture)).toBe(true);
+    const tracer = plan.animatedSprites.get("vfx_tracer")!.tracer!;
+    expect([tracer.spacing, tracer.length, tracer.steps[0].at, tracer.steps[tracer.steps.length - 1].at]).toEqual([4, 32, 0, 0.8333]);
+    expect(plan.particles.get("vfx_stone_debris_particles")!.emitter.direction).toEqual([1, 0]);
   });
 
   it("picks the variant with the cell's roll: two full path cells, one of each tile", () => {

@@ -9,6 +9,10 @@
 # Usage   : python -I -B tools/art/dotwork/tests/test_fonts.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Cyrillic font (#51): Latin glyphs unchanged, the
+#           block covered, every letter on the grid (baseline, descenders, capital and x-height, marks above),
+#           composed letters hold their base, no glyph doubles another unless a listed look-alike, the Russian and
+#           Ukrainian pangrams pass the coverage check, the pack previews them; a CSV header's "be" column is read
 # ---------------------------------------------------------------------------
 import contextlib
 import hashlib
@@ -429,6 +433,136 @@ class FontsExam(unittest.TestCase):
         with Image.open(os.path.join(game, "assets_src", "art", "ui", "fonts", "font_dialogue_latin_preview.png")) as im:
             with Image.open(os.path.join(game, "assets_src", "art", "ui", "fonts", "font_dialogue_preview.png")) as old:
                 self.assertGreater(im.size[1], old.size[1])   # the Latin preview adds its sample lines
+
+
+# ---- Cyrillic (#51) ------------------------------------------------------------------------------------------------
+CYRILLIC = [chr(c) for c in range(0x400, 0x460)] + ["Ґ", "ґ"]
+CYR_EXTRA = ["№", "ʼ"]
+# letters drawn exactly like a Latin glyph (Cyrillic and Latin share these shapes)
+CYR_LOOKALIKE = {"А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P", "С": "C", "Т": "T",
+                 "Х": "X", "Ѕ": "S", "І": "I", "Ј": "J", "Ё": "Ë", "Ѐ": "È", "Ї": "Ï", "а": "a", "е": "e", "о": "o",
+                 "р": "p", "с": "c", "у": "y", "х": "x", "ѕ": "s", "і": "i", "ј": "j", "ё": "ë", "ѐ": "è", "ї": "ï",
+                 "ћ": "ħ", "ʼ": "’", "к": "ĸ"}   # к: the same shape as Greenlandic kra
+CYR_DESCENDERS = set("ДЦЩЏЂдцщџруфђўј")
+CYR_ASCENDERS = set("бђћф")             # lowercase reaching the capitals' height
+CYR_PANGRAMS = {   # each holds its whole alphabet (checked below)
+    "ru": ("Съешь же ещё этих мягких французских булок, да выпей чаю.", "абвгдеёжзийклмнопрстуфхцчшщъыьэюя"),
+    "uk": ("Чуєш їх, доцю, га? Кумедна ж ти, прощайся без ґольфів!", "абвгґдеєжзиіїйклмнопрстуфхцчшщьюя"),
+}
+
+
+class CyrillicFontExam(unittest.TestCase):
+    def setUp(self):
+        import lane_fonts
+        self.meta, self.g = lane_fonts.parse(os.path.join(GLYPHS, "dialogue_cyrillic.txt"))
+        self.lmeta, self.lg = lane_fonts.parse(os.path.join(GLYPHS, "dialogue_latin.txt"))
+        self.tmp = tempfile.mkdtemp(prefix="dotwork_cyr_")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def test_latin_glyphs_unchanged_and_block_covered(self):
+        self.assertEqual(self.meta, self.lmeta)
+        for c, a in self.lg.items():
+            self.assertTrue(np.array_equal(self.g[c], a), f"U+{ord(c):04X} differs from dialogue_latin")
+        self.assertEqual([f"U+{ord(c):04X}" for c in CYRILLIC + CYR_EXTRA if c not in self.g], [])
+        self.assertEqual(len(self.g), len(self.lg) + len(CYRILLIC) + len(CYR_EXTRA))
+
+    def test_shapes_sit_on_the_grid(self):
+        top, base = self.meta["top"], self.meta["baseline"]
+        xh = base - 5                      # the lowercase x-height starts 5 rows above the baseline (row 4)
+        for c in CYRILLIC:
+            first, last = ink_rows(self.g[c])
+            if c in CYR_DESCENDERS:
+                self.assertTrue(base <= last < self.meta["height"], f"U+{ord(c):04X} {c}: descender row {last}")
+            else:
+                self.assertEqual(last, base - 1, f"U+{ord(c):04X} {c} is not on the baseline")
+            marked = len(unicodedata.decomposition(c).split()) == 2 or c in "Ґґ"
+            if c.isupper():                # capitals fill rows top..baseline; a mark (or Ґ's upturn) goes above
+                self.assertEqual(first < top, marked, f"U+{ord(c):04X} {c}: top row {first}")
+                if not marked:
+                    self.assertEqual(first, top, f"U+{ord(c):04X} {c}: not capital height")
+            elif marked:
+                self.assertLess(first, xh, f"U+{ord(c):04X} {c}: no mark above the x-height")
+            elif c in CYR_ASCENDERS or c in "іј":
+                self.assertLess(first, xh, f"U+{ord(c):04X} {c}")
+            else:
+                self.assertEqual(first, xh, f"U+{ord(c):04X} {c}: not x-height")
+
+    def test_composed_letters_hold_their_base(self):
+        checked = 0
+        for c in CYRILLIC:
+            d = unicodedata.decomposition(c).split()
+            if len(d) != 2 or d[0].startswith("<"):
+                continue
+            b = chr(int(d[0], 16))
+            base = self.g["ı"] if b == "і" else self.g[b]      # ї: the dot gives way to the diaeresis
+            self.assertFalse(np.array_equal(self.g[c], self.g[b]), f"{c} drawn like {b}")
+            self.assertIsNotNone(contains_at(self.g[c], base), f"U+{ord(c):04X} {c}: {b} is not inside it")
+            checked += 1
+        self.assertEqual(checked, 16)   # Ѐ Ё Ѓ Ї Ќ Ѝ Й Ў and their lowercase
+
+    def test_every_glyph_is_its_own_or_a_listed_lookalike(self):
+        seen = {}
+        for c in CYRILLIC + CYR_EXTRA:
+            key = (self.g[c].shape, self.g[c].tobytes())
+            self.assertNotIn(key, seen, f"{c} is drawn exactly like {seen.get(key)}")
+            seen[key] = c
+            same = [l for l, a in self.lg.items() if a.shape == self.g[c].shape and np.array_equal(a, self.g[c])]
+            self.assertEqual(same, [CYR_LOOKALIKE[c]] if c in CYR_LOOKALIKE else [], f"U+{ord(c):04X} {c}")
+
+    def test_pangrams_and_coverage_check(self):
+        import fontcheck
+        for lang, (text, alphabet) in CYR_PANGRAMS.items():
+            self.assertEqual(set(alphabet) - set(text.lower()), set(), lang)
+        path = os.path.join(self.tmp, "pangrams.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({k: {"pangram": v[0], "caps": v[0].upper()} for k, v in CYR_PANGRAMS.items()}, f,
+                      ensure_ascii=False)
+        csv_path = os.path.join(DOTWORK, "examples", "strings_cyrillic.csv")
+        res = fontcheck.check(fontcheck.font_chars(os.path.join(GLYPHS, "dialogue_cyrillic.txt")), [path, csv_path])
+        self.assertEqual(res["missing"], {})
+        self.assertEqual(res["languages"], ["ru", "uk", "be", "bg", "sr", "mk"])   # be: the CSV header fix
+        old = fontcheck.check(fontcheck.font_chars(os.path.join(GLYPHS, "dialogue_latin.txt")), [path])
+        self.assertIn("Щ", old["missing"])                    # the Latin font cannot draw it: the check says so
+
+    def test_csv_header_reads_word_like_language_codes(self):
+        import fontcheck
+        p = os.path.join(self.tmp, "ui.csv")
+        with open(p, "w", encoding="utf-8") as f:
+            f.write("keys,en,be,no,?context\ngo,Go,Ісці,Gå,note\n")
+        self.assertEqual(fontcheck.read_strings(p), [("en", "go", "Go"), ("be", "go", "Ісці"), ("no", "go", "Gå")])
+        p2 = os.path.join(self.tmp, "data.csv")                # no language in the header: still not languages
+        with open(p2, "w", encoding="utf-8") as f:
+            f.write("id,no\n1,2\n")
+        self.assertNotIn("no", [lang for lang, _, _ in fontcheck.read_strings(p2)])
+
+    def test_pack_builds_and_previews_the_pangrams(self):
+        game = make_game(os.path.join(self.tmp, "game"))
+        os.makedirs(os.path.join(game, "tools", "art", "dotwork", "examples"))
+        for n in ("strings_cyrillic.csv", "strings_latin.csv"):
+            shutil.copy(os.path.join(DOTWORK, "examples", n), os.path.join(game, "tools", "art", "dotwork", "examples"))
+        code, out = run_cli(["pack", "--spec", os.path.join(DOTWORK, "examples", "fonts_cyrillic.json"),
+                             "--project", game, "--engine", "none"])
+        self.assertEqual(code, 0, out)
+        self.assertIn("every character is in the font", out)
+        fnt_path = os.path.join(game, "assets", "art", "ui", "fonts", "font_dialogue_cyrillic.fnt")
+        with open(fnt_path, encoding="utf-8") as f:
+            fnt = f.read()
+        self.assertIn("lineHeight=26 base=18", fnt)            # the same line as dialogue_latin
+        for c in CYRILLIC + CYR_EXTRA:
+            self.assertIn(f"char id={ord(c)} ", fnt)
+        # the preview: dialogue_latin's lines plus all five Cyrillic lines (26 px each at 2x)
+        spec = os.path.join(self.tmp, "latin.json")
+        with open(spec, "w", encoding="utf-8") as f:
+            json.dump({"name": "l", "fonts": [{"name": "dialogue_latin", "glyphs": "glyphs/dialogue_latin.txt"}]}, f)
+        self.assertEqual(run_cli(["pack", "--spec", spec, "--project", game, "--engine", "none"])[0], 0)
+        import lane_fonts
+        self.assertEqual(len(lane_fonts.CYRILLIC_SAMPLE), 5)
+        folder = os.path.join(game, "assets_src", "art", "ui", "fonts")
+        with Image.open(os.path.join(folder, "font_dialogue_cyrillic_preview.png")) as im:
+            with Image.open(os.path.join(folder, "font_dialogue_latin_preview.png")) as old:
+                self.assertEqual(im.size[1] - old.size[1], 5 * 26)
 
 
 if __name__ == "__main__":

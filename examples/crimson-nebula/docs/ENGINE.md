@@ -64,11 +64,13 @@
   `velocity`, `particles` the white texture and the emitter JSON
   (Bevy 0.20 ships no particle system), `transition` the greyscale wipe (the threshold texture of the kit's
   transition recipe), `normal_map` the map and its `target` image (Bevy 0.20's 2D sprites have no normal-map
-  lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. `blend: add`
-  draws with normal blending (Bevy 0.20 sprites have no additive mode). `tests/dotwork.rs` checks the golden pack in
+  lighting: feed both to the kit's `sprite_light` material), `image_sprite` a loose image with its pivot. A `blend: add`
+  clip draws additively: Bevy 0.20 sprites have no additive mode, so `spawn_clip` makes it a frame-sized `Mesh2d`
+  quad with `DotworkAdditiveMaterial` (Bevy's `ColorMaterial` extended to blend src * alpha + dst, `additive.rs`);
+  switch its clip with `additive_clip_bundle`, not `clip_bundle`. `tests/dotwork.rs` checks the golden pack in
   `data/golden/dotwork/` against its `expected.json` (clips, sprites, the maps' terrain, placed cells and
   centres, the backgrounds) and that every manifest the game ships loads; `present.rs` shows a map, a walking
-  character, a prop and a label when the game has them.
+  character, a prop, an additive effect and a label when the game has them.
 - **Verify:** `python tools/dev.py doctor`.
 
 ## Layout
@@ -78,7 +80,8 @@ src/main.rs        launcher: command line -> app::build -> exit code
 src/app.rs         plugin sets per run mode (window, headless smoke, capture, tests), tick rate, smoke budget
 src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
-                   juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter
+                   juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter, feel (the SOP-18 recipe helpers)
+                   platform (achievements, stats, presence, cloud hooks: docs/PLATFORM.md; shell.platform)
                    shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat,
                    charmap (which characters a font can draw)
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
@@ -102,6 +105,7 @@ src/kit_shaders.rs the kit's shader recipes as typed 2D materials (generated, wi
 examples/shader_check.rs renders every recipe on the GPU for `smoke --shaders` (cargo's name: `<slug>_shader_check`)
 tests/             integration tests: drive the real GamePlugin headless with app.update()
 tests/golden.rs    the juice, shell and audio modules against data/golden/*.json (the kit's shared vectors)
+tests/platform.rs  the platform layer against data/golden/platform.json; the cached state file and the save hook
 tests/dotwork.rs   the Dotwork importer against data/golden/dotwork/expected.json; every assets/dotwork manifest loads
 tests/character.rs the golden rigged character (data/golden/character/) loads, walks and switches clips, headless
 data/golden/       golden vectors from tools/golden_vectors.py and tools/audio/wavesmith/; never edit by hand

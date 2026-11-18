@@ -51,7 +51,7 @@ Close the editor before running batchmode commands (one instance per project).
 | `smoke --until M`, `--fail-on M` | scans the Unity log for the markers your scenario test logs |
 | `smoke --drive menus` | the `Smoke_ShellDrive` PlayMode test with `GAMEKIT_DRIVE=menus`: title -> settings -> master volume 0.5 (left or right from whatever the data folder held), reduce motion toggled -> Back -> Quit; prints `SETTINGS_WRITTEN <path>` and the file holds both values |
 | `smoke --drive access[:res=WxH][,scale=N][,pad][,read]` | every screen reported as `ACCESS_*` lines for `tools/access/sweep.py` (`AccessAudit`): texts with size, colour, background, fit and where they land, the controls the grid reaches and what each says, the subtitle, the one-handed layout applied and reset, a held subtitle, the prompts; the panel is laid out for that window size, `pad` presses with the gamepad bindings only |
-| `smoke --drive show:<title\|settings\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit; `apply` the Display tab with a window size waiting, `confirm` its "Keep these display settings?") and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
+| `smoke --drive show:<title\|settings\|content\|pause\|subtitle\|juice\|credits\|apply\|confirm> --screenshot Logs/x.png` | opens that screen (settings with a control focused; the juice demo right after a hit; `apply` the Display tab with a window size waiting, `confirm` its "Keep these display settings?") and photographs it: `GameKitCapture` lays the UI panel's texture over the camera's picture |
 | `smoke --drive display` | the Display tab's Apply (#308): a window size staged (`DRIVE_DISPLAY staged`), Back warns (`warned`), Apply sets it (settings.json waits for Keep) and opens the confirm with Keep focused (`applied`), nobody answers and it reverts after 15 real seconds, checked in memory and in settings.json (`reverted ... after 15.0 s real time`), then two Backs discard a staged change (`discarded`) |
 | `smoke --drive pseudo --locale pseudo` | every screen (title, consent, main menu, each settings tab and the binding prompt, credits, loading, the juice demo, play, pause, What now?, history) checked label by label (`AccessAudit.PseudoProblems`): `PSEUDO_SCREEN` per screen, `PSEUDO_FAIL` per label that is untranslated (no `[`), cut (no `]`) or clipped, then `PSEUDO_PASS` or `PSEUDO_FAILED`; `pseudo-plant` adds a label too narrow for its text and must fail naming it (dev.py says so) |
 | `smoke --drive crash` | an unhandled exception in a frame: `CRASH_WRITTEN <path>` and exit 1 on purpose (`ShellReports`) |
@@ -121,3 +121,11 @@ Window > Analysis > Profiler and Frame Debugger. Profile a development build, no
 - Terrain painting, tree and detail placement are editor work. Claude can drive them through a Unity MCP (see "Unity MCP" above) but you should learn the tools first.
 - Pattern for team colors: keep flags/banners as separate meshes or material slots so ownership is a material swap.
 - Fog of war and limited-vision forests were done in that project as gameplay systems, so put them in `docs/ARCHITECTURE.md` early.
+
+## Content switches
+- Content switches (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `SettingsScreen.SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING` hide them in a game without
+  blood or strong language. The game reads `Shell.I.BloodEnabled()` (off: a neutral hit effect, SOP-18 step 4);
+  with `GameSettings.CleanLanguage` on, `Shell.T` and `Tn` pick `<key>@clean` lines and mask the words of
+  `data/i18n/mature/<locale>.json` (the build copies that folder too). `smoke --drive show:content --screenshot
+  Logs/content.png` pictures both rows.

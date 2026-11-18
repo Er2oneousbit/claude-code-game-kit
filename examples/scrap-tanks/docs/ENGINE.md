@@ -76,7 +76,7 @@
   caption. Copy the parts you want into `Game.cpp`. The shake's angle is not drawn (SDL's renderer has no rotated
   rectangles).
 - **Dotwork art (#60):** packs from Dotwork (`tools/art/dotwork/`) arrive as PNGs plus `assets/dotwork/<pack>.assets.json`
-  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`, 1.x: 1.0.0 and 1.1.0 load, another major is refused).
+  (spec: `tools/art/dotwork/ASSET_MANIFEST.md`, 1.x: 1.0.0 to 1.2.0 load, another major is refused).
   `src/core/DotworkAssets` (SDL-free, `core::dotwork`) reads them: clips with each frame's `duration` (`ClipPlayer`),
   sprites, icons, portraits, tilesets, maps, fonts (glyph quads from `chars`: `layout_text`), UI kits, and the extra
   kinds (background layers with their velocities and `repeat`, particles with the emitter JSON, transition, normal_map,
@@ -123,9 +123,10 @@
 ```
 CMakeLists.txt, CMakePresets.json, vcpkg.json
 src/core/        SDL-free, unit tested: Log, FixedTimestep; juice (Shake, Hitstop, Ease, FollowCamera, InputBuffer,
-                 CoyoteTimer, Spring, FlashLimiter); motor access (MotorAccess: timing_scale, hold_to_toggle);
+                 CoyoteTimer, Spring, FlashLimiter, Feel: the SOP-18 recipe helpers); motor access (MotorAccess: timing_scale, hold_to_toggle);
                  shell logic (Settings, Bindings, SaveStore, I18n, AtomicFile, Menu, ShellLogic); Analog (stick and
-                 trigger shaping); Report (crash files, bug-report texts); DotworkAssets (Dotwork manifests)
+                 trigger shaping); Report (crash files, bug-report texts); DotworkAssets (Dotwork manifests);
+                 Platform (achievements, stats, presence, cloud hooks: docs/PLATFORM.md; shell.platform())
 src/shell/       the shell's screens on SDL: Shell (stack, input, settings applied), Draw (text, panels, the access
                  report), Drive (smoke scenarios), JuiceDemo (debug builds)
 src/game/        gameplay: Game class (owns the shell, fills in the play screen), DotworkShowcase, entities, systems

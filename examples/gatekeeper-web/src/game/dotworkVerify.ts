@@ -18,6 +18,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the tile layout cross-check,
 //           and the extra kinds (backgrounds, particles, transitions, lit targets, images) built once
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a font is checked on every page, not page 0 only (#286)
 // ---------------------------------------------------------------------------
 import * as Phaser from "phaser";
 import { Log } from "../core/log";
@@ -162,10 +163,13 @@ class VerifyScene extends Phaser.Scene {
     }
     for (const f of plan.fonts.values()) {
       guard(`font ${f.name}`, () => {
-        const glyph = f.chars.find((c) => c[3] > 0 && c[8] === 0);
-        if (!glyph) return;
-        const t = addText(this, plan, f.name, 0, 0, String.fromCodePoint(glyph[0]), 1);
-        if (Math.round(t.getTextBounds().local.width) <= 0) throw new Error(`glyph ${glyph[0]} draws nothing`);
+        // one inked glyph of every page: a page left out of Phaser's texture draws nothing (#286)
+        f.pages.forEach((_, page) => {
+          const glyph = f.chars.find((c) => c[3] > 0 && c[8] === page);
+          if (!glyph) return;
+          const t = addText(this, plan, f.name, 0, 0, String.fromCodePoint(glyph[0]), 1);
+          if (Math.round(t.getTextBounds().local.width) <= 0) throw new Error(`glyph ${glyph[0]} (page ${page}) draws nothing`);
+        });
       });
     }
     for (const k of plan.uiKits.values()) guard(`ui_kit ${k.name}`, () => k.parts.forEach((p) => addNineSlice(this, plan, k.name, p.name, 0, 0, p.size[0] * 3, p.size[1] * 3)));

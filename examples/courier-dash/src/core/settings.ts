@@ -5,6 +5,7 @@
 //           Checked against data/golden/shell.json "defaults" and "settings_load".
 // Usage   : const { settings, problems } = settingsLoad(textOrNull)   // null = no file yet
 //           settings.audio.master ... ; effectiveShake(settings) ; telemetryAllowed(settings)
+//           bloodEnabled(settings) ; cleanLanguage(settings)   // the content switches (#171, #207)
 //           save: atomicWrite(store, "settings.json", JSON.stringify(settings, null, 1))
 // Notes   : No Phaser import (Vitest runs it). Missing fields take defaults, bad ones are fixed (one problem
 //           each: a number is clamped, a wrong type or unknown choice falls back to the default), and unknown
@@ -16,6 +17,8 @@
 //   per schema section: a non-object section counts as one problem ; per field: missing -> default,
 //   present -> fixField (bool | num clamp | enum | resolution) ; input.bindings: lists of strings only
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+//           bloodEnabled() and cleanLanguage() (#171, #207)
 // ---------------------------------------------------------------------------
 import { DEFAULT_BINDINGS, GLYPH_SETS, type Bindings } from "./bindings";
 import { deepCopy, hasKey, isNum, isObject, type JsonObject } from "./jsonUtil";
@@ -43,6 +46,7 @@ export interface Settings {
   };
   input: { bindings: Bindings; deadzone: number; invert_y: boolean; glyphs: string; [k: string]: unknown };
   telemetry: { consent: string; [k: string]: unknown };
+  content: { blood: boolean; clean_language: boolean; [k: string]: unknown };
   [k: string]: unknown;
 }
 
@@ -59,6 +63,7 @@ const DEFAULTS: Settings = {
   },
   input: { bindings: deepCopy(DEFAULT_BINDINGS) as Bindings, deadzone: 0.2, invert_y: false, glyphs: "auto" },
   telemetry: { consent: "unset" },
+  content: { blood: true, clean_language: false },
 };
 
 export type Rule =
@@ -83,6 +88,7 @@ export const SCHEMA: Record<string, Record<string, Rule>> = {
   },
   input: { deadzone: num(0, 0.9), invert_y: bool, glyphs: choice(GLYPH_SETS) },
   telemetry: { consent: choice(CONSENT) },
+  content: { blood: bool, clean_language: bool },
 };
 
 /** A fresh copy of the built-in defaults. */
@@ -184,6 +190,16 @@ export function effectiveShake(settings: Settings): number {
 /** Telemetry is recorded only after an explicit yes. */
 export function telemetryAllowed(settings: Settings): boolean {
   return settings.telemetry.consent === "yes";
+}
+
+/** #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18). */
+export function bloodEnabled(settings: Settings): boolean {
+  return settings.content.blood;
+}
+
+/** #207: the translator picks @clean lines and masks the game's word list (I18n.clean, SOP-19). */
+export function cleanLanguage(settings: Settings): boolean {
+  return settings.content.clean_language;
 }
 
 /** The settings as file text (one-space indent, like the kit's other JSON files). */

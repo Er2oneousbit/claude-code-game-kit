@@ -9,6 +9,7 @@
 # Exit    : 0 all pass, 1 a case failed
 # Notes   : Standard library only. The kit part is skipped in a game (no engines/ folder).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): @clean keys, the reserved @ and the word-list audit (#207)
 # ---------------------------------------------------------------------------
 import io
 import json
@@ -71,6 +72,32 @@ class CheckI18n(unittest.TestCase):
         self.assertEqual(self.cli("--dir", str(folder))[0], 1)
         self.assertEqual(self.cli("--dir", str(folder), "--same", "Íris “Nø”")[0], 0)
 
+    def test_clean_variants_are_keys_and_at_is_reserved(self):
+        en = dict(self.EN, **{"guard.bye": "Damn, bye.", "guard.bye@clean": "Bye.", "odd@key": "x",
+                              "lonely@clean": "y"})
+        fr = dict(self.FR, **{"guard.bye": "Merde, salut.", "odd@key": "x2", "lonely@clean": "y2"})
+        problems = check_i18n.check_dir(self.tables(en=en, fr=fr))["fr"]
+        self.assertIn("guard.bye@clean: missing (English: 'Bye.')", problems)
+        self.assertTrue(any(p.startswith("odd@key: '@' is reserved") for p in problems), problems)
+        self.assertTrue(any(p.startswith("lonely@clean: a clean variant of a line") for p in problems), problems)
+        rc, text = self.cli("--dir", str(self.tables(en=en, fr=dict(fr, **{"guard.bye@clean": "Salut."}))))
+        self.assertEqual(rc, 1, text)
+        self.assertIn("[FAIL] en.json: 2 problem(s)", text)
+
+    def test_the_word_list_audit_warns_without_failing(self):
+        en = dict(self.EN, **{"guard.bye": "Damn, bye.", "shout": "Hell yes", "shout@clean": "Yes!"})
+        fr = dict(self.FR, **{"guard.bye": "Merde, salut.", "shout": "Enfer, oui", "shout@clean": "Oui !"})
+        folder = self.tables(en=en, fr=fr)
+        (folder / "mature").mkdir()
+        (folder / "mature" / "en.json").write_text('{"words": ["damn", "hell"]}', encoding="utf-8")
+        (folder / "mature" / "fr.json").write_text('{"words": ["MERDE"]}', encoding="utf-8")
+        rc, text = self.cli("--dir", str(folder))
+        self.assertEqual(rc, 0, text)
+        self.assertIn("[warn] en.json: 1 line(s) hold a word from mature/en.json and have no @clean variant "
+                      "(the mask covers them): guard.bye", text)
+        self.assertIn("[warn] fr.json: 1 line(s)", text)
+        self.assertNotIn("mature.json", text, "the word lists are not string tables")
+
     def test_locale_picks_one_table_and_extra_keys_are_fine(self):
         fr = dict(self.FR, **{"binding.key.space": "Espace"})   # looked up with a fallback, English lacks it
         folder = self.tables(en=self.EN, fr=fr, de={"menu.play": "Spielen"})
@@ -107,6 +134,15 @@ class CheckI18n(unittest.TestCase):
         self.assertEqual(rc, 0, text)
         self.assertIn("no string tables", text)
         self.assertEqual(self.cli("--dir", str(missing))[0], 2, "a --dir that does not exist")
+        # core ships data/i18n/mature/en.json into every game, MZ too: a folder with only the word lists passes
+        (missing / "mature").mkdir(parents=True)
+        (missing / "mature" / "en.json").write_text('{"words": []}', encoding="utf-8")
+        try:
+            check_i18n.ROOT = missing.parents[1]
+            rc, text = self.cli()
+        finally:
+            check_i18n.ROOT = saved
+        self.assertEqual(rc, 0, text)
 
 
 @unittest.skipUnless(KIT_ENGINES.is_dir(), "in a game: the kit's engine tables are not here")

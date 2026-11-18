@@ -8,13 +8,21 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): credits_text, the markdown every credits screen strips (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its confirm (#308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Platform, the platform services layer's rules (#84)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches (#171 blood, #207 clean language),
+#           CLDR plurals, @clean lookups and the word mask; with CLDR_PLURALS_XML set, the plural rules against CLDR's own
+#           plurals.xml
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): FeelRecipes, the recipe helpers worked by hand (#170)
 # ---------------------------------------------------------------------------
 import json
 import math
+import os
+import re
 import struct
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -65,7 +73,7 @@ class VectorFiles(unittest.TestCase):
             self.assertGreater(c["problems"], 0, "the foreign-version case should also carry wrongly typed fields")
 
     def test_every_case_has_a_type_and_name(self):
-        for build in (gv.build_juice, gv.build_shell, gv.build_telemetry):
+        for build in (gv.build_juice, gv.build_shell, gv.build_telemetry, gv.build_platform):
             data = json.loads(gv.render(build()))
             self.assertEqual(data["version"], gv.VECTOR_VERSION)
             for case in data["cases"]:
@@ -134,6 +142,84 @@ class Juice(unittest.TestCase):
             self.assertAlmostEqual(sx * sy, 1.0)
 
 
+class FeelRecipes(unittest.TestCase):
+    """The helpers SOP-18's recipe table builds on (#170), worked by hand."""
+
+    def test_impact_scales_between_min_and_max(self):
+        # 4 of 10 damage: f = 0.4, hitstop 0.03 + 0.07 * 0.4 = 0.058, trauma 0.15 + 0.45 * 0.4 = 0.33, below flash_at
+        r = gv.impact(4.0, 10.0)
+        self.assertAlmostEqual(r["hitstop"], 0.058)
+        self.assertAlmostEqual(r["trauma"], 0.33)
+        self.assertFalse(r["flash"])
+        self.assertEqual(gv.impact(25.0, 10.0), {"hitstop": 0.1, "trauma": 0.6, "flash": True})   # clamped
+        self.assertEqual(gv.impact(0.0, 10.0), {"hitstop": 0.0, "trauma": 0.0, "flash": False})   # a miss
+        self.assertTrue(gv.impact(5.0, 10.0)["flash"])                                          # f == flash_at
+
+    def test_impact_stays_under_hitstop_cap(self):
+        # the largest confirm must fit under Hitstop's 0.25 s cap, so a stack of hits never freezes longer
+        self.assertLessEqual(gv.impact(1e9, 1.0)["hitstop"], gv.Hitstop().max_s)
+
+    def test_float_text_rises_pops_and_fades(self):
+        # half its life: out_cubic(0.5) = 0.875 of the rise, in_cubic(0.5) = 0.125 of the fade
+        r = gv.float_text(0.4, life=0.8, rise=24.0, pop_s=0.12)
+        self.assertAlmostEqual(r["dy"], -21.0)
+        self.assertAlmostEqual(r["alpha"], 0.875)
+        self.assertEqual(r["scale"], 1.0)
+        self.assertGreater(gv.float_text(0.06)["scale"], 1.0)          # overshoot while it pops in
+        end = gv.float_text(0.8)
+        self.assertTrue(end["done"])
+        self.assertAlmostEqual(end["alpha"], 0.0)
+
+    def test_float_text_reduce_motion_stays_put(self):
+        for t in (0.0, 0.3, 0.8):
+            r = gv.float_text(t, rise=0.0, pop_s=0.0)
+            self.assertEqual((r["dy"], r["scale"]), (0.0, 1.0))
+
+    def test_trail_keeps_points_by_distance(self):
+        # spacing 6: the head follows until it is 6 px past the point before it, then a new point starts
+        pts = []
+        for x in (0.0, 2.0, 4.0, 7.0, 9.0):
+            pts = gv.trail_push(pts, x, 0.0, spacing=6.0, max_len=100.0)
+        self.assertEqual(pts, [[0.0, 0.0], [7.0, 0.0], [9.0, 0.0]])
+
+    def test_trail_is_the_same_at_any_frame_rate(self):
+        # the same straight flight at 30 and 120 updates: the same length (the cap), the head in the same place
+        def fly(n):
+            pts = []
+            for i in range(n + 1):
+                pts = gv.trail_push(pts, 120.0 * i / n, 0.0, spacing=6.0, max_len=40.0)
+            return pts
+        a, b = fly(30), fly(120)
+        self.assertAlmostEqual(gv.trail_length(a), 40.0)
+        self.assertAlmostEqual(gv.trail_length(b), 40.0)
+        self.assertEqual(a[-1], b[-1])
+
+    def test_trail_cap_cuts_the_tail_inside_a_segment(self):
+        pts = gv.trail_push([[0.0, 0.0], [10.0, 0.0]], 30.0, 0.0, spacing=6.0, max_len=25.0)
+        self.assertEqual(pts, [[5.0, 0.0], [10.0, 0.0], [30.0, 0.0]])
+
+    def test_trail_follows_a_curve(self):
+        # a quarter circle: the kept points stay on it (a fixed straight streak would not)
+        pts = []
+        for i in range(20):
+            a = i / 19 * math.pi / 2
+            pts = gv.trail_push(pts, 10 * math.cos(a), 10 * math.sin(a), spacing=2.0, max_len=100.0)
+        for x, y in pts:
+            self.assertAlmostEqual(math.hypot(x, y), 10.0)
+        self.assertGreater(len(pts), 4)
+
+    def test_trail_shrink_catches_up_and_ends(self):
+        pts = [[0.0, 0.0], [10.0, 0.0], [12.0, 0.0]]
+        self.assertEqual(gv.trail_shrink(pts, 4.0), [[4.0, 0.0], [10.0, 0.0], [12.0, 0.0]])
+        self.assertEqual(gv.trail_shrink(pts, 11.0), [[11.0, 0.0], [12.0, 0.0]])
+        self.assertEqual(gv.trail_shrink(pts, 50.0), [[12.0, 0.0]])     # the head alone: draw nothing
+        self.assertEqual(gv.trail_shrink([], 1.0), [])
+
+    def test_vectors_cover_every_helper(self):
+        types = {c["type"] for c in gv.build_juice()["cases"]}
+        self.assertTrue({"impact", "float_text", "trail"} <= types)
+
+
 class Shell(unittest.TestCase):
     def test_load_of_dump_is_identity(self):
         s, problems = gv.settings_load(json.dumps(gv.DEFAULT_SETTINGS))
@@ -190,6 +276,181 @@ class Shell(unittest.TestCase):
         self.assertEqual(gv.tr(gv.TABLES, "de", "nope"), "nope")
         self.assertEqual(gv.tr_plural(gv.TABLES, "fr", "apples", 0), "0 pomme")
         self.assertEqual(gv.tr_plural(gv.TABLES, "ja", "apples", 1), "りんご1個")
+
+
+class ContentSettings(unittest.TestCase):
+    """#171 blood and #207 clean language: two bools in a content section, like every other settings field."""
+
+    def test_defaults_show_blood_and_text_as_written(self):
+        s, problems = gv.settings_load(None)
+        self.assertEqual((gv.blood_enabled(s), gv.clean_language(s), problems), (True, False, []))
+
+    def test_a_file_from_before_the_switches_loads_the_defaults(self):
+        s, problems = gv.settings_load('{"audio": {"master": 0.5}}')
+        self.assertEqual((s["content"], problems), ({"blood": True, "clean_language": False}, []))
+
+    def test_bad_values_are_fixed_one_problem_each_and_unknown_keys_stay(self):
+        s, problems = gv.settings_load('{"content": {"blood": "no", "clean_language": 1, "gore": "max"}}')
+        self.assertEqual(s["content"], {"blood": True, "clean_language": False, "gore": "max"})
+        self.assertEqual(sorted(problems), ["content.blood", "content.clean_language"])
+        s, problems = gv.settings_load('{"content": "off"}')
+        self.assertEqual((s["content"]["blood"], problems), (True, ["content"]))
+
+    def test_flipped_switches_survive_a_save(self):
+        s, _ = gv.settings_load('{"content": {"blood": false, "clean_language": true}}')
+        again, problems = gv.settings_load(json.dumps(s))
+        self.assertEqual((gv.blood_enabled(again), gv.clean_language(again), problems), (False, True, []))
+
+
+class Plurals(unittest.TestCase):
+    """CLDR 46 cardinal rules for whole numbers, worked by hand from the rules chart."""
+
+    def cats(self, loc, ns):
+        return [gv.plural(loc, n) for n in ns]
+
+    def test_russian_and_ukrainian(self):
+        for loc in ("ru", "uk", "ru-RU", "RU"):
+            self.assertEqual(self.cats(loc, (0, 1, 2, 4, 5, 11, 12, 14, 21, 22, 25, 101, 111, 112)),
+                             ["many", "one", "few", "few", "many", "many", "many", "many", "one", "few", "many",
+                              "one", "many", "many"], loc)
+
+    def test_polish_has_no_one_for_21(self):
+        self.assertEqual(self.cats("pl", (0, 1, 2, 5, 12, 21, 22, 102, 112)),
+                         ["many", "one", "few", "many", "many", "many", "few", "few", "many"])
+
+    def test_czech_lithuanian_and_croatian(self):
+        self.assertEqual(self.cats("cs", (0, 1, 2, 4, 5, 22)), ["other", "one", "few", "few", "other", "other"])
+        self.assertEqual(self.cats("lt", (1, 2, 9, 10, 11, 19, 21, 29, 30)),
+                         ["one", "few", "few", "other", "other", "other", "one", "few", "other"])
+        self.assertEqual(self.cats("hr", (1, 2, 5, 11, 21, 22, 112)),
+                         ["one", "few", "other", "other", "one", "few", "other"])
+
+    def test_arabic_welsh_irish(self):
+        self.assertEqual(self.cats("ar", (0, 1, 2, 3, 10, 11, 99, 100, 102, 103, 111)),
+                         ["zero", "one", "two", "few", "few", "many", "many", "other", "other", "few", "many"])
+        self.assertEqual(self.cats("cy", (0, 1, 2, 3, 4, 6, 7)), ["zero", "one", "two", "few", "other", "many", "other"])
+        self.assertEqual(self.cats("ga", (2, 6, 7, 10, 11)), ["two", "few", "many", "many", "other"])
+
+    def test_french_portuguese_and_the_millions(self):
+        self.assertEqual(self.cats("fr", (0, 1, 2, 1000000, 1000001, 2000000)),
+                         ["one", "one", "other", "many", "other", "many"])
+        self.assertEqual(self.cats("pt-BR", (0, 1)), ["one", "one"])
+        self.assertEqual(self.cats("pt-PT", (0, 1)), ["other", "one"])     # European Portuguese has its own rule
+        self.assertEqual(self.cats("pt_pt", (0,)), ["other"])
+        self.assertEqual(self.cats("es", (0, 1, 1000000)), ["other", "one", "many"])
+
+    def test_no_plural_languages_unknown_ones_and_negatives(self):
+        self.assertEqual(self.cats("ja", (0, 1, 2)), ["other"] * 3)
+        self.assertEqual(self.cats("xx", (0, 1, 2)), ["other", "one", "other"])
+        self.assertEqual(self.cats("ru", (-1, -3, -5)), ["one", "few", "many"])
+
+    def test_every_family_returns_only_its_categories(self):
+        for fam, cats in gv.PLURAL_FAMILIES.items():
+            lang = next(lg for lg, f in gv.PLURAL_FAMILY_OF.items() if f == fam)
+            got = {gv.plural(lang, n) for n in list(range(0, 1200)) + [1000000, 5000000]} | {"other"}
+            self.assertEqual(got, set(cats), fam)
+
+    def test_a_missing_form_shows_other_and_each_locale_uses_its_own_rule(self):
+        t = gv.PLURAL_TABLES
+        self.assertEqual(gv.tr_plural(t, "uk", "hits", 5), "5 ударів")      # uk has no many: its other
+        self.assertEqual(gv.tr_plural(t, "pl", "hits", 5), "5 hits")       # no pl table: English, English's rule
+        self.assertEqual(gv.tr_plural(t, "ru", "hits", 22), "22 удара")
+        self.assertEqual(gv.tr_plural(t, "fr", "hits", 1000000), "1000000 de coups")
+        self.assertEqual(gv.tr_plural({}, "ru", "hits", 5), "hits.many")   # nothing anywhere: the key shows
+
+
+@unittest.skipUnless(os.environ.get("CLDR_PLURALS_XML"), "set CLDR_PLURALS_XML to CLDR's plurals.xml to sweep it")
+class PluralsAgainstCldr(unittest.TestCase):
+    """The sweep behind PLURAL_FAMILIES: every mapped language against the rules in CLDR's own
+    common/supplemental/plurals.xml (release-46 when written), whole numbers 0..2000 and the millions."""
+
+    @staticmethod
+    def _holds(cond, n):
+        ops = {"n": n, "i": n, "v": 0, "w": 0, "f": 0, "t": 0, "e": 0, "c": 0}
+        for alt in cond.split(" or "):
+            ok = True
+            for rel in alt.split(" and "):
+                m = re.match(r"\s*([niftvwec])\s*(?:%\s*(\d+))?\s*(!=|=)\s*(.+)$", rel)
+                x = ops[m.group(1)] % int(m.group(2)) if m.group(2) else ops[m.group(1)]
+                hit = any((int(p.split("..")[0]) <= x <= int(p.split("..")[1])) if ".." in p else x == int(p)
+                          for p in m.group(4).replace(" ", "").split(","))
+                ok = ok and (hit if m.group(3) == "=" else not hit)
+            if ok:
+                return True
+        return False
+
+    def test_every_language_matches_cldr(self):
+        root = ET.parse(os.environ["CLDR_PLURALS_XML"]).getroot()
+        rules = {}
+        for pr in root.find("plurals").findall("pluralRules"):
+            for loc in pr.get("locales").split():
+                rules[loc] = [(r.get("count"), r.text.split("@")[0].strip()) for r in pr.findall("pluralRule")]
+        ns = list(range(0, 2001)) + [k * 1000000 for k in range(1, 101)]
+        for lang in sorted(gv.PLURAL_FAMILY_OF) + ["pt_PT"]:
+            with self.subTest(lang=lang):
+                self.assertIn(lang, rules)
+                for n in ns:
+                    want = next((c for c, cond in rules[lang] if c != "other" and self._holds(cond, n)), "other")
+                    self.assertEqual(gv.plural(lang.replace("_", "-"), n), want, f"{lang} {n}")
+
+
+class CleanLanguage(unittest.TestCase):
+    T = gv.CLEAN_TABLES
+
+    def test_the_players_language_wins_over_an_english_clean_line(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.insult", {"name": "Ana"}, True), "Dégage, espèce de Ana !")
+        self.assertEqual(gv.tr(self.T, "en", "guard.insult", {"name": "Ana"}, True), "Get lost, you pest!")
+        self.assertEqual(gv.tr(self.T, "fr-CA", "guard.bye", None, True), "Bon, salut.")
+
+    def test_off_is_the_text_as_written_whatever_the_list(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.bye", None, False, ["merde"]), "Merde, salut.")
+
+    def test_the_mask_covers_placeholder_values(self):
+        self.assertEqual(gv.tr(self.T, "fr", "guard.insult", {"name": "Crétin"}, True, ["crétin"]),
+                         "Dégage, espèce de #@$%#@ !")
+
+    def test_plural_clean_keys_carry_the_category(self):
+        self.assertEqual(gv.tr_plural(self.T, "en", "coins", 1, None, True), "1 coin")
+        self.assertEqual(gv.tr_plural(self.T, "en", "coins", 3, None, True, ["damn"]), "3 #@$% coins")
+
+    def test_a_missing_key_is_shown_unmasked(self):
+        self.assertEqual(gv.tr(self.T, "en", "missing.key", None, True, ["missing"]), "missing.key")
+
+
+class MaskWords(unittest.TestCase):
+    def test_whole_words_only(self):
+        self.assertEqual(gv.mask_words("class ass bass, ass!", ["ass"]), "class #@$ bass, #@$!")
+
+    def test_case_folds_in_the_pinned_scripts(self):
+        self.assertEqual(gv.mask_words("ÉCRASÉ Łajdak СУКА", ["écrasé", "łajdak", "сука"]),
+                         "#@$%#@ #@$%#@ #@$%")
+
+    def test_the_grawlix_counts_code_points_and_restarts_per_word(self):
+        wide = "\U0001D521\U0001D51E"                # two code points, four UTF-16 units
+        self.assertEqual(gv.mask_words(wide + " abcde", [wide, "abcde"]), "#@ #@$%#")
+
+    def test_bad_entries_never_match(self):
+        self.assertEqual(gv.mask_words("x-y two words", ["x-y", "two words", ""]), "x-y two words")
+
+    def test_the_fold_table_agrees_with_unicode_where_unicode_is_one_to_one(self):
+        """The pinned table is a subset of Unicode's simple lower case (plus final sigma), so it cannot drift."""
+        for cp in list(range(0x41, 0x5B)) + list(range(0xC0, 0x17F)) + list(range(0x386, 0x3AC)) + \
+                list(range(0x400, 0x430)):
+            low = chr(cp).lower()
+            if len(low) == 1 and gv.fold_char(cp) != cp:
+                self.assertEqual(gv.fold_char(cp), ord(low), hex(cp))
+
+    def test_range_edges(self):
+        self.assertFalse(gv.is_word_char(0xBF))
+        self.assertTrue(gv.is_word_char(0xC0))
+        self.assertFalse(gv.is_word_char(0x2BFF))
+        self.assertTrue(gv.is_word_char(0x2C00))
+        self.assertTrue(gv.is_word_char(0x301))      # a combining mark belongs to its word
+        self.assertFalse(gv.is_word_char(0x1F600))
+
+    def test_the_word_list_file(self):
+        self.assertEqual(gv.mature_words('{"words": ["a", 1, "b"]}'), ["a", "b"])
+        self.assertEqual(gv.mature_words("[]"), [])
 
 
 class Telemetry(unittest.TestCase):
@@ -321,6 +582,217 @@ class DisplayStaging(unittest.TestCase):
         self.assertEqual(st.back()[0], "leave")
         self.assertEqual(st.pending, {})
         self.assertEqual(st.applied["vsync"], True)
+
+
+class Platform(unittest.TestCase):
+    """The platform services layer (#84): values worked out by hand from docs/PLATFORM.md, not read back from the
+    reference, so the engine ports in phase 2 can follow the same rules."""
+
+    DEFS = {"stats": [{"id": "kills", "max": 100, "increment_only": True}, {"id": "gold", "max": 50},
+                      {"id": "pace", "type": "float", "min": -1, "max": 1}],
+            "achievements": [{"id": "win", "name": "Win"},
+                             {"id": "k5", "name": "K5", "stat": "kills", "threshold": 5, "progress_every": 2},
+                             {"id": "k3", "name": "K3", "stat": "kills", "threshold": 3},
+                             {"id": "rich", "name": "Rich", "stat": "gold", "threshold": 50}]}
+
+    def fresh(self, online=True, cloud="auto"):
+        defs, problems = gv.achievements_load(json.dumps(self.DEFS))
+        self.assertEqual(problems, 0)
+        return gv.Platform(defs, online=online, cloud=cloud)
+
+    def test_the_file_is_current_and_holds_every_rule(self):
+        data = json.loads((gv.OUT_DIR / "platform.json").read_text(encoding="utf-8"))
+        self.assertEqual(data, json.loads(gv.render(gv.build_platform())))
+        types = {c["type"] for c in data["cases"]}
+        self.assertEqual(types, {"platform_format", "achievements_load", "cloud_partition", "overlay",
+                                 "platform_script", "platform_state_load", "null_backend"})
+        ops = {s["op"][0] for c in data["cases"] if c["type"] == "platform_script" for s in c["steps"]}
+        self.assertEqual(ops, {"unlock", "set_stat", "add_stat", "flush", "set_presence", "clear_presence",
+                               "saved", "connect", "disconnect", "fail_store", "overlay", "reset_all"})
+        outs = {s["out"] for c in data["cases"] if c["type"] == "platform_script" for s in c["steps"]}
+        for out in ("unlocked", "already", "unknown", "ok", "clamped", "same", "refused", "sent", "nothing",
+                    "offline", "failed", "online", "cloud", "local", "pause", "reset"):
+            self.assertIn(out, outs, "no platform_script step pins " + out)
+        self.assertNotIn("{{", gv.render(gv.build_platform()))     # the scaffolder's placeholder scan
+
+    def test_definitions_fill_defaults_and_keep_their_order(self):
+        defs = self.fresh().defs
+        self.assertEqual([s["id"] for s in defs["stats"]], ["kills", "gold", "pace"])
+        self.assertEqual(defs["stats"][1], {"id": "gold", "type": "int", "min": 0, "max": 50, "increment_only": False})
+        self.assertEqual(defs["achievements"][0], {"id": "win", "name": "Win", "description": "", "stat": None,
+                                                   "threshold": None, "progress_every": None})
+
+    def test_bad_definitions_are_dropped_and_counted(self):
+        text = json.dumps({"stats": [{"id": "a"}, {"id": "a"}, {"id": "_x"}, {"id": "b", "min": 0.5},
+                                     {"id": "c", "type": "float", "min": 0.5}],
+                           "achievements": [{"id": "w", "name": "W", "stat": "a", "threshold": 0},
+                                            {"id": "v", "name": "V", "threshold": 2}, {"id": "u", "name": "U"}]})
+        defs, problems = gv.achievements_load(text)
+        self.assertEqual(problems, 5)                    # a twice, _x, b's half min, w's 0, v's stray threshold
+        self.assertEqual([s["id"] for s in defs["stats"]], ["a", "c"])
+        self.assertEqual([a["id"] for a in defs["achievements"]], ["u"])
+        self.assertEqual(gv.achievements_load(None), ({"version": 1, "stats": [], "achievements": []}, 0))
+        self.assertEqual(gv.achievements_load("nope")[1], 1)
+        self.assertEqual(gv.achievements_load(json.dumps({"stats": [{"id": "s", "max": float("inf")}]}))[1], 1)
+
+    def test_an_unlock_happens_once_and_flushes_at_once(self):
+        p = self.fresh()
+        self.assertEqual(p.unlock("win"), ("unlocked", [["set_achievement", "win"], ["store_stats"]]))
+        self.assertEqual(p.unlock("win"), ("already", []))
+        self.assertEqual(p.unlock("lose"), ("unknown", []))
+
+    def test_stats_wait_for_a_flush_and_thresholds_unlock_in_definition_order(self):
+        p = self.fresh()
+        self.assertEqual(p.add_stat("gold", 10), ("ok", []))
+        self.assertEqual(p.add_stat("gold", 5), ("ok", []))
+        # kills 0 -> 6: k5 (listed first) then k3, both at once; the flush sends only the latest gold
+        out, calls = p.add_stat("kills", 6)
+        self.assertEqual(out, "ok")
+        self.assertEqual(calls, [["set_stat", "kills", 6], ["set_stat", "gold", 15], ["set_achievement", "k5"],
+                                 ["set_achievement", "k3"], ["store_stats"]])
+        self.assertEqual(p.unlocked, ["k5", "k3"])
+
+    def test_progress_popups_only_on_a_crossed_step_below_the_threshold(self):
+        p = self.fresh()
+        self.assertEqual(p.add_stat("kills", 1), ("ok", []))
+        self.assertEqual(p.add_stat("kills", 1), ("ok", [["indicate_progress", "k5", 2, 5]]))  # 1 -> 2 crosses 2
+        out, calls = p.add_stat("kills", 1)                                                  # 3: k3 unlocks
+        self.assertEqual(calls[-2:], [["set_achievement", "k3"], ["store_stats"]])
+        self.assertNotIn("indicate_progress", [c[0] for c in calls])                         # 2 -> 3 crosses none
+        self.assertEqual(p.add_stat("kills", 1)[1], [["indicate_progress", "k5", 4, 5]])
+        p.online = False
+        self.assertEqual(p.add_stat("gold", 1)[1], [])                                       # offline: no popups
+
+    def test_refused_clamped_and_same(self):
+        p = self.fresh()
+        p.set_stat("kills", 4)
+        self.assertEqual(p.set_stat("kills", 3), ("refused", []))          # increment_only
+        self.assertEqual(p.add_stat("kills", -1), ("refused", []))
+        self.assertEqual(p.set_stat("kills", 4.0), ("same", []))           # 4.0 is 4
+        for bad in (4.5, "5", True, None, float("nan"), float("inf")):
+            self.assertEqual(p.set_stat("gold", bad), ("refused", []), bad)
+        self.assertEqual(p.set_stat("gold", 70)[0], "clamped")
+        self.assertEqual(p.stats["gold"], 50)
+        self.assertEqual(p.set_stat("pace", -3.5), ("clamped", []))
+        self.assertEqual(p.stats["pace"], -1.0)
+        self.assertEqual(p.add_stat("pace", 0.25), ("ok", []))
+        self.assertEqual(p.stats["pace"], -0.75)
+        self.assertEqual(p.set_stat("nope", 1), ("unknown", []))
+
+    def test_offline_play_queues_and_one_replay_sends_it(self):
+        p = self.fresh(online=False)
+        self.assertEqual(p.unlock("win"), ("unlocked", []))
+        p.add_stat("gold", 20)
+        p.add_stat("gold", 30)                                             # 50: rich unlocks, still offline
+        self.assertEqual(p.flush(), ("offline", []))
+        self.assertEqual(p.unlocked, ["win", "rich"])                      # local at once
+        self.assertEqual(p.connect({}), ("online", [["set_stat", "gold", 50], ["set_achievement", "win"],
+                                                    ["set_achievement", "rich"], ["store_stats"]]))
+        self.assertEqual(p.flush(), ("nothing", []))
+
+    def test_a_failed_store_keeps_the_queue(self):
+        p = self.fresh()
+        p.set_stat("gold", 3)
+        p.store_failures = 1
+        self.assertEqual(p.flush(), ("failed", [["set_stat", "gold", 3], ["store_stats"]]))
+        self.assertFalse(p.online)
+        self.assertEqual(p.state()["pending"]["stats"], ["gold"])
+        self.assertEqual(p.connect({}), ("online", [["set_stat", "gold", 3], ["store_stats"]]))
+
+    def test_connect_merges_the_stores_copy(self):
+        p = self.fresh(online=False)
+        p.add_stat("kills", 2)                                              # pending, increment_only
+        p.set_stat("gold", 10)                                              # pending: the local value wins
+        out, calls = p.connect({"unlocked": ["win", "ghost"], "stats": {"kills": 4, "gold": 40, "pace": 0.5}})
+        self.assertEqual(out, "online")
+        self.assertEqual(p.unlocked, ["win", "k3"])                         # remote win, then k3 at kills 4
+        self.assertEqual(p.stats, {"kills": 4, "gold": 10, "pace": 0.5})
+        self.assertEqual(calls, [["set_stat", "gold", 10], ["set_achievement", "k3"], ["store_stats"]])
+        p.disconnect()
+        p.add_stat("kills", 3)                                              # 7 locally: k5 unlocks offline
+        self.assertEqual(p.connect({"stats": {"kills": 5}})[1],             # remote behind: kills stays pending
+                         [["set_stat", "kills", 7], ["set_achievement", "k5"], ["store_stats"]])
+
+    def test_presence_limits_and_no_resend(self):
+        p = self.fresh()
+        self.assertEqual(p.set_presence("status", "Menu"), ("ok", [["set_presence", "status", "Menu"]]))
+        self.assertEqual(p.set_presence("status", "Menu"), ("same", []))
+        self.assertEqual(p.set_presence("status", "é" * 128), ("refused", []))   # 256 UTF-8 bytes
+        self.assertEqual(p.set_presence("status", "é" * 127 + "x")[0], "ok")    # 255
+        self.assertEqual(p.set_presence("2fast", "x"), ("refused", []))
+        self.assertEqual(p.set_presence("status", ""), ("ok", [["set_presence", "status", ""]]))
+        self.assertEqual(p.set_presence("status", ""), ("same", []))
+        for i in range(gv.PRESENCE_MAX_KEYS):
+            p.set_presence("k%d" % i, "v")
+        self.assertEqual(p.set_presence("one_more", "v"), ("refused", []))
+        p.disconnect()
+        p.clear_presence()
+        p.set_presence("b", "2")
+        p.set_presence("a", "1")
+        self.assertEqual(p.connect({})[1], [["set_presence", "a", "1"], ["set_presence", "b", "2"]])
+
+    def test_cloud_partition_and_hooks(self):
+        self.assertEqual([gv.cloud_partition(f) for f in ("save_1.json", "save_1.json.bak", "SETTINGS.json",
+                                                         "save_1.json.tmp", "logs\\a.txt", "deep/logs/a.txt")],
+                         ["cloud", "cloud", "local", "local", "local", "cloud"])
+        api = self.fresh(cloud="api")
+        self.assertEqual(api.saved("save_1.json"), ("cloud", [["cloud_write", "save_1.json"]]))
+        self.assertEqual(api.saved("settings.json"), ("local", []))
+        api.disconnect()
+        api.saved("save_2.json")
+        api.saved("save_2.json")
+        self.assertEqual(api.connect({})[1], [["cloud_write", "save_2.json"]])     # once, not twice
+        auto = self.fresh(cloud="auto")
+        self.assertEqual(auto.saved("save_1.json"), ("cloud", []))                   # Auto-Cloud: no calls
+
+    def test_the_overlay_pauses_gameplay_and_never_resumes(self):
+        self.assertEqual(gv.overlay_action(True, "play"), "pause")
+        self.assertEqual(gv.overlay_action(False, "pause"), "none")
+        self.assertEqual(gv.overlay_action(True, "pause"), "none")
+
+    def test_reset_is_never_queued(self):
+        p = self.fresh()
+        p.unlock("win")
+        self.assertEqual(p.reset_all(), ("reset", [["reset_all_stats", True]]))
+        self.assertEqual((p.unlocked, p.stats["gold"]), ([], 0))
+        p.disconnect()
+        self.assertEqual(p.reset_all(), ("offline", []))
+
+    def test_the_null_backend_holds_what_was_stored_so_a_reconnect_sends_nothing(self):
+        nb = gv.NullBackend()
+        p = self.fresh()
+        for call in p.add_stat("kills", 3)[1] + p.set_presence("status", "Menu")[1]:
+            self.assertTrue(nb.send(call))
+        self.assertEqual(nb.remote(), {"unlocked": ["k3"], "stats": {"kills": 3}})
+        self.assertEqual(nb.presence, {"status": "Menu"})
+        p.disconnect()
+        self.assertEqual(p.connect(nb.remote())[1], [["set_presence", "status", "Menu"]])   # only the session's map
+        other = self.fresh(online=False)                                  # a second machine
+        self.assertEqual(other.connect(nb.remote()), ("online", []))
+        self.assertEqual((other.unlocked, other.stats["kills"]), (["k3"], 3))
+        nb.send(["set_stat", "gold", 4])
+        nb.fail_stores = 1
+        self.assertFalse(nb.send(["store_stats"]))                        # a failed store lands nothing
+        self.assertEqual(nb.remote()["stats"], {"kills": 3})
+        self.assertTrue(nb.send(["store_stats"]))
+        self.assertEqual(nb.remote()["stats"], {"kills": 3, "gold": 4})
+
+    def test_the_state_file_round_trips_and_drops_what_does_not_fit(self):
+        p = self.fresh(online=False, cloud="api")
+        p.add_stat("kills", 3)
+        p.saved("save_1.json")
+        text = json.dumps(p.state())
+        self.assertEqual(gv.platform_state_load(p.defs, text), (p.state(), 0))
+        bad = json.loads(text)
+        bad["unlocked"].append("ghost")
+        bad["stats"]["gold"] = 1.5
+        bad["pending"]["cloud"].append("settings.json")
+        state, problems = gv.platform_state_load(p.defs, json.dumps(bad))
+        self.assertEqual((state, problems), (p.state(), 3))
+        self.assertEqual(gv.platform_state_load(p.defs, None)[1], 0)
+        newer = dict(json.loads(text), version=2)
+        self.assertEqual(gv.platform_state_load(p.defs, json.dumps(newer)),
+                         (gv.Platform(p.defs).state(), 1))
 
 
 if __name__ == "__main__":

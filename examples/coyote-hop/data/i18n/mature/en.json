@@ -1,0 +1,4 @@
+{
+ "_note": "The game's own word list for the clean-language setting (#207, docs/sop/SOP-19): with content.clean_language on, every whole word listed here is masked (#@$%) in the shell's text, placeholder values included. One file per language (fr.json, de.json ...); the files of every language in the fallback chain apply. Single words only, any case. Empty: nothing is masked, only the @clean lines are used.",
+ "words": []
+}

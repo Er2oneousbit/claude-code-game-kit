@@ -16,6 +16,8 @@
 //   for primary, then backup: parse -> missing | unreadable | not a save | bad version | newer -> next
 //   the first good one is migrated step by step up to SAVE_VERSION and returned with its source
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): an optional onSaved hook after the atomic write
+//           (the platform layer's saved(), #84)
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "./atomicFile";
 import { deepCopy, hasKey, isObject, type JsonObject } from "./jsonUtil";
@@ -88,7 +90,8 @@ export const saveName = (slot: number | string) => `save_${slot}.json`;
 export class SaveStore {
   private readonly newer = new Set<string>();
 
-  constructor(private readonly store: TextStore) {}
+  /** onSaved(name) runs after a slot's atomic write succeeded (the platform layer's cloud hook, PLATFORM.md). */
+  constructor(private readonly store: TextStore, private readonly onSaved?: (name: string) => void) {}
 
   load(slot: number | string): SaveLoadResult {
     const name = saveName(slot);
@@ -106,5 +109,6 @@ export class SaveStore {
     }
     const text = JSON.stringify({ format: SAVE_FORMAT, version: SAVE_VERSION, data }, null, 1) + "\n";
     atomicWrite(this.store, name, text, { isGood: (old) => parseSave(old)[1] === "" });
+    this.onSaved?.(name);
   }
 }

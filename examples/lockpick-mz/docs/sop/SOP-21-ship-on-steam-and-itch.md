@@ -34,13 +34,34 @@ are from Valve's own documentation read on 2026-11-01 (F39), itch.io facts from 
 
 ## 3. Uploading builds (A)
 1. Steamworks: create depots (one per platform), publish.
-2. Write an app build VDF (AppID, content root, the Depots list) and one depot build VDF per depot (FileMapping with
-   LocalPath and DepotPath, FileExclusion for debug files) (E76). Keep them in the repo under `tools/steam/`, without
-   any login.
+2. SteamPipe takes an app build VDF (AppID, content root, the Depots list), each depot with a FileMapping (LocalPath
+   and DepotPath) and FileExclusion for debug files (E76). The kit writes it for you (below), without any login.
 3. Upload with `steamcmd +login <build account> +run_app_build <app_build.vdf> +quit`. The build account needs "Edit App
-   Metadata" rights; the first login asks for a Steam Guard code, so run it by hand once on the machine that uploads
-   (verify the current flow on Steamworks). Use `SetLive` to put a build on a beta branch automatically; the default branch can only be set
-   live by hand in the App Admin panel (E76), which is the last human check before players get it.
+   Metadata" rights. Use `SetLive` to put a build on a beta branch automatically; the default branch can only be set
+   live by hand in the App Admin panel (E76), which is the last human check before players get it. The kit wires it:
+   ```
+   python tools/dev.py ship --target steam --app 1234560 --depot 1234561 --site build/windows --branch beta --dry-run
+   python tools/dev.py ship --target steam --app 1234560 --depot 1234561=build/windows --depot 1234562=build/linux \
+       --branch beta --steam-user mybuildaccount --preview     # SteamPipe builds the manifest, uploads nothing
+   python tools/dev.py ship --target steam --app 1234560 --depot 1234561 --site build/windows --branch beta \
+       --steam-user mybuildaccount --yes                       # upload, set live on beta
+   ```
+   `--dry-run` checks that steamcmd is found (`STEAMCMD_BIN` or PATH), the ids are numbers, every depot folder exists,
+   is not empty and holds no `<build>/steam_appid.txt`, secret-type file or token, and the version is known (`SOP-06`), then
+   writes `deploy/steam/app_build_<app>.vdf` (git-ignored: it holds this machine's absolute paths) and prints it with
+   the exact steamcmd line. It runs nothing and needs no login. The VDF has every depot inline under one content root
+   (the depots' common folder), excludes `*.pdb`, and has `SetLive` only with `--branch`; `--branch default` is refused.
+   `--preview` adds SteamPipe's `"Preview" "1"`, which should build the manifest and the log without uploading
+   (**verify** on the first run); it never carries `SetLive`. An upload, and a preview until that is verified, asks
+   for the game's slug in a terminal and needs `--yes` anywhere else.
+   **The login is never stored by the kit.** `--steam-user` (or `STEAM_USER`) is the account's name only. Log in by
+   hand once, in a terminal on the machine that uploads: `steamcmd +login <build account> +quit`, then type the
+   password and the Steam Guard code it asks for; steamcmd keeps its own login after that (**verify** how long), and
+   the kit never reads its files (Claude Code's deny rules cover `~/Steam/config/` and `~/.steam/`, where steamcmd
+   keeps them on Linux and macOS: **verify**; on Windows they sit in steamcmd's own folder). Outside a terminal steamcmd gets a closed stdin, so a missing login fails at
+   once instead of waiting. Not done yet: a real upload through the kit (tested with a stand-in steamcmd only), the
+   VDF details (Windows path spelling, inline depots, `Recursive`) and whether steamcmd's exit code reports every
+   failure: **verify** all on the first upload, and check the build on Steamworks (App Admin, SteamPipe, Builds).
 4. **itch.io** with butler (E84): `butler push <folder> user/game:<channel> --userversion 1.2.0`. butler uploads only
    what changed. Channel names containing `win`/`windows`, `linux`, `mac`/`osx` or `android` tag the platform
    (`win-linux-mac-stable` tags three); lower case, dash-separated. A web build is marked "playable in browser" on the
@@ -58,11 +79,17 @@ are from Valve's own documentation read on 2026-11-01 (F39), itch.io facts from 
    checks that one is there and never reads, prints or writes it. A push asks for the game's slug in a terminal and
    needs `--yes` anywhere else. Not done yet: a real upload through the kit (tested with a stand-in butler only,
    **verify** on the first push), and `--status`, which runs `butler status` (seen in butler's own output, not its docs:
-   **verify**). Steam has no `ship` target yet (#84): use step 3 by hand.
+   **verify**).
 5. Never put store passwords, butler keys or Steam credentials in the repo or in a log (`CLAUDE.md` guardrails). In
    CI they live in the repository's secrets.
 
 ## 4. Steam features (A)
+- **The kit's platform layer** (`docs/PLATFORM.md`, #84): achievements, stats, rich presence, the overlay's pause hook
+  and the cloud-save hooks go through one engine-neutral layer with a null backend that records every call, so tests
+  and smoke never need Steam. Its rules (unlock once, stat limits, the offline queue and its replay, which files go to
+  the cloud) are golden-tested (`data/golden/platform.json`) in every engine. Each engine has a Steam adapter, off
+  until you turn it on (`docs/PLATFORM.md` section 6 names the binding and the switch); none has run against Steam yet,
+  so test the wiring with app 480 first **(verify)**.
 - **Achievements** (E78): defined on the App Admin page; unlock with `SetAchievement` then `StoreStats`; reset for
   testing with `ResetAllStats(true)` or the Steam console. Up to 100 at first. All-ages names and icons. Before release
   they do not show in the Community, so the game should show what was earned. Tip: design them as goals that point at

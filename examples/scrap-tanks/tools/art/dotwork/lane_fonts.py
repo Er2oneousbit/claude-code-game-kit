@@ -7,8 +7,11 @@
 #           "shadow"}]
 # Notes   : effect shadow | outline | none; gradient brass | steel | copper | [hex...]; caps_only; export {char: file};
 #           check [strings files in the game]: every character they use must be in the font, or the pack fails
-#           (fontcheck.py; also `dotwork.py fonts-check`). glyphs/*_latin.txt add Latin-1 + Latin Extended-A.
+#           (fontcheck.py; also `dotwork.py fonts-check`). glyphs/*_latin.txt add Latin-1 + Latin Extended-A;
+#           glyphs/dialogue_cyrillic.txt adds Cyrillic (U+0400-045F, Ґ ґ, №) to dialogue_latin.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): Cyrillic preview lines (a Russian and a Ukrainian
+#           pangram, the capitals and the Serbian / Macedonian letters) for fonts that have every letter (#51)
 # ---------------------------------------------------------------------------
 import os
 
@@ -32,6 +35,18 @@ LATIN_SAMPLE = ["Ch\u00e2teau, cr\u00e8me br\u00fbl\u00e9e, gar\u00e7on, \u0153u
                 "\u0131l\u0131k \u015feftali, \u0130yi!",
                 "\u00ab Oui \u00bb \u201eJa\u201c \u201cYes\u2026\u201d \u2013 1,50 \u20ac \u00a3 \u00a5 \u00a9 "
                 "\u00ae \u00b0 \u00b1 \u00d7 \u00f7"]
+
+# Cyrillic preview lines, shown only when the font has every character in them (#51): each pangram holds its whole
+# alphabet (Russian 33 letters, Ukrainian 33), then the capitals, then the other letters of the block
+CYRILLIC_SAMPLE = ["\u0421\u044a\u0435\u0448\u044c \u0436\u0435 \u0435\u0449\u0451 \u044d\u0442\u0438\u0445 "
+                   "\u043c\u044f\u0433\u043a\u0438\u0445 \u0444\u0440\u0430\u043d\u0446\u0443\u0437\u0441\u043a\u0438\u0445 "
+                   "\u0431\u0443\u043b\u043e\u043a, \u0434\u0430 \u0432\u044b\u043f\u0435\u0439 \u0447\u0430\u044e.",
+                   "\u0427\u0443\u0454\u0448 \u0457\u0445, \u0434\u043e\u0446\u044e, \u0433\u0430? "
+                   "\u041a\u0443\u043c\u0435\u0434\u043d\u0430 \u0436 \u0442\u0438, \u043f\u0440\u043e\u0449\u0430\u0439\u0441\u044f "
+                   "\u0431\u0435\u0437 \u0491\u043e\u043b\u044c\u0444\u0456\u0432!",
+                   "".join(chr(c) for c in range(0x410, 0x430)) + " \u0401 \u0490",
+                   " ".join(chr(c) for c in range(0x400, 0x410)) + " \u2116 5",
+                   " ".join(chr(c) for c in range(0x450, 0x460)) + " \u0491 \u02bc"]
 
 
 def _lines(path, **kw):
@@ -221,7 +236,7 @@ def run(entries, pack, man, conf):
         fnt, png, meta, rendered, line_h, glyphs = build(name, gp, out, scale, effect, e.get("gradient"),
                                                           bool(e.get("caps_only")))
         missing = [chr(c) for c in range(33, 127) if chr(c) not in rendered]
-        latin = [t for t in LATIN_SAMPLE if set(t) <= set(rendered) | {" "}]
+        latin = [t for t in LATIN_SAMPLE + CYRILLIC_SAMPLE if set(t) <= set(rendered) | {" "}]
         text = e.get("sample") or ([t for t in SAMPLE] + latin if not missing else ["".join(sorted(rendered))])
         checked = check_strings(name, e.get("check"), rendered)
         pv = preview(rendered, glyphs, meta, scale, line_h, text, os.path.join(src, f"font_{name}_preview.png"))

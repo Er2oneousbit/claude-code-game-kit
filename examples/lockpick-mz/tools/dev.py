@@ -18,11 +18,13 @@
 #             clean    remove build/ (--deep also removes node_modules/)
 #             doctor   verify the local environment
 #             dotwork  turn Dotwork's art (asset manifests) into MZ's image layouts in game/img: character,
-#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, B to E
-#                      tilesets (tools/dotwork_mz.mjs; dotwork -h for its options)
+#                      object, face and side-view battler sheets, enemies, Window.png, IconSet.png, A1 / A2
+#                      autotiles and B to E tilesets, battle backs and parallaxes, and the maps into game/data
+#                      (tools/dotwork_mz.mjs; dotwork -h for its options)
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : RPGMZ_EXE  optional, the editor (RPGMZ.exe) for `run --editor` and `doctor`.
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : The MZ project lives in game/ (open its .rmmzproject in the editor), so the editor's Deployment
@@ -40,6 +42,7 @@
 #   dotwork: node tools/dotwork_mz.mjs --game <the MZ project> [options]; check also runs its --check once an
 #          export record exists
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --drive menus|access|crash (tools/mz_drives.js, #280)
 # Updated : 2026-10-30 with Claude (Opus 5.5, claude-opus-5-5): a timeout kills the whole process tree
 #           (taskkill /T, or the process group), then waits at most KILL_TIMEOUT_S for the pipe
 # Updated : 2026-11-01 with Claude (Opus 5.5, claude-opus-5-5): GameAudio.js (the kit's audio rules) is one of the
@@ -64,6 +67,10 @@
 #           reason, exit 2) instead of "no tests ran" (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): `ship --target itch` uploads to itch.io with
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): `dotwork` also makes autotiles, battle backs,
+#           parallaxes and maps (data/MapNNN.json with its tileset and MapInfos entries, #286)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): GamePlatform in OWN_PLUGINS (the platform layer, #84)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -82,7 +89,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIN_NODE = (22, 12)
 GAME_DIR = "game"                          # where the MZ project lives
 OWN_PLUGINS = ("GameCore", "GameAudio", "GameJuice", "GameShell", "GameAccess",   # the game's plugins, in load
-               "GameMain")                                                     # order (setup registers them)
+               "GamePlatform", "GameMain")                                     # order (setup registers them)
 CORE_FILES = ("index.html", "js/main.js", "js/rmmz_core.js", "js/rmmz_managers.js", "js/rmmz_objects.js",
               "js/rmmz_scenes.js", "js/rmmz_sprites.js", "js/rmmz_windows.js", "data/System.json")
 DATABASE = ("Actors", "Animations", "Armors", "Classes", "CommonEvents", "Enemies", "Items", "MapInfos",
@@ -92,6 +99,8 @@ NOT_SHIPPED = {"save"}                     # build leaves these out
 NOT_SHIPPED_SUFFIX = (".rmmzproject",)
 SHIPPED_AT_ROOT = ("index.html", "package.json", "js", "data", "img", "audio", "effects", "fonts", "css", "icon")
 SMOKE_FRAMES = 120
+DRIVES = ("menus", "access", "crash")     # smoke --drive: tools/mz_drives.js (#280)
+DRIVE_FAILS_ON_PURPOSE = {"crash": "DRIVE_CRASH"}   # drive -> the marker that proves the planted failure
 BOOT_MARKER = "BOOT_OK"                    # logged by game/js/plugins/GameMain.js
 SMOKE_TIMEOUT_S = 240                      # MZ loads its whole database before the title: software WebGL is slow
 SMOKE_MIN_FPS = 20
@@ -773,13 +782,21 @@ def cmd_smoke(args):
            "--marker", BOOT_MARKER, "--timeout-ms", str(args.timeout * 1000)] + (["--verbose"] if DEBUG else [])
     for flag, value in (("--query", args.query), ("--until", args.until), ("--fail-on", args.fail_on),
                         ("--screenshot", args.screenshot), ("--record", args.record),
-                        ("--record-every", str(args.record_every) if args.record else "")):
+                        ("--record-every", str(args.record_every) if args.record else ""), ("--drive", getattr(args, "drive", ""))):
         if value:
             cmd += [flag, value]
     cmd += ["--headed"] if args.headed else []
     limit = SMOKE_TIMEOUT_S + args.timeout + args.frames // SMOKE_MIN_FPS
     rc, out = run(cmd, capture=True, timeout=limit)
     print(out.rstrip())
+    drive = getattr(args, "drive", "")
+    if drive in DRIVE_FAILS_ON_PURPOSE and rc != 2 and rc not in NO_EXEC:
+        # a drive that must fail: the proof is the planted marker; either way the exit is 1 (#280)
+        marker = DRIVE_FAILS_ON_PURPOSE[drive]
+        print(f"[info] --drive {drive} fails on purpose: {marker} in the output is the proof")
+        if marker not in out:
+            print(f"[FAIL] --drive {drive} did not fail with its planted error (a smoke that cannot fail proves nothing)")
+        return 1
     if rc == 124:
         print(f"[FAIL] smoke did not finish within {limit} s")
         return 1
@@ -1109,6 +1126,10 @@ def build_parser():
     p.add_argument("--screenshot", default="", help="save a PNG of the final frame (path relative to the project)")
     p.add_argument("--record", default="", help="save PNG frames to this folder (GIF: tools/art/frames_to_gif.py)")
     p.add_argument("--record-every", type=positive_int, default=66, help="milliseconds between recorded frames (default 66)")
+    p.add_argument("--drive", default="", choices=DRIVES,
+                   help="a scripted run of MZ's own screens (tools/mz_drives.js): menus (every screen opens), access (every "
+                        "kit row on the Options screen turns and is saved), crash (fails on purpose). Not yet run "
+                        "against a real MZ project (verify)")
     p.add_argument("--headed", action="store_true", help="visible browser window (real GPU)")
     p.add_argument("--shaders", action="store_true",
                    help="also render every kit shader recipe as a PIXI filter and compare it with its golden image "
@@ -1125,10 +1146,12 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="accepted on every engine; this clean never asks")
     p.set_defaults(fn=cmd_clean)
     p = sub.add_parser("dotwork", help="Dotwork's art into MZ's image layouts in game/img (characters, faces, "
-                                       "battlers, Window.png, IconSet.png, B to E tilesets)",
+                                       "battlers, Window.png, IconSet.png, autotiles and tilesets, battle backs, "
+                                       "parallaxes) and its maps into game/data",
                        description="Convert Dotwork's asset manifests (<assets_dir>/dotwork/*.assets.json) into RPG "
-                                   "Maker MZ's image layouts in game/img, and record the icon, face and tile ids for "
-                                   "the database in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
+                                   "Maker MZ's image layouts in game/img and its maps into game/data (MapNNN.json, "
+                                   "with Tilesets.json and MapInfos.json entries), and record the icon, face, tile "
+                                   "and map ids in <src_dir>/dotwork/mz_export.json. Never overwrites a file it did "
                                    "not write unless --replace. docs/ENGINE_FLOW.md 'Dotwork art in MZ'.")
     p.add_argument("--manifest", action="append", metavar="FILE",
                    help="a manifest to convert (repeatable; default: every *.assets.json in Dotwork's assets folder)")
@@ -1137,7 +1160,8 @@ def build_parser():
     p.add_argument("--sheet", default="", metavar="NAME",
                    help="put characters on normal sheets NAME, NAME_2 ... (8 each) instead of one $ file each")
     p.add_argument("--only", default="", metavar="KINDS",
-                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets")
+                   help="comma list of characters, objects, faces, sv, enemies, icons, window, tilesets, maps, "
+                        "backgrounds")
     p.add_argument("--stand", choices=("walk", "idle"), default="",
                    help="the standing frame (MZ's middle column): walk's first (default) or idle's")
     p.add_argument("--side-view", action="store_true", help="make side-view battlers even in a front-view game")
@@ -1146,8 +1170,8 @@ def build_parser():
     p.add_argument("--dry-run", action="store_true", help="say what would be written, write nothing")
     p.add_argument("--check", action="store_true", help="check the last export (files, MZ's shapes); `check` runs it too")
     p.set_defaults(fn=cmd_dotwork)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

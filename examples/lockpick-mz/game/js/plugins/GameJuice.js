@@ -18,6 +18,11 @@
 //           Keep it free of $game*, Scene_*, Window_*: anything MZ goes in GameAccess.js or GameMain.js.
 //           The last lines make the same file a global (GameJuice) in MZ and a CommonJS module in Node.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers SOP-18 step 4 builds on (#170,
+//           #164): impact (a hit confirm scaled by damage), floatText (a damage number's motion) and the tracer's
+//           point history by distance (trailPush, trailShrink, trailLength)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): impact is the same with blood on or off; what a
+//           hit leaves is the game's: blood, or (blood_enabled off) a neutral spark or dust (SOP-18 step 4, #171)
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -358,9 +363,71 @@
         }
     }
 
+    // ---- Recipe helpers (SOP-18 step 4) ----------------------------------------
+    // Pure functions: no settings, no clock, no random numbers. Points are [x, y], tail first, head last; each
+    // trail function returns a new array. Their defaults are SOP-18's starting points.
+    const TRAIL_EPS = 1e-12;   // a cut this close to a point removes the point
+
+    // A hit confirm scaled by damage: hitstop and trauma from min (smallest hit) to max (full), flash from flashAt
+    function impact(damage, full, hitstopMin = 0.03, hitstopMax = 0.1, traumaMin = 0.15, traumaMax = 0.6, flashAt = 0.5) {
+        if (damage <= 0) return { hitstop: 0, trauma: 0, flash: false };
+        const f = full <= 0 ? 1 : Math.min(Math.max(damage / full, 0), 1);
+        return { hitstop: hitstopMin + (hitstopMax - hitstopMin) * f, trauma: traumaMin + (traumaMax - traumaMin) * f,
+            flash: f >= flashAt };
+    }
+
+    // A damage number at age t: rises on out_cubic, pops in on out_back, fades on in_cubic; reduce motion: rise 0, popS 0
+    function floatText(t, life = 0.8, rise = 24.0, popS = 0.12) {
+        const u = life > 0 ? Math.min(Math.max(t / life, 0), 1) : 1;
+        return { dy: -rise * ease("out_cubic", u), scale: popS > 0 ? ease("out_back", t / popS) : 1,
+            alpha: 1 - ease("in_cubic", u), done: t >= life };
+    }
+
+    function segLength(a, b) {
+        const dx = b[0] - a[0];
+        const dy = b[1] - a[1];
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function trailLength(points) {
+        let total = 0;
+        for (let i = 0; i < points.length - 1; i++) total += segLength(points[i], points[i + 1]);
+        return total;
+    }
+
+    function trailTrimTo(points, keep) {
+        const pts = points.map((p) => [p[0], p[1]]);
+        let excess = trailLength(pts) - Math.max(keep, 0);
+        while (excess > TRAIL_EPS && pts.length > 1) {
+            const s = segLength(pts[0], pts[1]);
+            if (s <= excess + TRAIL_EPS) {
+                pts.shift();
+                excess -= s;
+            } else {
+                const k = excess / s;
+                pts[0] = [pts[0][0] + (pts[1][0] - pts[0][0]) * k, pts[0][1] + (pts[1][1] - pts[0][1]) * k];
+                excess = 0;
+            }
+        }
+        return pts;
+    }
+
+    // A tracer's path: the head follows (x, y); a new point once the head is spacing past the point before it
+    function trailPush(points, x, y, spacing = 6.0, maxLen = 48.0) {
+        const pts = points.map((p) => [p[0], p[1]]);
+        if (pts.length < 2 || segLength(pts[pts.length - 2], pts[pts.length - 1]) >= spacing) pts.push([x, y]);
+        else pts[pts.length - 1] = [x, y];
+        return trailTrimTo(pts, maxLen);
+    }
+
+    // The tail catching up after the shot dies: remove amount px from the tail (fewer than two points: draw nothing)
+    function trailShrink(points, amount) {
+        return trailTrimTo(points, trailLength(points) - amount);
+    }
+
     const GameJuice = {
         lattice, noise, Shake, Hitstop, ease, EASE_NAMES, FollowCamera, InputBuffer, CoyoteTimer, Spring, squash,
-        FlashLimiter, HoldToggle, AutoRepeat,
+        FlashLimiter, HoldToggle, AutoRepeat, impact, floatText, trailPush, trailShrink, trailLength,
         SHAKE_DEFAULTS, FOLLOW_DEFAULTS, HITSTOP_MAX_S, INPUT_BUFFER_S, COYOTE_S, FLASH_MAX, FLASH_WINDOW_S,
     };
 

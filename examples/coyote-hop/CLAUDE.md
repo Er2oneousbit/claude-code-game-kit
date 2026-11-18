@@ -20,7 +20,7 @@ Never guess build or test commands. Use the project wrapper:
 python tools/dev.py check | test | smoke | build | run | clean | doctor | ship   # -h for help and env vars, --debug for detail
 ```
 `check` is the fast parse/compile pass, `test` runs unit tests, `smoke` boots headless and fails on errors, `ship`
-puts a build online or on itch.io (`SOP-06`, `SOP-21`).
+puts a build online, on itch.io or on Steam (`SOP-06`, `SOP-21`).
 A change is not done until `check` and `test` pass,
 and `smoke` passes if you touched startup, scenes/levels, or anything loaded at boot. A project with no tests yet
 gets "nothing ran" from `test`: write the first test, or record the gap in `docs/HANDOFF.md` (`SOP-09`).
@@ -76,7 +76,8 @@ gets "nothing ran" from `test`: write the first test, or record the gap in `docs
 | Screen shake, hitstop, easing, camera feel ("juice") | `docs/sop/SOP-18-game-feel.md` via `/game-feel` |
 | Menus, settings, saves, rebinding, gamepad prompts, localization, crash logs | `docs/sop/SOP-19-front-end-and-settings.md` via `/game-shell` |
 | Subtitles, text size, colour, motion and flash safety, difficulty; colour-blind pairs (`python tools/access/colour_check.py pairs`), the screens and the Steam Deck pass (`python tools/access/sweep.py`) | `docs/sop/SOP-20-accessibility.md` |
-| Steam and itch.io: store page, uploads, achievements, signing, CI, legal; upload to itch.io (`python tools/dev.py ship --target itch`) | `docs/sop/SOP-21-ship-on-steam-and-itch.md`, `docs/LEGAL.md` |
+| Steam and itch.io: store page, uploads, achievements, signing, CI, legal; upload to itch.io or Steam (`python tools/dev.py ship --target itch` or `--target steam`) | `docs/sop/SOP-21-ship-on-steam-and-itch.md`, `docs/LEGAL.md` |
+| Achievements, stats, rich presence, the Steam overlay, cloud saves (the platform layer) | `docs/PLATFORM.md` |
 | Balance, economy, progression curves | `docs/sop/SOP-22-balancing-and-economy.md` |
 | Run the bots over many seeds and settings (pass rates per setting) | `python tools/seed_sweep.py -h` |
 | Store page, trailer, press kit, wishlists | `docs/sop/SOP-23-marketing.md` |

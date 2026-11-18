@@ -19,9 +19,10 @@
 //                          and opens the confirm, which reverts by itself after 15 REAL seconds; then two Backs
 //                          discard a staged change. DRIVE_DISPLAY lines (staged, warned, applied, reverted,
 //                          discarded). Headless.
-//           show:<screen>  title | main_menu | settings | pause | help | history | credits | subtitle | juice | apply
-//                          (a Display change waiting) | confirm (Keep these display settings?): opens it, then ends
-//                          (add --screenshot; juice lands a hit first). Opens a window.
+//           show:<screen>  title | main_menu | settings | content (the Blood and Clean language rows) | pause | help
+//                          | history | credits | subtitle | juice | apply (a Display change waiting) | confirm (Keep
+//                          these display settings?): opens it, then ends (add --screenshot; juice lands a hit
+//                          first). Opens a window.
 //           access[:opts]  the accessibility sweep's tour (tools/access/sweep.py): res=WxH, scale=N, pad, read.
 //                          Opens a window (it measures the drawn text).
 // Notes   : A scenario is a list of steps; each step runs once a frame until it reports done, and every step has a
@@ -39,6 +40,9 @@
 //           checks the Display tab with a change waiting and the confirm (#308)
 //           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old size while the
 //           confirm waits
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the access tour wants only enabled rows: a disabled
+//           Apply (nothing staged) was reported unreached, though focus skips it by design (#308)
 // ---------------------------------------------------------------------------
 use std::collections::{BTreeMap, VecDeque};
 
@@ -75,10 +79,11 @@ const JUICE_SHOT_FRAMES: u32 = 1;
 const REAL_SLACK_S: f64 = 2.0;
 /// display: a frame sleeps this long while the confirm counts down (headless frames are not throttled).
 const REAL_WAIT_MS: u64 = 10;
-pub const SHOW_TARGETS: [&str; 11] = [
+pub const SHOW_TARGETS: [&str; 12] = [
     "title",
     "main_menu",
     "settings",
+    "content",
     "pause",
     "help",
     "history",
@@ -376,7 +381,12 @@ impl Drive {
                         Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
                         _ => String::new(),
                     };
-                    let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
+                    // a disabled row (Apply while nothing waits, #308) is not a control: focus skips it on purpose
+                    let want: Vec<String> = rows
+                        .iter()
+                        .filter(|r| r.enabled)
+                        .map(|r| format!("{prefix}{}", r.id))
+                        .collect();
                     d.reach_seen.clear();
                     state = Some((rows.len() + 1, want, shell.focus_id()));
                 }
@@ -401,7 +411,12 @@ impl Drive {
                 Some(t) if t.name == ScreenName::Settings => format!("{}.", TABS[t.tab.min(TABS.len() - 1)]),
                 _ => String::new(),
             };
-            let want: Vec<String> = rows.iter().map(|r| format!("{prefix}{}", r.id)).collect();
+            // a disabled row (Apply while nothing waits, #308) is not a control: focus skips it on purpose
+            let want: Vec<String> = rows
+                .iter()
+                .filter(|r| r.enabled)
+                .map(|r| format!("{prefix}{}", r.id))
+                .collect();
             let unreached: Vec<&String> = want.iter().filter(|w| !d.reach_seen.contains(w)).collect();
             let mut narration = BTreeMap::new();
             for row in &rows {
@@ -974,6 +989,15 @@ fn show(d: &mut Drive, target: &str) {
             d.press("ui_down");
             d.focus("audio.master");
             d.press("ui_left");
+            d.frames(5);
+        }
+        "content" => {
+            // the Accessibility tab at the Blood and Clean language rows (#171, #207)
+            d.menu_from_title();
+            d.open("settings", ScreenName::Settings);
+            d.open_tab("access");
+            d.press("ui_down");
+            d.focus("access.clean_language");
             d.frames(5);
         }
         "credits" => {

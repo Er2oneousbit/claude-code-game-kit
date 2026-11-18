@@ -12,10 +12,12 @@
 ```
 index.html          page shell, loads src/main.ts
 src/main.ts         creates the Phaser.Game (size, scale mode, scene list)
-src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter,
+src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow, buffer, coyote, spring, flash limiter, feel recipes,
                     hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue, audio director, music director,
                     audio access, analog (stick and trigger shaping), display staging (the Display tab's Apply and
-                    its keep-or-revert confirm), hud font size (ui_scale and text_scale for text the renderer draws).
+                    its keep-or-revert confirm), hud font size (ui_scale and text_scale for text the renderer draws), platform
+                    services (achievements, stats, presence, cloud hooks: docs/PLATFORM.md; null backend only, a
+                    browser has no Steam).
                     No Phaser import. Unit tested (golden vectors).
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no Phaser import; the
                     same files as the web-3d overlay's, host.ts is all it knows of the renderer)

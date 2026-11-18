@@ -29,6 +29,8 @@
 //           Display tab with a change waiting and the confirm (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the display drive checks settings.json keeps the old
 //           size while the confirm waits
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the Blood and Clean language rows
+//           (#171, #207)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections;
@@ -50,7 +52,7 @@ namespace graveyard_shift.Shell
         public const int MAX_SLIDER_STEPS = 40;
         public const int JUICE_SETTLE_FRAMES = 40;   // frames into the juice demo before a drive attacks
         public const float PLANT_WIDTH = 40f;        // pseudo-plant: a label this narrow cannot hold its text
-        public static readonly string[] SHOW_TARGETS = { "title", "settings", "pause", "subtitle", "juice", "credits", "apply", "confirm" };
+        public static readonly string[] SHOW_TARGETS = { "title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply", "confirm" };
         public const double REAL_SLACK_S = 2.0;      // display: the confirm reverts within this of its 15 real seconds
         public static readonly string[] BUG_FILES = { "info.txt", "log_tail.txt", "settings.json" };
         public static readonly string[] ACCESS_ACTIONS = { "ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause" };
@@ -182,6 +184,19 @@ namespace graveyard_shift.Shell
                     yield return NavTo("Tab_audio", "ui_right");
                     if (Failed) yield break;
                     yield return NavTo("Setting_audio_master", "ui_down");
+                    if (Failed) yield break;
+                    yield return Frames(SETTLE_FRAMES);
+                    break;
+                case "content":                            // the Accessibility tab at the content rows (#171, #207)
+                    yield return ToMainMenu();
+                    if (Failed) yield break;
+                    yield return NavTo("Settings", "ui_down");
+                    if (Failed) yield break;
+                    yield return Accept("settings");
+                    if (Failed) yield break;
+                    yield return NavTo("Tab_access", "ui_right");
+                    if (Failed) yield break;
+                    yield return NavTo("Setting_content_clean_language", "ui_down");
                     if (Failed) yield break;
                     yield return Frames(SETTLE_FRAMES);
                     break;

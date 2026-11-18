@@ -17,7 +17,13 @@
 #           LANGUAGE lists the English texts the kit's own tables keep as they are: proper names and units; add a
 #           game's own with --same. Keys only the other table has (a name the code looks up with a fallback, like
 #           Unity's binding.key.*) are listed with --debug, never an error. Standard library only.
+#           Clean-language variants (#207): a key may have a sibling <key>@clean, checked like any other key; '@'
+#           is reserved for it, so any other '@' in a key, or an @clean line without its plain line, is a problem.
+#           With a word list in data/i18n/mature/<locale>.json, every line that holds a listed word and has no
+#           @clean variant is listed as a warning (the shell masks those words, but a written clean line reads
+#           better); a warning never fails the run.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): @clean keys and the word-list audit (#207)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -25,6 +31,8 @@
 #   for each table, for each English key:
 #     missing -> problem; placeholders differ -> problem
 #     same text as English, not placeholders-only, not in SAME_IN_EVERY_LANGUAGE or --same -> problem
+#   every table (en too): '@' only as a trailing @clean, and every @clean has its plain key
+#   with data/i18n/mature/<locale>.json: lines whose text the mask changes and that have no @clean -> warnings
 #   print the problems per table; exit 1 if any
 import argparse
 import json
@@ -44,6 +52,8 @@ ROOT = Path(__file__).resolve().parents[1]
 I18N_DIR = "data/i18n"
 BASE = "en"
 SKIP_LOCALES = {"pseudo"}                     # generated from English at runtime, never a file to translate
+CLEAN_SUFFIX = "@clean"                       # a line's clean-language variant (#207)
+MATURE_DIR = "mature"                         # data/i18n/mature/<locale>.json: the game's word list
 PLACEHOLDER = re.compile(r"\{\{?[A-Za-z0-9_]+\}?\}")   # {n}, {name}; Ghost Lantern before scaffolding
 NOTHING_TO_TRANSLATE = re.compile(r"^[\W_]*$")         # what is left of a value once its placeholders are gone
 # English texts that are right as they are in the other languages the kit ships (French): proper names (brands,
@@ -99,6 +109,48 @@ def table_problems(en, other, same=()):
     return problems
 
 
+def key_problems(table):
+    """Key names: '@' is reserved for a trailing @clean, and an @clean line needs its plain line."""
+    problems = []
+    for key in table:
+        base = key[:-len(CLEAN_SUFFIX)] if key.endswith(CLEAN_SUFFIX) else key
+        if "@" in base:
+            problems.append(f"{key}: '@' is reserved for the @clean variant (rename the key)")
+        elif base != key and base not in table:
+            problems.append(f"{key}: a clean variant of a line the table does not have ({base})")
+    return problems
+
+
+def _reference():
+    """tools/golden_vectors.py (mask_words, mature_words), or None in a project without it."""
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import golden_vectors
+    except ImportError:
+        return None
+    return golden_vectors
+
+
+def clean_gaps(table, words):
+    """Keys whose line holds a listed word (the shell would mask it) and that have no @clean variant."""
+    gv = _reference()
+    if gv is None or not words:
+        return []
+    return [k for k, v in table.items() if not k.endswith(CLEAN_SUFFIX) and k + CLEAN_SUFFIX not in table
+            and gv.mask_words(v, words) != v]
+
+
+def mature_words(folder, locale):
+    """The word list of one locale (data/i18n/mature/<locale>.json), [] without one."""
+    path = Path(folder) / MATURE_DIR / f"{locale}.json"
+    gv = _reference()
+    if gv is None or not path.is_file():
+        return []
+    return gv.mature_words(path.read_text(encoding="utf-8"))
+
+
 def check_dir(folder, locales=None, same=()):
     """{locale: [problems]} for the tables in folder. Raises ValueError for a missing or broken table."""
     folder = Path(folder)
@@ -119,7 +171,7 @@ def check_dir(folder, locales=None, same=()):
         extra = [k for k in table if k not in en]
         if extra:
             dbg(f"{f.name}: keys English does not have (looked up with a fallback?): {', '.join(extra)}")
-        result[f.stem] = table_problems(en, table, same)
+        result[f.stem] = key_problems(table) + table_problems(en, table, same)
     return result
 
 
@@ -137,10 +189,11 @@ def main(argv=None):
     args = ap.parse_args(argv)
     DEBUG = args.debug
     folder = Path(args.dir) if args.dir else ROOT / I18N_DIR
-    if not args.dir and not folder.is_dir():
-        # A project with no string tables at all (RPG Maker MZ): the tool ships into every game, so the plain
-        # run passes there. A --dir that is wrong or holds no en.json is still a usage problem (exit 2).
-        print(f"[ OK ] no string tables ({I18N_DIR}/ does not exist), nothing to check")
+    if not args.dir and not (folder / f"{BASE}.json").is_file():
+        # A project with no string tables (RPG Maker MZ, which has only the word lists core ships): the tool ships
+        # into every game, so the plain run passes there. A --dir that is wrong or holds no en.json is still a
+        # usage problem (exit 2).
+        print(f"[ OK ] no string tables ({I18N_DIR}/{BASE}.json does not exist), nothing to check")
         return 0
     try:
         result = check_dir(folder, args.locale, set(args.same))
@@ -152,10 +205,20 @@ def main(argv=None):
         if DEBUG:
             traceback.print_exc()
         return 2
+    en_keys = key_problems(load_table(folder / f"{BASE}.json"))
+    if en_keys:
+        print(f"[FAIL] {BASE}.json: {len(en_keys)} problem(s)")
+        for p in en_keys:
+            print(f"  {p}")
+    for loc in [BASE] + list(result):
+        gaps = clean_gaps(load_table(folder / f"{loc}.json"), mature_words(folder, loc))
+        if gaps:
+            print(f"[warn] {loc}.json: {len(gaps)} line(s) hold a word from {MATURE_DIR}/{loc}.json and have no "
+                  f"@clean variant (the mask covers them): {', '.join(gaps)}")
     if not result:
         print(f"[ OK ] {folder}: English only, nothing to check")
-        return 0
-    bad = 0
+        return 1 if en_keys else 0
+    bad = 1 if en_keys else 0
     for loc, problems in result.items():
         if problems:
             bad += 1

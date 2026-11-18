@@ -75,6 +75,11 @@ offers one-handed layouts (`data/input/presets.json`, #166); `readable_font`, `l
 `timing_scale` and `auto_repeat` work as SOP-20 says.
 - **Narration** (#165): the shell's `narrator.ts` puts a line for every focus change, value change and screen into
   an ARIA live region (always) and speaks it with `speechSynthesis` when `access.narration` is on.
+- **Content switches** (#171, #207): Blood (`content.blood`) and Clean language (`content.clean_language`) close the
+  Accessibility tab; `SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING` in `src/shell/settingsScreen.ts` hide them in a
+  game without blood or strong language. The game reads `bloodEnabled(shell.settings)` (off: a neutral hit
+  effect, SOP-18 step 4); with `cleanLanguage(settings)` on, `i18n.t()` and `tn()` pick `<key>@clean` lines and
+  mask the words of `data/i18n/mature/<locale>.json`. `smoke --drive show:content --screenshot` pictures both.
 - **Where:** `src/shell/` (screens, input, subtitles, the smoke driver), `src/core/` (the engine-free logic: settings,
   bindings and glyphs, saves, i18n, juice), `data/i18n/<locale>.json` (strings), `data/dialogue/*.built.json`
   (subtitles in the dialogue format v0 of Wavesmith's dialogue subcommand). Scenes read `shell.settings`,
@@ -218,7 +223,7 @@ None recorded yet. Add notes from videos, forums or your own runs here, with an 
   - `display` (#308): `DRIVE_DISPLAY staged` (the mode one step on, not applied), `warned` (Back), `applied` (the
     confirm, focus on Keep), `reverted <ms> ms` (it ran out after 15 real seconds, sooner than 14 fails; the mode and
     `settings.json` are back where they were), `discarded` (a second change, Back twice). About 20 s.
-  - `show:title|settings|pause|subtitle|juice|credits|apply|confirm` (with `--screenshot`): opens that screen, freezes it, captures it
+  - `show:title|settings|content|pause|subtitle|juice|credits|apply|confirm` (content: the Blood and Clean language rows) (with `--screenshot`): opens that screen, freezes it, captures it
     (credits: the first lines, standing still; `apply`: the Display tab with a staged change, `confirm`: its
     confirm, countdown held).
   - `access[:res=WxH][,scale=N][,pad]`: every screen reported as `ACCESS_*` lines for `tools/access/sweep.py`

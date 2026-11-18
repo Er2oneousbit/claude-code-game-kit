@@ -19,6 +19,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-04 with Claude (Opus 5.5, claude-opus-5-5): every TileMapLayer cell must find its tile; a
 #           Pixelorama TileSet is loaded, not terrain-painted
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a tracer Line2D (top_level, fed the real path at run
+#           time, #164) may start with no points
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -112,7 +114,7 @@ func _init():
 	quit(1 if bad > 0 else 0)
 
 # Particle and trail nodes in a scene (lane_vfx): a GPUParticles2D needs a ParticleProcessMaterial, a texture and at
-# least one particle; a Line2D trail needs two points and a gradient. Each is printed with what a game tunes. Returns
+# least one particle; a Line2D trail needs two points (a top_level tracer none) and a gradient. Each is printed with what a game tunes. Returns
 # the number of broken nodes.
 # Maps (mapbuild, Pixelorama tilemaps): every cell of every TileMapLayer must find its tile in the TileSet (a cell
 # whose atlas slot or source is gone draws nothing and logs no error).
@@ -143,8 +145,10 @@ func _fx_check(p, node):
 		if not ok:
 			bad += 1
 	elif node is Line2D:
-		print("DOTWORK_LINE ", p, " node=", node.name, " points=", node.points.size(), " gradient=", node.gradient != null)
-		if node.points.size() < 2 or node.gradient == null:
+		print("DOTWORK_LINE ", p, " node=", node.name, " points=", node.points.size(), " gradient=", node.gradient != null,
+			" top_level=", node.top_level)
+		# a tracer (top_level: world space) starts empty: the game feeds it the real path (golden_vectors.trail_push)
+		if (node.points.size() < 2 and not node.top_level) or node.gradient == null:
 			bad += 1
 	for c in node.get_children():
 		bad += _fx_check(p, c)

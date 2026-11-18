@@ -47,7 +47,7 @@ README's "What was tested" table lists versions and graphics APIs). What each en
 - **Godot, web (Phaser), web-3d (Three.js), RPG Maker MZ (PIXI), LÖVE:** GLSL. The web pages and MZ's PIXI emulation
   run in headless Chromium; Godot and LÖVE need a window (headless Godot and LÖVE have no renderer).
 - **Unity:** unlit passes with no `LightMode` tag, which the Built-in pipeline and URP both draw (URP as
-  `SRPDefaultUnlit`; K01: Built-in and URP 17.6, through a Blit and through a URP camera). HDRP is not checked.
+  `SRPDefaultUnlit`; K01: Built-in, URP 17.6 and HDRP 17.6, through a Blit and through a camera; HDRP needs its camera set up for the check, see Unity's ENGINE.md).
 - **Unreal:** a material per recipe around a Custom node. The pythonscript commandlet runs on the Null RHI, so the
   check starts the full editor off-screen (`-ExecCmds=py ...`; `-ExecutePythonScript` quit before the materials
   compiled, K01).

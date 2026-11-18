@@ -23,6 +23,8 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' full loaded result,
 //           the extra kinds loaded, the hash, roll, corners4, centre and stamps cases
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): four golden maps (atlas_order_check)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects (spec 1.2.0, #164): light and
+//           tracer kept; the extra kinds check counts kinds, not assets (the fixture now has two particle sets)
 // ---------------------------------------------------------------------------
 #include <doctest/doctest.h>
 
@@ -320,14 +322,15 @@ TEST_CASE("dotwork assets: the golden pack loads as expected.json") {
 TEST_CASE("dotwork assets: the extra kinds load by name with their data") {
     const dw::Pack pack = golden_pack();
     const json expected = load_json(golden(kGoldenExpected));
-    std::set<std::string> extra;
+    std::set<std::string> extra, kinds;
     for (const auto& [key, want] : expected.at("assets").items()) {
         const std::string kind = key.substr(0, key.find('/'));
         if (kExtraKinds.count(kind)) {
             extra.insert(key);
+            kinds.insert(kind);
         }
     }
-    REQUIRE(extra.size() == kExtraKinds.size());   // the fixture has one of each
+    REQUIRE(kinds.size() == kExtraKinds.size());   // the fixture has at least one of each
     CHECK(pack.warnings.empty());                   // none is skipped any more
     for (const auto& key : extra) {
         const std::string kind = key.substr(0, key.find('/')), name = key.substr(key.find('/') + 1);
@@ -364,6 +367,27 @@ TEST_CASE("dotwork assets: the extra kinds load by name with their data") {
             CHECK(i->w > 0);
         }
     }
+}
+
+TEST_CASE("dotwork assets: the shooting effects keep their light and tracer (spec 1.2.0, #164)") {
+    const dw::Pack pack = golden_pack();
+    const dw::AnimatedSprite* muzzle = pack.animated_sprite("vfx_muzzle");
+    REQUIRE(muzzle);
+    CHECK(muzzle->blend == dw::Blend::Add);
+    CHECK(muzzle->clips.at(0).pivot.x == doctest::Approx(0.0));   // the barrel tip is the left edge
+    const dw::AnimatedSprite* glow = pack.animated_sprite("vfx_muzzle_light");
+    REQUIRE(glow);
+    REQUIRE(glow->light.has_value());
+    CHECK(glow->light->energy == std::vector<double>{1.2, 0.6, 0.0});
+    CHECK(std::filesystem::exists(pack.resolve(glow->light->texture)));
+    const dw::AnimatedSprite* tracer = pack.animated_sprite("vfx_tracer");
+    REQUIRE(tracer);
+    CHECK(tracer->tracer.at("spacing").get<double>() == doctest::Approx(4.0));
+    CHECK(tracer->tracer.at("length").get<double>() == doctest::Approx(32.0));
+    CHECK_FALSE(pack.animated_sprite("hero")->light.has_value());
+    const dw::Particles* debris = pack.particle_set("vfx_stone_debris_particles");
+    REQUIRE(debris);
+    CHECK(debris->emitter.at("direction").at(0).get<double>() == doctest::Approx(1.0));
 }
 
 TEST_CASE("dotwork assets: every file of the golden pack is there") {

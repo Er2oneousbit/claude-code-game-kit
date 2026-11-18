@@ -17,6 +17,8 @@
 //           light) is the game's or the shader recipes' job. `skipped` lists only kinds this importer does not know.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): stamps, the map's shape, the extra kinds (#285)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): an animated sprite's light and tracer (asset
+//           manifest 1.2.0, #164)
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DotworkMap.Bounds, a map's real extent on both
 //           shapes (#297)
 // ---------------------------------------------------------------------------
@@ -97,11 +99,25 @@ namespace graveyard_shift.Dotwork
         public GameObject prefab;                    // SpriteRenderer + Animator, first clip's first frame
         public List<DotworkClip> clips = new List<DotworkClip>();
         public List<DotworkDirection> directions = new List<DotworkDirection>();
+        public bool hasLight;                        // manifest 1.2.0 (#164): a light that pulses with a clip
+        public DotworkLight light = new DotworkLight();
+        public string tracerJson = "";               // manifest 1.2.0: a tracer's ribbon as JSON ("" when none)
 
         public DotworkClip ClipNamed(string clip) => clips.Find(c => c.name == clip);
 
         /// <summary>The clip name for an action and a direction (walk, s -> walk_s), or null.</summary>
         public string Clip(string action, string dir) => directions.Find(d => d.action == action && d.dir == dir)?.clip;
+    }
+
+    /// <summary>A light that pulses with a clip: frame i shows energy[i] (the last is 0). For a Light2D (URP 2D) or
+    /// any light a game draws; the clip itself is the additive glow every engine shows.</summary>
+    [Serializable]
+    public sealed class DotworkLight
+    {
+        public string clip = "", color = "#ffffff";
+        public UnityEngine.Sprite texture;           // a white radial falloff
+        public float radius;                         // px it reaches
+        public float[] energy = new float[0];
     }
 
     [Serializable]

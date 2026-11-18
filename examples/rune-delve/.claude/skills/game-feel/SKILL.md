@@ -11,6 +11,11 @@ Follow `docs/sop/SOP-18-game-feel.md`.
    shapes yet, say so and stop.
 2. **Moments:** list the five to ten moments that matter (hit, land, jump, pick up, die) with the feeling each should
    give, and pick at most two or three effects per moment (SOP-18 step 1). Confirm the list with the user.
+   When a moment calls for a common effect (hit confirm, damage number, knockback, recoil, camera kick, landing
+   squash, pickup pop, dash afterimages, casings and bursts, bullet spread, kill slow-mo, muzzle flash, tracer,
+   firing light, wall-impact debris), build it from its row in SOP-18 step 4 (the recipe table): its primitives, its
+   starting numbers, its rule. Build it in the game's code and add a test of the row's rule to the game's own tests;
+   do not add it to the kit's juice module (SOP-18 "When the kit grows" says when that happens).
 3. **Use the kit's juice module** (`docs/ENGINE.md` names the files; the spec is `tools/golden_vectors.py`). Do not write
    a second shake or tween system. If a needed behavior is missing, change the reference first, run
    `python tools/golden_vectors.py --write`, then the port, then its tests. Every overlay ships the module; in

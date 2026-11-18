@@ -43,6 +43,12 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and keep-or-revert confirm,
 //           counted in real time (#308); hud_scale() and play.hud_scale_changed for a game HUD (#309)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png (#314)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(); t() honours clean language with the
+//           word lists of data/i18n/mature/ (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in a core::WordCache, folded once
+//           per locale, not on every t() (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): platform() (docs/PLATFORM.md, #84), save_slot() with
+//           the cloud hook, on_overlay() for the store overlay's pause; the pause menu and quit flush
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -69,7 +75,9 @@
 #include "core/HudScale.hpp"
 #include "core/I18n.hpp"
 #include "core/Menu.hpp"
+#include "core/Platform.hpp"
 #include "core/Report.hpp"
+#include "core/SaveStore.hpp"
 #include "core/ShellLogic.hpp"
 #include "shell/Draw.hpp"
 
@@ -142,6 +150,8 @@ public:
     nlohmann::json& settings() { return settings_; }
     const nlohmann::json& settings() const { return settings_; }
     std::string t(const std::string& key, const core::TrArgs& args = {}) const;
+    // #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).
+    bool blood_enabled() const;
     bool access_flag(const char* key) const;          // settings.access.<key> as a bool
     double access_number(const char* key, double fallback) const;
     double game_speed() const { return access_number("game_speed", 1.0); }
@@ -161,6 +171,13 @@ public:
     // and smoke, else the exe's folder, where the build copies them (a shipped game started from anywhere). Join
     // the game's own files to it the same way: shell.game_dir() / "assets/spr_player.png".
     const std::filesystem::path& game_dir() const { return game_dir_; }
+    // Achievements, stats, presence and cloud hooks (docs/PLATFORM.md); valid after init(). The null backend unless
+    // the game was built with -DGAMEKIT_STEAM=ON and Steam answered.
+    core::PlatformService& platform() { return *platform_; }
+    // A save slot in the data folder whose saves reach platform().saved (the cloud hook): "save_1.json".
+    core::SaveStore save_slot(const std::string& file_name);
+    // A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes.
+    void on_overlay(bool active);
     bool say_line(const std::string& id);             // a dialogue line as a subtitle (settings permitting)
     bool caption(const std::string& event_id);        // a sound caption ("[thud]") with captions_sfx on
     void set_objective(const std::string& text) { objective_ = text; }
@@ -198,9 +215,11 @@ private:
 
     std::filesystem::path data_dir_;
     std::filesystem::path game_dir_;      // where data/ and CREDITS.md are read from (game_dir())
+    std::unique_ptr<core::PlatformService> platform_;
     nlohmann::json settings_;
     bool settings_existed_ = false;
     core::StringTables tables_;
+    mutable core::WordCache words_;   // data/i18n/mature/<locale>.json, folded once per locale (#207)
     std::string locale_ = core::kFallbackLocale;
     nlohmann::json presets_;
     nlohmann::json colours_;
@@ -257,6 +276,7 @@ private:
 
     // setup
     void load_tables();
+    void start_platform();
     void load_dialogue();
     nlohmann::json load_json(const std::filesystem::path& file, const char* what);
     void apply_settings();

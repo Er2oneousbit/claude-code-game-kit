@@ -10,6 +10,8 @@
 //           Apply row, the keep-or-revert confirm, Back that warns once about unapplied Display changes (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): set_display saves only once no confirm is open, and
 //           Keep saves: an Apply waiting for Keep never reaches settings.json
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+//           Accessibility tab (content.*, #171, #207), each hidden by its kShow constant
 // ---------------------------------------------------------------------------
 #include "core/Menu.hpp"
 
@@ -34,6 +36,8 @@ namespace {
 const std::vector<std::pair<int, int>> kResolutions = {{1280, 720}, {1600, 900}, {1920, 1080}, {2560, 1440},
                                                        {3840, 2160}};
 constexpr double kSlideEps = 1e-9;   // a slider this close to its target is there
+constexpr bool kShowBloodSetting = true;      // false: a game with no blood hides the Blood row (SOP-18)
+constexpr bool kShowLanguageSetting = true;   // false: a game with no strong language hides Clean language (SOP-19)
 
 template <typename T, std::size_t N>
 std::vector<json> as_options(const std::array<T, N>& values) {
@@ -506,7 +510,7 @@ std::vector<Row> SettingsMenu::controls_rows() {
 }
 
 std::vector<Row> SettingsMenu::access_rows() {
-    return {
+    std::vector<Row> rows = {
         field("access", "text_scale", RowKind::Slider, {}, 0.75, 2.0, 0.25),
         field("access", "subtitles", RowKind::Toggle),
         field("access", "subtitle_size", RowKind::Choice, as_options(kSubtitleSizes)),
@@ -527,8 +531,16 @@ std::vector<Row> SettingsMenu::access_rows() {
         field("access", "timing_scale", RowKind::Slider, {}, 1.0, 3.0, 0.5),    // #166: motor access
         field("access", "auto_repeat", RowKind::Toggle),
         field("access", "narration", RowKind::Toggle),                           // #165: menu narration
-        back_row(),
     };
+    // #171 and #207: what the game shows (content.*); labels are functions, so a switch shows at once
+    if (kShowBloodSetting) {
+        rows.push_back(field("content", "blood", RowKind::Toggle));
+    }
+    if (kShowLanguageSetting) {
+        rows.push_back(field("content", "clean_language", RowKind::Toggle));
+    }
+    rows.push_back(back_row());
+    return rows;
 }
 
 std::vector<Row> SettingsMenu::language_rows() {

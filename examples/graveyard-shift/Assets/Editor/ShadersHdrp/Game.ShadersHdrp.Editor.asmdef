@@ -1,0 +1,13 @@
+{
+  "name": "Game.ShadersHdrp.Editor",
+  "rootNamespace": "",
+  "references": ["Unity.RenderPipelines.Core.Runtime", "Unity.RenderPipelines.HighDefinition.Runtime"],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true,
+  "defineConstraints": ["KIT_HDRP"],
+  "versionDefines": [
+    { "name": "com.unity.render-pipelines.high-definition", "expression": "1.0.0", "define": "KIT_HDRP" }
+  ]
+}

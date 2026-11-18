@@ -10,6 +10,8 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the jpeg feature for generated characters' textures
 #           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the shader check example gets the game's own name (#294)
 #           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): raw-window-handle and windows-sys on Windows (#308)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the optional `steam` feature (the steamworks crate,
+#           the platform layer's Steam backend, #84); off by default
 # ---------------------------------------------------------------------------
 [package]
 name = "project_crimson_nebula"
@@ -26,6 +28,9 @@ bevy = { version = "0.20", features = ["jpeg"] }
 serde_json = "1"
 # Typed reading of the Dotwork asset manifests (src/dotwork/); Bevy already builds serde with derive
 serde = { version = "1", features = ["derive"] }
+# The platform layer's Steam backend (src/logic/platform_steam.rs, docs/PLATFORM.md): only with --features steam.
+# MIT OR Apache-2.0; its -sys crate carries Valve's redistributable SDK files (read their terms before shipping)
+steamworks = { version = "0.13", optional = true }
 
 # Windows only: the monitor's work area and the window's frame, so a windowed size fits the screen
 # (src/shell/display.rs); the versions Bevy's winit already builds, so nothing new is compiled
@@ -36,6 +41,9 @@ windows-sys = { version = "0.52", features = ["Win32_Foundation", "Win32_Graphic
 [features]
 # Faster rebuilds while developing: cargo run --features dev. Never ship it (docs/ENGINE.md gotcha 6).
 dev = ["bevy/dynamic_linking"]
+# The Steam backend for a Steam build: cargo build --release --features steam (docs/PLATFORM.md). Never needed for
+# check, test or smoke: without it the game runs the null backend.
+steam = ["dep:steamworks"]
 
 # The shader check (dev.py smoke --shaders) under a name of this game's own (#294): cargo names examples without a
 # hash, so every project sharing one CARGO_TARGET_DIR (docs/ENGINE.md) linked into one shader_check.pdb until MSVC

@@ -1,0 +1,10 @@
+{
+  "name": "Game.Steam",
+  "rootNamespace": "graveyard_shift.Steam",
+  "references": ["Game.Core", "Game.Shell", "com.rlabrecque.steamworks.net"],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "autoReferenced": true,
+  "defineConstraints": ["GAMEKIT_STEAM"]
+}

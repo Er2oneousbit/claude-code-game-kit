@@ -16,6 +16,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): created with the Godot importer (#307)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the imported-font scaling case
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects' light and tracer (spec 1.2.0)
 # ---------------------------------------------------------------------------
 extends GutTest
 
@@ -564,6 +565,20 @@ func test_ui_and_extra_kinds_build() -> void:
 	assert_eq(int(p["emitter"]["amount"]), 12)
 	assert_not_null(DotworkAssets.texture(_model["transition"]["transition_wipe"]["image"]))
 	assert_not_null(DotworkAssets.texture(_model["image"]["logo_golden"]["image"]))
+
+
+# Spec 1.2.0 (#164): the shooting effects' light and tracer are kept for the game, the light's texture loads.
+func test_shooting_effects_keep_light_and_tracer() -> void:
+	var muzzle: Dictionary = _model["animated_sprite"]["vfx_muzzle"]
+	assert_eq(muzzle["blend"], "add")
+	assert_eq(muzzle["clips"]["play"]["pivot"], [0.0, 4.0], "the barrel tip is the left edge")
+	var light: Dictionary = _model["animated_sprite"]["vfx_muzzle_light"]["light"]
+	assert_not_null(DotworkAssets.texture(light["texture"]), "the light's texture")
+	assert_eq(light["energy"], [1.2, 0.6, 0.0])
+	var tracer: Dictionary = _model["animated_sprite"]["vfx_tracer"]["tracer"]
+	assert_eq([float(tracer["spacing"]), float(tracer["length"])], [4.0, 32.0])
+	assert_false((_model["animated_sprite"]["hero"] as Dictionary).has("light"))
+	assert_eq(float(_model["particles"]["vfx_stone_debris_particles"]["emitter"]["direction"][0]), 1.0)
 
 
 func test_prop_on_the_map_stands_on_its_feet() -> void:

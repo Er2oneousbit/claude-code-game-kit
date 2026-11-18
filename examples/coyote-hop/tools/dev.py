@@ -10,7 +10,7 @@
 #             smoke    boot the game headless for N frames, fail on errors; --screenshot FILE and --record DIR then
 #                      capture it in a real window (tools/capture.gd; GIF: tools/art/frames_to_gif.py);
 #                      --drive SCENARIO runs a scripted visit of the menus (menus, crash, display, pseudo,
-#                      pseudo-plant, show:<title|settings|pause|subtitle|juice|credits|apply|confirm>,
+#                      pseudo-plant, show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>,
 #                      access[:res=WxH][,scale=N][,pad] for
 #                      tools/access/sweep.py), --locale pseudo checks every label,
 #                      --data-dir DIR keeps the game's files there, --compare BASE.png diffs the screenshot
@@ -20,7 +20,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : GODOT_BIN  path to the Godot executable (else `godot` on PATH), Godot 4.6 or newer
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Flags mirror the Godot 4 CLI; every command was run against Godot 4.7.2 (see the change log below; build
@@ -78,6 +79,10 @@
 #           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a crashed shader run (or one whose shader cache
 #           would not load) and a crashed headless import run again, up to 3 runs: both crash now and then on Godot
 #           4.7.2, most on a project's first run (#264)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): --drive content (the switches toggled from their rows)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -140,8 +145,8 @@ SHADER_CACHE_ERROR = r"SPIR-V|reflect_spirv|shader_data\.is_empty"   # Godot's l
 SHADER_CRASH_TRIES = 3                        # #264: the shader run, crashed (or its cache unreadable), runs again up to 3 runs
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
-DRIVES = ("menus", "crash", "display", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits", "apply",
+DRIVES = ("menus", "crash", "display", "content", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
+SHOW_TARGETS = ("title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply",
                 "confirm")   # smoke --drive show:<target>
 DRIVE_FPS = 60                           # drives run with --fixed-fps: every frame is 1/60 s, pictures repeat
 DRIVE_MAX_FRAMES = 1000000               # backstop only: headless fixed-fps frames run far faster than real time,
@@ -1422,7 +1427,7 @@ def build_parser():
                         "crash (a script error: crash file, exit 1), display (the Display tab: a staged change, Back "
                         "warns, Apply, the keep-or-revert confirm reverts on its own after 15 real seconds), pseudo "
                         "(every screen; use --locale pseudo), pseudo-plant (plus one label too small: exit 1), "
-                        "show:<title|settings|pause|subtitle|juice|credits|apply|confirm> "
+                        "show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm> "
                         "(open that screen; with --screenshot, photograph it), access[:res=WxH][,scale=N][,pad] (report "
                         "every screen for tools/access/sweep.py at that window size and text scale; pad presses with "
                         "gamepad events only). Runs at --fixed-fps 60")
@@ -1453,8 +1458,8 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="accepted on every engine; Godot clean never asks anyway")
     p.set_defaults(fn=cmd_clean)
 
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

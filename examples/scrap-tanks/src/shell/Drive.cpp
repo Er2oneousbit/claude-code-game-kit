@@ -13,6 +13,8 @@
 //           Display tab with a change waiting and the confirm (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the bug drive looks for screenshot.png (#314); the
 //           display drive checks settings.json keeps the old size while the confirm waits
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the Blood and Clean language rows
+//           (#171, #207)
 // ---------------------------------------------------------------------------
 #include "shell/Drive.hpp"
 
@@ -43,7 +45,7 @@ namespace {
 
 const char* kAccessActions[] = {"ui_up", "ui_down", "ui_left", "ui_right", "ui_accept", "ui_cancel", "pause"};
 const char* kPromptActions[] = {"move_left", "move_right", "jump", "attack", "interact", "pause"};
-const char* kShowScreens = "title, menu, settings, pause, subtitle, play, juice, credits, apply, confirm";
+const char* kShowScreens = "title, menu, settings, content, pause, subtitle, play, juice, credits, apply, confirm";
 const char* kBugFiles[] = {"info.txt", "log_tail.txt", "settings.json", "screenshot.png"};
 
 bool starts_with(const std::string& s, const std::string& prefix) {
@@ -657,6 +659,13 @@ bool Drive::build_show(const std::string& screen) {
         press("ui_down");
         focus("audio.master");
         press("ui_left");
+        frames(5);
+    } else if (screen == "content") {                   // the Accessibility tab at the content rows (#171, #207)
+        to_menu();
+        open("settings", "settings");
+        to_tab("access");
+        press("ui_down");
+        focus("access.clean_language");
         frames(5);
     } else if (screen == "pause") {
         to_menu();

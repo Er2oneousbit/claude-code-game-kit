@@ -11,6 +11,8 @@
 #           when a needed glyph is missing. Languages come from the nearest language key in a JSON path ("fr",
 #           "pt_BR"), a CSV header ("keys,en,fr"), a PO "Language:" header, or the file name (fr.json, menu_de.po).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a CSV header's be / id / is / no columns are
+#           languages too once the header names one (Belarusian was skipped, #51)
 # ---------------------------------------------------------------------------
 import csv
 import io
@@ -108,6 +110,9 @@ def read_csv(path, text):
     head = [None if c.startswith(("?", "_")) else lang_code(c.strip()) for c in rows[0]]
     fallback = lang_of_path(path)
     if any(head[1:]):   # a header row: only the language columns are text the game shows
+        # in a header that already names a language, a bare code that is also an English word (be, id, is, no)
+        # is a language column too: Belarusian "be" was skipped, so its letters went unchecked (#51)
+        head = [h or (c.strip().lower() if c.strip().lower() in REGION_ONLY else None) for h, c in zip(head, rows[0])]
         return [(head[c], r[0] or f"row {n}", r[c]) for n, r in enumerate(rows[1:], 2)
                 for c in range(1, min(len(r), len(head))) if head[c]]
     if max(len(r) for r in rows) == 1:   # one column: a list of strings

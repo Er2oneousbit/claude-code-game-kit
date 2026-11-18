@@ -5,12 +5,18 @@
 #           parameters MainTex / AuxTex and one parameter per recipe parameter (u_<name>).
 # Usage   : from kit_shaders import kit_materials        (in editor Python, Content/Python is on sys.path)
 #           kit_materials.build("flash", "/Game/KitShaders")   -> the material asset
+#           kit_materials.build_post("vignette", "/Game/KitShaders")   -> a Post Process material (M_KitPost_vignette)
 #           make_materials.py builds them all; shader_check.py checks them (python tools/dev.py check / smoke)
 # Notes   : Sprites and lighting are Unlit + Translucent (emissive = rgb, opacity = a), the others Unlit + Opaque.
 #           The check builds two opaque variants of the same graph, one showing rgb and one alpha, because a
 #           translucent draw onto a render target blends alpha in ways that hide the value the recipe returned.
 #           Coordinates are the mesh's UVs (Unreal's UV origin is top-left, as the recipes' image space).
+#           A Post Process material (build_post, #260) is the same Custom node with the scene colour
+#           (SceneTexture PostProcessInput0) where the Surface variant samples MainTex: the post recipes read the scene
+#           once, at uv, so the code swaps that one sample for the node's colour and refuses a recipe that does more.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): build_post and build_feed (a Post Process material
+#           showing a texture, the scene a check feeds the post recipes), #260
 # ---------------------------------------------------------------------------
 import unreal
 
@@ -114,5 +120,87 @@ def build(name, dest, view=None, main=None, aux=None, asset_name=None):
         alpha.set_editor_property("b", False)
         MEL.connect_material_expressions(custom, "", alpha, "")
         MEL.connect_material_property(alpha, "", unreal.MaterialProperty.MP_OPACITY)
+    MEL.recompile_material(material)
+    return material
+
+
+# ---- Post Process variants (#260) ------------------------------------------------------
+SCENE_SAMPLE = "Texture2DSampleLevel(MainTex, MainTexSampler, uv, 0)"   # how the generated recipes read the scene
+
+
+def _post_material(asset_name, dest, priority):
+    """An empty Post Process material, applied after tonemapping (what it writes is what the screen gets)."""
+    path = f"{dest}/{asset_name}"
+    if unreal.EditorAssetLibrary.does_asset_exist(path):
+        unreal.EditorAssetLibrary.delete_asset(path)
+    material = _tools().create_asset(asset_name, dest, unreal.Material, unreal.MaterialFactoryNew())
+    material.set_editor_property("material_domain", unreal.MaterialDomain.MD_POST_PROCESS)
+    material.set_editor_property("blendable_location", unreal.BlendableLocation.BL_SCENE_COLOR_AFTER_TONEMAPPING)
+    material.set_editor_property("blendable_priority", priority)
+    return material
+
+
+def build_post(name, dest, asset_name=None, priority=1):
+    """The post recipe `name` as a Post Process material: the scene colour in place of MainTex. Raises ValueError
+    for a recipe that is not a post recipe or reads the scene any other way than one sample at uv."""
+    recipe = RECIPES[name]
+    code = recipe["code"]
+    if recipe["group"] != "post":
+        raise ValueError(f"{name} is not a post recipe")
+    if SCENE_SAMPLE not in code or "MainTex" in code.replace(SCENE_SAMPLE, ""):
+        raise ValueError(f"{name} reads the scene other than as one sample at uv: build_post cannot swap it")
+    material = _post_material(asset_name or f"M_KitPost_{name}", dest, priority)
+    custom = MEL.create_material_expression(material, unreal.MaterialExpressionCustom, CUSTOM_X, 0)
+    custom.set_editor_property("code", code.replace(SCENE_SAMPLE, "Scene"))
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+    custom.set_editor_property("description", f"kit post {name}")
+    scene = MEL.create_material_expression(material, unreal.MaterialExpressionSceneTexture, NODE_X, -300)
+    scene.set_editor_property("scene_texture_id", unreal.SceneTextureId.PPI_POST_PROCESS_INPUT0)
+    scene.set_editor_property("filtered", False)
+    nodes = [("Scene", scene),
+             ("uv", MEL.create_material_expression(material, unreal.MaterialExpressionTextureCoordinate, NODE_X, -200))]
+    for i, (key, value) in enumerate(recipe["params"].items()):
+        nodes.append((f"u_{key}", _parameter(material, key, value, 200 + 120 * i)))
+    inputs = []
+    for input_name, _ in nodes:
+        item = unreal.CustomInput()
+        item.set_editor_property("input_name", input_name)
+        inputs.append(item)
+    custom.set_editor_property("inputs", inputs)
+    for input_name, node in nodes:
+        MEL.connect_material_expressions(node, "", custom, input_name)
+    rgb = MEL.create_material_expression(material, unreal.MaterialExpressionComponentMask, -200, 0)
+    for channel in "rgba":
+        rgb.set_editor_property(channel, channel != "a")
+    MEL.connect_material_expressions(custom, "", rgb, "")
+    MEL.connect_material_property(rgb, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
+    MEL.recompile_material(material)
+    return material
+
+
+def build_feed(dest, texture, asset_name="M_Check_feed", priority=0):
+    """A Post Process material that shows `texture` over the whole view (uv = viewport uv): the scene a check feeds
+    the post recipes, so a SceneCapture needs no mesh in the level. Same Custom node route as build()."""
+    material = _post_material(asset_name, dest, priority)
+    custom = MEL.create_material_expression(material, unreal.MaterialExpressionCustom, CUSTOM_X, 0)
+    custom.set_editor_property("code", "return Texture2DSampleLevel(Tex, TexSampler, uv, 0);")
+    custom.set_editor_property("output_type", unreal.CustomMaterialOutputType.CMOT_FLOAT4)
+    node = MEL.create_material_expression(material, unreal.MaterialExpressionTextureObjectParameter, NODE_X, -100)
+    node.set_editor_property("parameter_name", "Tex")
+    node.set_editor_property("texture", texture)
+    uv = MEL.create_material_expression(material, unreal.MaterialExpressionTextureCoordinate, NODE_X, -200)
+    inputs = []
+    for input_name in ("uv", "Tex"):
+        item = unreal.CustomInput()
+        item.set_editor_property("input_name", input_name)
+        inputs.append(item)
+    custom.set_editor_property("inputs", inputs)
+    MEL.connect_material_expressions(uv, "", custom, "uv")
+    MEL.connect_material_expressions(node, "", custom, "Tex")
+    rgb = MEL.create_material_expression(material, unreal.MaterialExpressionComponentMask, -200, 0)
+    for channel in "rgba":
+        rgb.set_editor_property(channel, channel != "a")
+    MEL.connect_material_expressions(custom, "", rgb, "")
+    MEL.connect_material_property(rgb, "", unreal.MaterialProperty.MP_EMISSIVE_COLOR)
     MEL.recompile_material(material)
     return material

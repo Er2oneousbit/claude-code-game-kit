@@ -10,6 +10,10 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display_staging cases (DisplayStaging, the
 //           Display tab's Apply and its keep-or-revert confirm, #308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content switches, plural_rules (CLDR), tr_clean,
+//           mask_words and mature_words; plural cases read their key from the case (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): I18n.WordCache folds once and follows new lists and
+//           locales, and its cost against folding per call (#207)
 // ---------------------------------------------------------------------------
 using System.Collections.Generic;
 using NUnit.Framework;
@@ -25,7 +29,7 @@ namespace graveyard_shift.Tests
         private static readonly string[] REQUIRED_TYPES =
         {
             "defaults", "settings_load", "rebind", "glyph_set", "glyph_name", "prompt_binding", "save_load", "tr",
-            "plural", "pseudo", "narration", "display_staging",
+            "plural", "pseudo", "narration", "display_staging", "plural_rules", "tr_clean", "mask_words", "mature_words",
         };
         private const int MIN_STAGING_CASES = 5;    // #308: the Display tab's Apply scripts
 
@@ -50,6 +54,51 @@ namespace graveyard_shift.Tests
             {
                 Assert.IsTrue(seen.Contains(type), $"{FILE} has no '{type}' case");
             }
+        }
+
+        [Test]
+        public void WordCache_FoldsOnceAndFollowsNewListsAndLocales()
+        {
+            var cache = new I18n.WordCache { Lists = new Dictionary<string, List<string>> { { "en", new List<string> { "damn" } } } };
+            Assert.AreEqual("#@$%, bob", I18n.MaskWordSet("Damn, bob", cache.Get("en")));
+            Assert.AreEqual("#@$%, bob", I18n.MaskWordSet("Damn, bob", cache.Get("en")));
+            Assert.AreEqual(1, cache.Folds, "the second Get reused the fold");
+            cache.Lists = new Dictionary<string, List<string>>
+            {
+                { "en", new List<string> { "bob" } }, { "fr", new List<string> { "merde" } },
+            };
+            Assert.AreEqual("Damn, #@$", I18n.MaskWordSet("Damn, bob", cache.Get("en")), "a new list drops the old fold");
+            Assert.AreEqual("#@$%#, #@$", I18n.MaskWordSet("Merde, bob", cache.Get("fr")), "a new chain: fr's words join");
+        }
+
+        [Test]
+        public void WordCache_IsATenthOfFoldingPerCallOrLess()
+        {
+            var words = new List<string>();
+            for (int k = 0; k < 3000; k++)
+            {
+                words.Add("word" + k);
+            }
+            var tables = new Dictionary<string, Dictionary<string, string>>
+            {
+                { "en", new Dictionary<string, string> { { "label", "A settings label with {name} in it" } } },
+            };
+            var args = new Dictionary<string, object> { { "name", "x" } };
+            var cache = new I18n.WordCache { Lists = new Dictionary<string, List<string>> { { "en", words } } };
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            for (int k = 0; k < 100; k++)
+            {
+                I18n.Tr(tables, "en", "label", args, true, words);
+            }
+            double uncached = watch.Elapsed.TotalMilliseconds;
+            watch.Restart();
+            for (int k = 0; k < 100; k++)
+            {
+                I18n.Finish(I18n.Lookup(tables, "en", "label", true), args, true, cache.Get("en"));
+            }
+            double cached = watch.Elapsed.TotalMilliseconds;
+            TestContext.WriteLine($"T_COST 100 labels, 3000 words: uncached {uncached:F1} ms, cached {cached:F1} ms");
+            Assert.Less(cached, uncached / 10, "the folded set is built once, not per label");
         }
 
         [Test]
@@ -96,6 +145,29 @@ namespace graveyard_shift.Tests
                     Points(c, tol, where, pt => Bindings.NarrationLine((string)pt[0], (string)pt[1], (string)pt[2]), 3);
                     break;
                 case "display_staging": RunDisplayStaging(c, tol, where); break;
+                case "plural_rules": RunPluralRules(c, tol, where); break;
+                case "tr_clean":
+                    var cleanTables = I18n.TablesFromJson(G.Get(c, "tables"));
+                    Points(c, tol, where, pt => pt[2] == null
+                        ? I18n.Tr(cleanTables, (string)pt[0], (string)pt[1], (Dictionary<string, object>)pt[3], (bool)pt[4], Words(pt[5]))
+                        : I18n.TrPlural(cleanTables, (string)pt[0], (string)pt[1], Json.ToNumber(pt[2]),
+                                        (Dictionary<string, object>)pt[3], (bool)pt[4], Words(pt[5])), 6);
+                    break;
+                case "mask_words":
+                    Assert.AreEqual(G.Str(c, "grawlix"), I18n.GRAWLIX, where + " grawlix");
+                    Points(c, tol, where, pt => I18n.MaskWords((string)pt[0], Words(pt[1])), 2);
+                    break;
+                case "mature_words":
+                    Points(c, tol, where, pt =>
+                    {
+                        object parsed = null;
+                        if (pt[0] is string text)
+                        {
+                            Json.TryParse(text, out parsed);
+                        }
+                        return I18n.MatureWords(parsed).ConvertAll(w => (object)w);
+                    }, 1);
+                    break;
                 default:
                     Assert.Fail($"unknown case type '{type}' in {FILE}: add a runner for it here");
                     break;
@@ -110,6 +182,8 @@ namespace graveyard_shift.Tests
                             $"{where}: problem count (got: {string.Join(" | ", r.Problems)})");
             G.AssertClose(GameSettings.EffectiveShake(r.Settings), G.Get(c, "effective_shake"), tol, where + " effective_shake");
             G.AssertClose(GameSettings.TelemetryAllowed(r.Settings), G.Get(c, "telemetry_allowed"), tol, where + " telemetry_allowed");
+            G.AssertClose(GameSettings.BloodEnabled(r.Settings), G.Get(c, "blood_enabled"), tol, where + " blood_enabled");
+            G.AssertClose(GameSettings.CleanLanguage(r.Settings), G.Get(c, "clean_language"), tol, where + " clean_language");
         }
 
         private static void RunRebind(Dictionary<string, object> c, double tol, string where)
@@ -186,9 +260,36 @@ namespace graveyard_shift.Tests
                 var pt = (List<object>)p;                  // [locale, n, plural form, tr_plural text]
                 string locale = (string)pt[0];
                 double n = Json.ToNumber(pt[1]);
-                var actual = new List<object> { I18n.Plural(locale, n), I18n.TrPlural(tables, locale, "apples", n) };
+                string key = G.Get(c, "key") as string ?? "apples";
+                var actual = new List<object> { I18n.Plural(locale, n), I18n.TrPlural(tables, locale, key, n) };
                 G.AssertClose(actual, pt.GetRange(2, 2), tol, $"{where} {Json.Stringify(pt)}");
             }
+        }
+
+        private static void RunPluralRules(Dictionary<string, object> c, double tol, string where)
+        {
+            foreach (object s in G.List(c, "sweep"))
+            {
+                var sw = (List<object>)s;                  // [locale, first n, "cat cat ..."]
+                string locale = (string)sw[0];
+                double start = Json.ToNumber(sw[1]);
+                string[] cats = ((string)sw[2]).Split(' ');
+                for (int k = 0; k < cats.Length; k++)
+                {
+                    Assert.AreEqual(cats[k], I18n.Plural(locale, start + k), $"{where} {locale} n={start + k}");
+                }
+            }
+            Points(c, tol, where, pt => I18n.Plural((string)pt[0], Json.ToNumber(pt[1])), 2);
+        }
+
+        private static List<string> Words(object list)
+        {
+            var words = new List<string>();
+            foreach (object w in (List<object>)list)
+            {
+                words.Add((string)w);
+            }
+            return words;
         }
 
         // points = [inputs..., expected]: inputs are the first `inputs` items, the expected value is the next one

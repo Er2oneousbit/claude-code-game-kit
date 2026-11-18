@@ -12,6 +12,7 @@
 # Notes   : Standard library only. Each case copies doctor.py and check_links.py into a fake project under a temp
 #           folder and runs it there (doctor.py checks the project its own file sits in).
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the Steam SDK [info] line (#84)
 # ---------------------------------------------------------------------------
 import datetime
 import os
@@ -170,6 +171,20 @@ class DoctorChecks(unittest.TestCase):
         code, out = self.run_doctor()
         self.assertEqual(code, 0, out)
         self.assertIn("[ OK ] project scaffold looks healthy", out)
+
+    def test_achievements_bring_the_steam_sdk_line_and_change_nothing_else(self):
+        """#84: with data/achievements.json an [info] line says where the engine's Steam adapter expects the SDK;
+        without it the output is as before. The line never changes the exit code."""
+        self.healthy()
+        code, out = self.run_doctor()
+        self.assertNotIn("Steam needs", out)
+        self.put(".game-kit.json", '{"engine": "cpp-sdl2"}')
+        self.put("data/achievements.json", "{}")
+        code, out = self.run_doctor()
+        self.assertEqual(code, 0, out)
+        self.assertIn("[info] platform: data/achievements.json found", out)
+        self.assertIn("STEAMWORKS_SDK", out)
+        self.assertIn("-DGAMEKIT_STEAM=ON", out)
 
     def test_every_missing_required_file_is_named_and_exits_1(self):
         code, out = self.run_doctor()

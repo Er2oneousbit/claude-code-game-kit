@@ -26,6 +26,8 @@
 //     input.bindings: defaults, then each action from the file (string entries only)
 //   EffectiveShake = 0 with reduce_motion, else shake_scale ; TelemetryAllowed = consent is "yes"
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): BloodEnabled() and CleanLanguage(), the content
+//           section (#171, #207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -69,6 +71,12 @@ namespace GameKit
 
 	/** True only after the player said yes (consent "yes"); "unset" and "no" both mean no telemetry. */
 	GAMEKITSHELL_API bool TelemetryAllowed(const FJsonObject& Settings);
+
+	/** #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18). */
+	GAMEKITSHELL_API bool BloodEnabled(const FJsonObject& Settings);
+
+	/** #207: the shell's T() picks @clean lines and masks the game's word list (SOP-19). */
+	GAMEKITSHELL_API bool CleanLanguage(const FJsonObject& Settings);
 
 	// ---- Typed reads of one field (section.field), falling back to the built-in default ----
 	GAMEKITSHELL_API double SettingNumber(const FJsonObject& Settings, const FString& Section, const FString& Field);

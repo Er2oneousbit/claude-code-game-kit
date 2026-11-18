@@ -1,6 +1,6 @@
 {
  "name": "vfx",
- "_comment": "Small effects drawn in code (no GPU): arrows, energy bolts and orbs with a flight loop and a trail (sprite strip, Line2D or particles), ground puffs, a pickup twinkle, a level-up burst, and GPUParticles2D emitters for dust, sparkles and embers. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "_comment": "Small effects drawn in code (no GPU): arrows, energy bolts and orbs with a flight loop and a trail (sprite strip, Line2D or particles), ground puffs, a pickup twinkle, a level-up burst, and GPUParticles2D emitters for dust, sparkles and embers; and the shooting effects (#164): a muzzle flash (plain and with side sparks), its firing light pulse, a tracer round and a homing bolt whose trail follows the real path, and wall-impact debris (stone chips by default, wood chips by colour; give a debris entry sample, a tile PNG of the game, to take the chips' colours from that surface). Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
  "vfx": [
   {
    "name": "arrow",
@@ -75,6 +75,41 @@
    "kind": "ember_particles",
    "size": 12,
    "one_shot": true
+  },
+  {
+   "name": "muzzle",
+   "kind": "muzzle_flash"
+  },
+  {
+   "name": "shotgun_muzzle",
+   "kind": "muzzle_flash",
+   "size": 24,
+   "sparks": true
+  },
+  {
+   "name": "muzzle_light",
+   "kind": "muzzle_light"
+  },
+  {
+   "name": "tracer_round",
+   "kind": "tracer"
+  },
+  {
+   "name": "homing_bolt",
+   "kind": "bolt",
+   "trail": "tracer",
+   "length": 72,
+   "spacing": 3
+  },
+  {
+   "name": "stone_debris",
+   "kind": "debris"
+  },
+  {
+   "name": "wood_debris",
+   "kind": "debris",
+   "colors": ["#3a2414", "#6a4426", "#9a6c3e", "#c89a62"],
+   "amount": 6
   }
  ]
 }

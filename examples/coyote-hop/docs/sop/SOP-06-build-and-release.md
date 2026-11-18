@@ -63,8 +63,10 @@ validated offline and not yet run against a real account **(verify on the first 
 
 **itch.io** is not OpenTofu: `python tools/dev.py ship --target itch --project user/game --dry-run` checks a build
 folder (the engine's web build, or `--site <folder>` with `--channel windows|linux|mac|android`) and prints the butler
-command; the same without `--dry-run` pushes it with the version above (`SOP-21` step 3). Steam uploads are not wired
-yet (#84).
+command; the same without `--dry-run` pushes it with the version above (`SOP-21` step 3). **Steam** is SteamPipe:
+`python tools/dev.py ship --target steam --app <id> --depot <id> --site <build folder> --branch beta --dry-run` writes
+the app build VDF and prints it with the steamcmd command; `--preview` has SteamPipe build it without uploading, and
+the same with `--steam-user <build account> --yes` uploads (`SOP-21` step 3; log in to steamcmd by hand once first).
 
 ## After launch (standard practice)
 - **Hotfix flow:** a crash or a save-breaking bug gets a PATCH release (versioning above) from a branch off the release

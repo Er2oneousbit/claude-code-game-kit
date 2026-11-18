@@ -17,10 +17,12 @@
 index.html          full-window page, loads src/main.ts
 src/main.ts         renderer, the worlds, hands the host to the shell after the first rendered frame
 src/core/           engine-free logic: Log, juice (shake, hitstop, ease, follow camera, follow spring, buffer, coyote,
-                    spring, flash limiter, hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue,
+                    spring, flash limiter, feel recipes, hold toggle, auto repeat), settings, bindings, saves, i18n, user data, dialogue,
                     audio director, music director, audio access, analog (stick deadzone and trigger shaping for
                     navigator.getGamepads values), display staging (the Display tab's Apply and its keep-or-revert
-                    confirm), hud font size (ui_scale and text_scale for text the renderer draws). No three import.
+                    confirm), hud font size (ui_scale and text_scale for text the renderer draws), platform services
+                    (achievements, stats, presence, cloud hooks: docs/PLATFORM.md; null backend only, a browser has
+                    no Steam). No three import.
                     Unit tested (golden vectors).
 src/shell/          the front end: HTML screens over the canvas, input, subtitles, smoke driver (no three import; the
                     same files as the 2D web overlay's, host.ts is all it knows of the renderer)
@@ -72,7 +74,7 @@ dist/               production build (git-ignored)
 - **Rules in `src/core`, stepped at a fixed rate,** make the whole game playable in a unit test: a scenario run in the browser
   (`?autoplay`) then replays exactly in Vitest (the kit repo's Courier Dash example does this).
 
-- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.1.0; the
+- **Dotwork art** (`public/assets/dotwork/<pack>.assets.json`, spec `tools/art/dotwork/ASSET_MANIFEST.md` 1.2.0; the
   importer reads any 1.x): in a world's `load()`, `const lib = await DotworkLibrary.load(DOTWORK_MANIFESTS, progress)`
   (src/game/dotwork/), then `lib.animated("hero", { ppu })` (`playDirection("walk", "e")`), `lib.sprite`, `lib.map`,
   `lib.text`, `lib.icon`, `lib.portrait`, `lib.nineSlice`; call `update(dt, camera)` on each every frame. The diorama

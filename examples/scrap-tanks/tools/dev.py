@@ -21,7 +21,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : VCPKG_ROOT  path to your vcpkg checkout (required by CMakePresets.json)
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Works with single-config (Ninja/Make) and multi-config (Visual Studio)
@@ -68,6 +69,9 @@
 #           the help (the Display tab's Apply, #308)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): check fails on a TEST_CASE name holding ';' (CMake splits
 #           it, so doctest_discover_tests registers a test that matches nothing and passes)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -907,7 +911,7 @@ def build_parser():
                         "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), display (the Display tab's "
                         "Apply: stage, warn, apply, the 15 s confirm reverts in real time, discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm: "
+                        "show:<screen> (title, menu, settings, content, pause, subtitle, play, juice, credits, apply or confirm: "
                         "opens that screen; add "
                         "--screenshot); "
                         "the run ends at DRIVE_DONE")
@@ -924,8 +928,8 @@ def build_parser():
     p = sub.add_parser("clean", help="remove build/")
     p.add_argument("--yes", action="store_true", help="accepted on every engine; C++ clean never asks anyway")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

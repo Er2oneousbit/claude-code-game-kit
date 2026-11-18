@@ -9,6 +9,7 @@
 #           python tools/cloud/ship.py --target aws --kind static --apply --yes
 #           python tools/cloud/ship.py --target aws --kind static --destroy --yes
 #           python tools/cloud/ship.py --target itch --project user/game --site DIR --dry-run   (itch.io: see Notes)
+#           python tools/cloud/ship.py --target steam --app ID --depot ID --site DIR --dry-run (Steam: see Notes)
 #           (python tools/dev.py ship ... forwards here, with the engine's web build folder as --site)
 #             --site DIR          static: the web build to publish (must hold index.html)
 #             --image REF --port N   container: a public image and the port it listens on
@@ -23,6 +24,7 @@
 # Env     : Each provider's own login, never a file of the kit's: AWS (aws configure / AWS_PROFILE), Azure (az login,
 #           ARM_SUBSCRIPTION_ID), GCP (gcloud auth application-default login), Linode (LINODE_TOKEN), DigitalOcean
 #           (DIGITALOCEAN_TOKEN, and SPACES_ACCESS_KEY_ID / SPACES_SECRET_ACCESS_KEY for a static site). TOFU_BIN.
+#           itch.io: BUTLER_BIN, BUTLER_API_KEY. Steam: STEAMCMD_BIN, STEAM_USER (the build account's name only).
 # Exit    : 0 ok, 1 the step failed or a guardrail refused it, 2 usage or environment (no OpenTofu, bad options)
 # Notes   : Pseudocode
 #             --check: the --plan steps up to `tofu validate`, which needs no account (offline)
@@ -56,13 +58,35 @@
 #             --status: butler status user/game:channel (what itch.io did with the upload)
 #           The channel defaults to html5 when the folder holds index.html (a web build); any other build names its
 #           channel (windows, linux, mac, android: butler tags platforms from those words). The version comes from
-#           the engine's one version source (SOP-06) unless --userversion is given. Steam is not here yet (#84).
+#           the engine's one version source (SOP-06) unless --userversion is given.
 #           Tested with a stand-in butler only: a real upload is still to come (verify).
+#
+#           Steam is its own path too: steamcmd runs a SteamPipe app build VDF this tool writes (#86, E76).
+#             python tools/cloud/ship.py --target steam --app ID --depot ID[=DIR] [--depot ...] [--site DIR]
+#                                        [--branch beta] [--steam-user NAME] [--userversion V]
+#                                        (--dry-run | --preview | --yes)
+#             checks: app and depot ids are numbers, every depot folder exists, is not empty, holds no
+#                     steam_appid.txt, secret-type file or token; --branch is never default (set live by hand);
+#                     the version is known
+#             -> write deploy/steam/app_build_<app>.vdf (ContentRoot = the depots' common folder, one inline
+#                FileMapping per depot, *.pdb excluded, SetLive only with --branch and never in a preview,
+#                Preview with --preview)
+#             --dry-run: print the VDF and the exact steamcmd line; runs nothing, needs no login
+#             --preview / upload: a build account must be named (--steam-user or STEAM_USER: a name, never a
+#                     password) -> confirmed, a preview too until a real run proves it uploads nothing (the slug
+#                     in a terminal, --yes elsewhere) ->
+#                     steamcmd +login <account> +run_app_build <vdf> +quit, streaming its lines; outside a terminal
+#                     its stdin is closed so a login prompt fails instead of waiting
+#           The first login (password and Steam Guard code) is by hand in a terminal; steamcmd keeps its own login.
+#           Tested with a stand-in steamcmd only: no real upload yet, and the VDF details marked (verify) below.
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): --target itch pushes a build with butler (#86):
 #           dry run, version from the engine's version source, login checked by presence only, confirm like --apply
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --target itch hands butler the absolute --site, so
 #           a path relative to another folder pushes the folder that was scanned, not a same-named one in the root
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): --target steam uploads with steamcmd and a SteamPipe
+#           app build VDF (#86): --dry-run prints the VDF and command, --preview, no stored login, no steam_appid.txt;
+#           a confirm prompt that reads end-of-file asks for --yes instead of a traceback (every target)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -137,6 +161,25 @@ VERSION_SOURCES = {
     "unreal": ("Config/DefaultGame.ini", r"(?m)^ProjectVersion=(\S+)"),                    # (verify)
 }
 BUTLER_TIMEOUT_S = 6 * 3600                           # a big first upload on a slow line
+
+# Steam (SteamPipe with steamcmd, https://partner.steamgames.com/doc/sdk/uploading, read 2026-11-01: E76)
+STEAM = "steam"
+STEAMCMD_ENV = "STEAMCMD_BIN"
+STEAM_USER_ENV = "STEAM_USER"                         # the build account's name only; never a password
+STEAM_USER_PLACEHOLDER = "<build account>"            # shown in a dry run with no account named
+STEAMCMD_INSTALL = ("install steamcmd (https://developer.valvesoftware.com/wiki/SteamCMD), then put it on PATH, set "
+                    f"{STEAMCMD_ENV} or pass --steamcmd")
+STEAM_LOGIN = ("log in by hand once on this machine: steamcmd +login <build account> +quit, then type the password "
+               "and the Steam Guard code it asks for; steamcmd keeps its own login after that (verify), the kit never "
+               "sees or stores it. The build account needs the Edit App Metadata permission (E76)")
+STEAM_ID_RE = re.compile(r"^[1-9][0-9]{0,9}$")         # app and depot ids are positive integers
+STEAM_BRANCH_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")   # a beta branch made on Steamworks first (verify)
+STEAM_DEFAULT_BRANCHES = ("default", "public")        # set live by hand in the App Admin panel only (E76)
+STEAM_USER_RE = re.compile(r"^[A-Za-z0-9_]{2,64}$")
+STEAM_APPID_FILE = "steam_appid.txt"                  # a dev-only file: never in a shipped build (SOP-21)
+STEAM_TEST_APP = "480"                                # Valve's Spacewar: for API tests, never an upload target
+STEAM_EXCLUDE = ("*.pdb",)                            # debug symbols stay out of every depot
+STEAMCMD_TIMEOUT_S = 6 * 3600
 
 
 class ToolError(Exception):
@@ -309,7 +352,10 @@ def confirm(a, what, slug):
         return
     if not sys.stdin or not sys.stdin.isatty():
         raise ToolError(f"{what} changes your {a.target} account: pass --yes (no terminal here to ask)")
-    answer = input(f"{what} on {a.target} for {slug}. Type the game's slug to go ahead: ").strip()
+    try:
+        answer = input(f"{what} on {a.target} for {slug}. Type the game's slug to go ahead: ").strip()
+    except EOFError:                        # a closed stdin that says it is a terminal (Windows reports NUL so)
+        raise ToolError(f"{what} changes your {a.target} account: pass --yes (nobody answered the prompt)")
     if answer != slug:
         raise Refused("not confirmed")
 
@@ -553,9 +599,9 @@ def game_version():
 
 def itch_check(a):
     """Every check a push needs except the login. Returns (butler, folder, channel, version, version source)."""
-    if a.check or a.plan or a.apply or a.destroy:
+    if a.check or a.plan or a.apply or a.destroy or a.preview:
         raise ToolError("--target itch takes --dry-run, --status, or no step (a push): --check, --plan, --apply and "
-                        "--destroy are for the OpenTofu targets")
+                        "--destroy are for the OpenTofu targets, --preview for Steam")
     if a.kind == "container":
         raise ToolError("--target itch uploads a build folder (--site), not a container image")
     if not a.project:
@@ -641,15 +687,216 @@ def cmd_itch(a):
     return 0
 
 
+# ---- Steam with steamcmd and SteamPipe (#86) ------------------------------------------------
+def steamcmd_exe(a):
+    """steamcmd: --steamcmd, then STEAMCMD_BIN, then steamcmd on PATH. Missing is an environment problem."""
+    exe = a.steamcmd or os.environ.get(STEAMCMD_ENV) or shutil.which("steamcmd")
+    if not exe:
+        raise ToolError("steamcmd not found: " + STEAMCMD_INSTALL)
+    if not Path(exe).is_file():
+        raise ToolError(f"steamcmd not found at {exe}: " + STEAMCMD_INSTALL)
+    return exe
+
+
+def steam_depots(a):
+    """[(depot id, absolute folder)] from every --depot ID or ID=DIR (a bare ID takes --site)."""
+    if not a.depot:
+        raise ToolError("--target steam needs --depot <id> (one per platform, from Steamworks: App Admin, SteamPipe, "
+                        "Depots); --depot ID=DIR gives each depot its own build folder")
+    depots, seen = [], set()
+    for spec in a.depot:
+        did, _, folder = spec.partition("=")
+        if not STEAM_ID_RE.match(did):
+            raise ToolError(f"--depot {spec}: the depot id is a number (e.g. 1234561), then =DIR if it has its own "
+                            "folder")
+        if did in seen:
+            raise ToolError(f"--depot {did} is given twice")
+        seen.add(did)
+        folder = folder or a.site
+        if not folder:
+            raise ToolError(f"--depot {did} needs a build folder: --site DIR, or --depot {did}=DIR")
+        depots.append((did, Path(os.path.abspath(folder))))
+    return depots
+
+
+def vdf_value(what, value):
+    """A VDF string as steamcmd reads it: no quotes or control characters, which it cannot escape (verify)."""
+    text = str(value)
+    if '"' in text or any(ord(c) < 32 and c != "\t" for c in text):
+        raise ToolError(f"{what} {text!r}: a quote or a line break cannot go into a SteamPipe VDF")
+    return text
+
+
+def steam_vdf(app, depots, content_root, output, desc, branch, preview):
+    """The app build VDF (E76): one file with every depot inline. ContentRoot and BuildOutput are absolute, each
+    LocalPath is relative to ContentRoot, all in this OS's spelling. Holds no login."""
+    q = vdf_value
+    lines = ['"AppBuild"', "{",
+             f'\t"AppID" "{q("--app", app)}"',
+             f'\t"Desc" "{q("the build description", desc)}"',
+             f'\t"ContentRoot" "{q("the content root", os.path.join(str(content_root), ""))}"',
+             f'\t"BuildOutput" "{q("the build output", os.path.join(str(output), ""))}"']
+    if preview:
+        lines.append('\t"Preview" "1"')                   # SteamPipe builds the manifest, uploads nothing (verify)
+    if branch:
+        lines.append(f'\t"SetLive" "{q("--branch", branch)}"')
+    lines += ['\t"Depots"', "\t{"]
+    for did, folder in depots:
+        rel = os.path.relpath(str(folder), str(content_root))
+        local = "*" if rel == "." else os.path.join(rel, "*")
+        lines += [f'\t\t"{q("--depot", did)}"', "\t\t{", '\t\t\t"FileMapping"', "\t\t\t{",
+                  f'\t\t\t\t"LocalPath" "{q("the depot folder", local)}"', '\t\t\t\t"DepotPath" "."',
+                  '\t\t\t\t"Recursive" "1"', "\t\t\t}"]
+        lines += [f'\t\t\t"FileExclusion" "{x}"' for x in STEAM_EXCLUDE]
+        lines.append("\t\t}")
+    lines += ["\t}", "}"]
+    return "\n".join(lines) + "\n"
+
+
+def steam_check(a):
+    """Every check an upload needs except the login. Returns (steamcmd, depots, branch, version, version source)."""
+    if a.check or a.plan or a.apply or a.destroy or a.status:
+        raise ToolError("--target steam takes --dry-run, --preview, or no step (an upload): --check, --plan, --apply, "
+                        "--destroy and --status belong to other targets")
+    if a.kind == "container":
+        raise ToolError("--target steam uploads build folders (--site or --depot ID=DIR), not a container image")
+    if not a.app:
+        raise ToolError("--target steam needs --app <app id> (Steamworks: your app's number; 480 is Valve's "
+                        "Spacewar test app)")
+    if not STEAM_ID_RE.match(a.app):
+        raise ToolError(f"--app {a.app}: the app id is a number (e.g. 1234560)")
+    depots = steam_depots(a)
+    branch = a.branch
+    if branch is not None:
+        if branch.lower() in STEAM_DEFAULT_BRANCHES:
+            raise ToolError(f"--branch {branch}: the default branch is set live by hand in the App Admin panel "
+                            "(SteamPipe cannot, E76), the last check before players get the build; upload with no "
+                            "--branch, or to a beta branch such as --branch beta")
+        if not STEAM_BRANCH_RE.match(branch):
+            raise ToolError(f"--branch {branch}: lower case letters, digits, '-' and '_' (a beta branch made on "
+                            "Steamworks first, e.g. beta)")
+    exe = steamcmd_exe(a)
+    for did, folder in depots:
+        if not folder.is_dir():
+            raise ToolError(f"depot {did}: {folder} is no folder (build the game first)")
+        if not any(folder.iterdir()):
+            raise ToolError(f"depot {did}: {folder} is empty (build the game first)")
+        found = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*")
+                       if p.name.lower() == STEAM_APPID_FILE)
+        if found:
+            raise Refused(f"depot {did}: {', '.join(found)} must not ship (it lets the game start outside Steam's "
+                          "launch check; keep it beside your dev build only, SOP-21)")
+        problems = site_problems(folder, need_index=False, links_ok=True)
+        if problems:
+            raise Refused(f"depot {did}: the build folder is not safe to publish:\n  " + "\n  ".join(problems[:20]))
+    if a.userversion:
+        if not USERVERSION_RE.match(a.userversion):
+            raise ToolError(f"--userversion {a.userversion!r}: letters, digits and . + _ - only (e.g. 1.2.0)")
+        version, source = a.userversion, "--userversion"
+    else:
+        version, source = game_version()
+    return exe, depots, branch, version, source
+
+
+def steam_account(a):
+    """The Steam build account's name (not a secret, never stored by the kit): --steam-user, then STEAM_USER."""
+    user = (a.steam_user or os.environ.get(STEAM_USER_ENV, "")).strip()
+    if user and not STEAM_USER_RE.match(user):
+        raise ToolError(f"--steam-user {user!r}: a Steam account name is letters, digits and '_'")
+    return user or None
+
+
+def steamcmd(exe, args):
+    """Run steamcmd, streaming its own lines. In a terminal it can ask for the password and the Steam Guard code (the
+    first login on a machine); anywhere else its stdin is closed, so a missing cached login fails instead of waiting
+    for an answer nobody can type. Returns the exit code."""
+    cmd = [str(exe), *args]
+    dbg("run: " + shown_command(cmd))
+    sys.stdout.flush()
+    tty = bool(sys.stdin) and sys.stdin.isatty()
+    try:
+        r = subprocess.run(cmd, cwd=ROOT, stdin=None if tty else subprocess.DEVNULL, timeout=STEAMCMD_TIMEOUT_S)
+    except FileNotFoundError as exc:
+        raise ToolError(f"cannot run steamcmd ({exe}): {exc}")
+    except subprocess.TimeoutExpired:
+        raise Refused(f"steamcmd did not finish within {STEAMCMD_TIMEOUT_S} s (a login prompt with no terminal to "
+                      "answer it?): " + STEAM_LOGIN)
+    return r.returncode
+
+
+def cmd_steam(a):
+    exe, depots, branch, version, source = steam_check(a)
+    slug = game_slug()
+    user = steam_account(a)
+    deploy = ROOT / "deploy" / "steam"
+    try:                                    # one ContentRoot: every depot folder on the same drive
+        content_root = Path(os.path.commonpath([str(f) for _, f in depots]))
+    except ValueError:
+        raise ToolError("the depot folders are on different drives: SteamPipe takes one content root, so put the "
+                        "builds under one folder")
+    desc = f"{slug} {version}" + (f" ({branch})" if branch else "")
+    vdf_path = deploy / f"app_build_{a.app}.vdf"
+    # A preview never sets a branch live, whatever SteamPipe makes of "Preview" (verify): SetLive stays out of it
+    text = steam_vdf(a.app, depots, content_root, deploy / "output", desc, None if a.preview else branch, a.preview)
+    run = ["+login", user or STEAM_USER_PLACEHOLDER, "+run_app_build", str(vdf_path), "+quit"]
+    print(f"[ OK ] steamcmd: {exe}")
+    for did, folder in depots:
+        files = sum(1 for p in folder.rglob("*") if p.is_file())
+        print(f"[ OK ] depot {did}: {folder} ({files} files, no secret-type files, tokens or {STEAM_APPID_FILE})")
+    print(f"[ OK ] app {a.app}, version {version} (from {source}); " +
+          (f"set live on the {branch} branch after the upload" if branch else
+           "no --branch: set the build live by hand on Steamworks (App Admin, SteamPipe, Builds)"))
+    if a.app == STEAM_TEST_APP:
+        print(f"[WARN] app {STEAM_TEST_APP} is Valve's Spacewar: test the Steam API with it, but uploads go to your "
+              "own app id")
+    deploy.mkdir(parents=True, exist_ok=True)
+    write_lf(vdf_path, text)
+    if a.dry_run:
+        print(f"[info] wrote {vdf_path.relative_to(ROOT).as_posix()} (git-ignored; no login in it):")
+        print(text.rstrip("\n"))
+        print("[info] would run: " + shown_command([exe, *run]))
+        if not user:
+            print(f"[WARN] no build account named yet: --steam-user NAME or {STEAM_USER_ENV} (a name only; steamcmd "
+                  "asks for the password itself)")
+        print("[ OK ] dry run: nothing was run or uploaded (--preview has SteamPipe build the manifest without "
+              "uploading; it logs in)")
+        return 0
+    if not user:
+        raise ToolError(f"no Steam build account: pass --steam-user NAME or set {STEAM_USER_ENV}. " + STEAM_LOGIN)
+    if a.app == STEAM_TEST_APP:
+        raise Refused(f"app {STEAM_TEST_APP} (Spacewar) is Valve's: upload to your own app id")
+    # A preview is confirmed like an upload until a real run proves it uploads nothing (verify)
+    confirm(a, ("preview (SteamPipe should upload nothing) of " if a.preview else "upload ")
+               + f"{', '.join('depot ' + d for d, _ in depots)} to app {a.app}"
+               + (f" and set it live on {branch}" if branch and not a.preview else ""), slug)
+    print("[info] running: " + shown_command([exe, *run]))
+    rc = steamcmd(exe, run)
+    if rc != 0:
+        raise Refused(f"steamcmd failed (exit {rc}): read its lines above. A login problem: " + STEAM_LOGIN)
+    if a.preview:
+        print(f"[ OK ] preview built, nothing uploaded: the manifest and log are in "
+              f"{(deploy / 'output').relative_to(ROOT).as_posix()}/ (verify)")
+    else:
+        print(f"[ OK ] uploaded app {a.app} {version}" + (f", live on {branch}" if branch else "") +
+              ": check it on Steamworks (App Admin, SteamPipe, Builds); steamcmd's exit code is all this tool "
+              "saw (verify)")
+    return 0
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="ship.py", description="Put a game online with OpenTofu (a static web build, or one container image), "
-                                    "or upload a build to itch.io with butler (--target itch).",
+                                    "upload a build to itch.io with butler (--target itch), or to Steam with "
+                                    "steamcmd (--target steam).",
         epilog="Exit codes: 0 ok, 1 failed or refused, 2 usage or environment. Every provider keeps its own login. "
                "itch.io: ship.py --target itch --project user/game --site <build folder> [--channel C] "
-               "[--userversion V] --dry-run, then the same without --dry-run (and --yes outside a terminal) to push.")
-    ap.add_argument("--target", required=True, choices=TARGETS + (ITCH,),
-                    help="aws, azure, gcp, linode, do (DigitalOcean) with OpenTofu, or itch (itch.io with butler)")
+               "[--userversion V] --dry-run, then the same without --dry-run (and --yes outside a terminal) to push. "
+               "Steam: ship.py --target steam --app ID --depot ID --site <build folder> [--branch beta] "
+               "--steam-user NAME --dry-run (prints the VDF and the steamcmd line), --preview (SteamPipe builds the "
+               "manifest, uploads nothing), then without either to upload. Log in to steamcmd by hand once first.")
+    ap.add_argument("--target", required=True, choices=TARGETS + (ITCH, STEAM),
+                    help="aws, azure, gcp, linode, do (DigitalOcean) with OpenTofu, itch (itch.io with butler) or "
+                         "steam (SteamPipe with steamcmd)")
     ap.add_argument("--kind", choices=KINDS, help="OpenTofu targets (required): static (a web build) or container "
                                                   "(one image)")
     step = ap.add_mutually_exclusive_group()
@@ -658,9 +905,14 @@ def build_parser():
     step.add_argument("--apply", action="store_true", help="apply the saved plan, unchanged")
     step.add_argument("--destroy", action="store_true", help="remove everything this tool made there")
     step.add_argument("--dry-run", action="store_true",
-                      help="itch: check everything and print the exact butler command; uploads nothing, needs no login")
+                      help="itch, steam: check everything and print the exact butler or steamcmd command (and "
+                           "Steam's app build VDF); uploads nothing, runs nothing, needs no login")
     step.add_argument("--status", action="store_true", help="itch: butler status for --project and --channel")
-    ap.add_argument("--site", help="static: the web build folder (holds index.html); itch: the build folder to push")
+    step.add_argument("--preview", action="store_true",
+                      help="steam: run steamcmd with a preview build (SteamPipe makes the manifest and log, uploads "
+                           "nothing; it logs in)")
+    ap.add_argument("--site", help="static: the web build folder (holds index.html); itch: the build folder to push; "
+                                   "steam: the build folder of every bare --depot ID")
     ap.add_argument("--image", help="container: a public image reference")
     ap.add_argument("--port", type=int, help="container: the port the image listens on")
     ap.add_argument("--domain", help="linode container: the domain for the HTTPS certificate")
@@ -673,11 +925,22 @@ def build_parser():
     ap.add_argument("--billing-account", help="gcp: the billing account id for the budget")
     ap.add_argument("--channel", help=f"itch: the channel (windows, linux, mac, android name the platform; default "
                                       f"{ITCH_WEB_CHANNEL} for a folder holding index.html)")
-    ap.add_argument("--userversion", help="itch: the version butler records (default: the engine's version source, "
-                                          "SOP-06)")
-    ap.add_argument("--yes", action="store_true", help="confirm --apply / --destroy / an itch push without a prompt")
+    ap.add_argument("--userversion", help="itch: the version butler records; steam: the version in the build "
+                                          "description (default: the engine's version source, SOP-06)")
+    ap.add_argument("--app", help="steam: the app id (a number, from Steamworks)")
+    ap.add_argument("--depot", action="append", metavar="ID[=DIR]",
+                    help="steam: a depot id, once per depot (one per platform); ID=DIR names its build folder, a bare "
+                         "ID uses --site")
+    ap.add_argument("--branch", help="steam: the beta branch to set the build live on (never default: that is set "
+                                     "by hand on Steamworks); none: set it live by hand")
+    ap.add_argument("--steam-user", help=f"steam: the build account's name (default: {STEAM_USER_ENV}); steamcmd "
+                                         "asks for the password itself, the kit never takes one")
+    ap.add_argument("--yes", action="store_true", help="confirm --apply / --destroy / an itch push / a Steam upload "
+                                                       "without a prompt")
     ap.add_argument("--tofu", help="the OpenTofu executable (default: TOFU_BIN, then tofu on PATH)")
     ap.add_argument("--butler", help="itch: the butler executable (default: BUTLER_BIN, then butler on PATH)")
+    ap.add_argument("--steamcmd", help=f"steam: the steamcmd executable (default: {STEAMCMD_ENV}, then steamcmd on "
+                                       "PATH)")
     ap.add_argument("--debug", action="store_true", help="show tofu's full output and the commands run")
     return ap
 
@@ -694,10 +957,15 @@ def main(argv=None):
     try:
         if a.target == ITCH:                    # butler, not OpenTofu: never needs tofu
             return cmd_itch(a)
+        if a.target == STEAM:                   # steamcmd, not OpenTofu
+            return cmd_steam(a)
+        if a.preview:
+            raise ToolError("--preview is for --target steam")
         if not a.kind:
             raise ToolError(f"--target {a.target} needs --kind static or --kind container")
         if a.dry_run or a.status:
-            raise ToolError("--dry-run and --status are for --target itch: the OpenTofu targets use --check or --plan")
+            raise ToolError("--dry-run and --status are for --target itch (and --dry-run for --target steam): the "
+                            "OpenTofu targets use --check or --plan")
         if not (a.check or a.plan or a.apply or a.destroy):
             raise ToolError(f"--target {a.target} needs one step: --check, --plan, --apply or --destroy")
         a.region = a.region or DEFAULT_REGION_BY_KIND.get((a.target, a.kind), DEFAULT_REGION[a.target])

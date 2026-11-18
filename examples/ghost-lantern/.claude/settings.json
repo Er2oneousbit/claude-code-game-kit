@@ -108,7 +108,9 @@
       "Bash(python3 tools/issues.py *--create*)",
       "PowerShell(python tools/issues.py *--create*)",
       "Bash(butler:*)",
-      "PowerShell(butler *)"
+      "PowerShell(butler *)",
+      "Bash(steamcmd:*)",
+      "PowerShell(steamcmd *)"
     ],
     "deny": [
       "Read(./.env)",
@@ -153,7 +155,9 @@
       "PowerShell(gh auth status *-t*)",
       "PowerShell(gh repo delete *)",
       "Read(~/.config/itch/**)",
-      "Read(~/Library/Application Support/itch/**)"
+      "Read(~/Library/Application Support/itch/**)",
+      "Read(~/Steam/config/**)",
+      "Read(~/.steam/**)"
     ]
   },
   "hooks": {

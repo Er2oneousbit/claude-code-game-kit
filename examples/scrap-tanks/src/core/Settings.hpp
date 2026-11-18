@@ -23,7 +23,10 @@
 //       per field: missing -> default ; present -> fixed by its rule (num clamp, bool, enum, resolution)
 //     input.bindings: defaults, then each action from the file (string entries only)
 //   effective_shake = 0 with reduce_motion, else shake_scale ; telemetry_allowed = consent is "yes"
+//   blood_enabled = content.blood ; clean_language = content.clean_language (#171, #207)
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section with blood_enabled() and
+//           clean_language() (#171, #207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -74,5 +77,11 @@ double effective_shake(const nlohmann::json& settings);
 
 // True only after the player said yes (consent "yes"); "unset" and "no" both mean no telemetry.
 bool telemetry_allowed(const nlohmann::json& settings);
+
+// #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18).
+bool blood_enabled(const nlohmann::json& settings);
+
+// #207: the shell's t() picks @clean lines and masks the game's word list (SOP-19).
+bool clean_language(const nlohmann::json& settings);
 
 }  // namespace core

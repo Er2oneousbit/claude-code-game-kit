@@ -1,7 +1,8 @@
 # tools/cloud: put the game online
 
 `ship.py` deploys a game with [OpenTofu](https://opentofu.org) the same way on five providers, and uploads a build to
-itch.io with butler ([below](#itchio-with-butler)). Two kinds of thing go online with OpenTofu:
+itch.io with butler ([below](#itchio-with-butler)) and to Steam with steamcmd
+([below](#steam-with-steamcmd-steampipe)). Two kinds of thing go online with OpenTofu:
 
 - **static**: a web build (index.html and its files) as a website over HTTPS;
 - **container**: one container image (a game server, a save-sync or leaderboard backend) behind HTTPS.
@@ -96,4 +97,41 @@ python tools/dev.py ship --target itch --project user/game --channel html5 --sta
 
 **Not run against itch.io yet.** The push, the dry run and every guardrail are tested with a stand-in butler; the
 first real upload is still to come (verify), and so is `--status` (`butler status`, which butler's own output names
-but its documentation does not). Steam (SteamPipe) has no `ship` target yet: it waits for the platform layer (#84).
+but its documentation does not).
+
+## Steam with steamcmd (SteamPipe)
+Steam is not OpenTofu either: [steamcmd](https://developer.valvesoftware.com/wiki/SteamCMD) runs a SteamPipe app build
+VDF that `ship.py` writes from a few options (`docs/sop/SOP-21-ship-on-steam-and-itch.md` step 3, E76).
+```
+python tools/dev.py ship --target steam --app 1234560 --depot 1234561 --site build/windows --branch beta --dry-run
+python tools/dev.py ship --target steam --app 1234560 --depot 1234561=build/windows --depot 1234562=build/linux \
+    --branch beta --steam-user mybuildaccount --preview
+python tools/dev.py ship --target steam --app 1234560 --depot 1234561 --site build/windows --branch beta \
+    --steam-user mybuildaccount --yes
+```
+- **The ids:** `--app` and each `--depot` come from Steamworks (App Admin, SteamPipe, Depots): one depot per platform.
+  A bare `--depot ID` uses `--site`; `--depot ID=DIR` gives a depot its own folder. `dev.py` adds no folder: a Steam
+  depot is a desktop build, never the engine's web build. App 480 (Spacewar) is for Steam API tests and is refused
+  for an upload.
+- **The VDF:** `deploy/steam/app_build_<app>.vdf` (git-ignored: it holds this machine's absolute paths). One content
+  root (the depots' common folder), every depot inline with `FileMapping` (`LocalPath` relative to the root,
+  `DepotPath` `.`, `Recursive`), `FileExclusion` `*.pdb`, a description of slug and version, `SetLive` only with
+  `--branch`. `--branch default` (or `public`) is refused: the default branch is set live by hand on Steamworks.
+- **Guardrails:** every depot folder must exist, not be empty, and hold no `<build>/steam_appid.txt` (a dev-only file), no
+  secret-type file and no token (the same scan as itch.io). A quote or a line break in a VDF value is refused.
+- **`--dry-run`** prints the VDF and the exact steamcmd line; it runs nothing and needs no login. **`--preview`**
+  runs steamcmd with `"Preview" "1"` and no `SetLive`: SteamPipe should build the manifest and its log in
+  `deploy/steam/output/` and upload nothing (it does log in; verify on the first run). **An upload**, and a preview
+  until that is verified, asks for the game's slug in a terminal and needs `--yes` anywhere else.
+- **The login:** `--steam-user NAME` or `STEAM_USER` is the build account's name only (it needs the Edit App Metadata
+  permission). There is no password option: log in by hand once in a terminal, `steamcmd +login <build account>
+  +quit`, and type the password and the Steam Guard code there; steamcmd keeps its own login (verify how long). Run
+  from a terminal, steamcmd can ask again; anywhere else its stdin is closed, so a missing login fails at once.
+  Claude Code may not read `~/Steam/config/` or `~/.steam/` (deny rules; where steamcmd keeps its login on Linux and
+  macOS, verify); on Windows, steamcmd keeps its login in its own folder, so do not point Claude at it.
+- **Which steamcmd:** `--steamcmd`, `STEAMCMD_BIN`, then `steamcmd` on PATH; missing is exit 2.
+
+**Not run against Steam yet.** The dry run, the preview, the upload and every guardrail are tested with a stand-in
+steamcmd; no Steamworks account was used. Verify on the first upload: the VDF's Windows path spelling, inline depots
+and `Recursive`, what `--preview` leaves in `deploy/steam/output/`, and whether steamcmd's exit code reports every
+failed upload (check the build on Steamworks: App Admin, SteamPipe, Builds).

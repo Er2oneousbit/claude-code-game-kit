@@ -13,8 +13,15 @@
 //             is written as is); Graphics.Blit(main, target, material); ReadPixels -> EncodeToPNG
 //           The recipes are unlit passes with no LightMode tag, which the Built-in pipeline and URP both draw
 //           (URP as SRPDefaultUnlit): checked with Unity 6000.6 on the Built-in pipeline (D3D11) and with URP 17.6
-//           (D3D12), there both through this Blit and through a URP camera in play mode. HDRP is not checked.
+//           (D3D12), there both through this Blit and through a URP camera in play mode.
+//           #260, HDRP: Render also draws each recipe through a Camera (an orthographic camera looking at a quad with the
+//           recipe's material, into <-shaderOut>/camera/<name>.png), so the active pipeline's own passes run: HDRP
+//           draws a pass without a LightMode tag as SRPDefaultUnlit, but changes the colours (exposure, alpha): under
+//           HDRP the camera is prepared by Assets/Editor/ShadersHdrp/GameKitShadersHdrp.cs (see its header).
+//           It prints "SHADER_PIPELINE <pipeline asset type or Built-in> <graphics api>" first, so a result says which
+//           pipeline it ran on.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): SHADER_PIPELINE line and the camera pass (#260)
 // ---------------------------------------------------------------------------
 using System;
 using System.IO;
@@ -86,14 +93,17 @@ public static class GameKitShaders
             EditorApplication.Exit(2);
             return;
         }
+        var pipeline = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline;
+        Debug.Log($"SHADER_PIPELINE {(pipeline == null ? "Built-in" : pipeline.GetType().Name)} {SystemInfo.graphicsDeviceType}");
         var paths = ShaderPaths();
         int failed = 0;
+        Directory.CreateDirectory(Path.Combine(outDir, "camera"));
         foreach (var path in paths)
         {
             var name = Path.GetFileNameWithoutExtension(path);
             try
             {
-                var png = Draw(path);
+                var png = Draw(path, false);
                 File.WriteAllBytes(Path.Combine(outDir, name + ".png"), png);
                 Debug.Log($"SHADER_OK {name}");
             }
@@ -102,11 +112,24 @@ public static class GameKitShaders
                 failed++;
                 Debug.Log($"SHADER_FAIL {name} {e.Message}");
             }
+            try
+            {
+                File.WriteAllBytes(Path.Combine(outDir, "camera", name + ".png"), Draw(path, true));
+                Debug.Log($"SHADER_OK {name} (camera)");
+            }
+            catch (Exception e)
+            {
+                failed++;
+                Debug.Log($"SHADER_FAIL {name} (camera) {e.Message}");
+            }
         }
+        var restore = Type.GetType("GameKitShadersHdrp, Game.ShadersHdrp.Editor", false);
+        if (restore != null)
+            restore.GetMethod("Restore").Invoke(null, null);
         Done(paths.Length, failed);
     }
 
-    static byte[] Draw(string path)
+    static byte[] Draw(string path, bool viaCamera)
     {
         var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
         if (shader == null || ShaderUtil.ShaderHasError(shader))
@@ -133,7 +156,10 @@ public static class GameKitShaders
                 material.SetTexture("_AuxTex", aux);
             }
             target = new RenderTexture(Size, Size, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
-            Graphics.Blit(main, target, material);
+            if (viaCamera)
+                DrawWithCamera(material, main, target, made);
+            else
+                Graphics.Blit(main, target, material);
             RenderTexture.active = target;
             var read = new Texture2D(Size, Size, TextureFormat.RGBA32, false, true);
             made.Add(read);
@@ -152,6 +178,46 @@ public static class GameKitShaders
             foreach (var o in made)
                 UnityEngine.Object.DestroyImmediate(o);
         }
+    }
+
+    /// #260: the material on a quad that fills an orthographic camera, drawn by the active pipeline into `target`
+    /// (not a Blit: the pipeline's own pass list decides whether the recipe's untagged unlit pass is drawn).
+    static void DrawWithCamera(Material material, Texture2D main, RenderTexture target, System.Collections.Generic.List<UnityEngine.Object> made)
+    {
+        material.SetTexture("_MainTex", main);
+        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+        made.Add(quad);
+        UnityEngine.Object.DestroyImmediate(quad.GetComponent<Collider>());
+        quad.GetComponent<MeshRenderer>().sharedMaterial = material;
+        quad.transform.position = new Vector3(0f, 0f, 5000f);     // far from anything else in the open scene
+        var rig = new GameObject("KitShaderCamera");
+        made.Add(rig);
+        var cam = rig.AddComponent<Camera>();
+        cam.orthographic = true;
+        cam.orthographicSize = 0.5f;
+        cam.aspect = 1f;
+        cam.nearClipPlane = 0.1f;
+        cam.farClipPlane = 10f;
+        cam.transform.position = new Vector3(0f, 0f, 4995f);
+        cam.clearFlags = CameraClearFlags.SolidColor;
+        cam.backgroundColor = new Color(0f, 0f, 0f, 0f);
+        cam.allowHDR = false;
+        cam.allowMSAA = false;
+        cam.targetTexture = target;
+        ConfigureHdrpCamera(rig, made);
+        cam.Render();
+    }
+
+    /// HDRP changes what an unlit pass shows (pre-exposure, post processing, no alpha in an 11-bit colour buffer): the
+    /// camera and a Volume are set up in Assets/Editor/ShadersHdrp/GameKitShadersHdrp.cs, an assembly that exists only
+    /// when the HDRP package does, so this file reaches it by name.
+    static void ConfigureHdrpCamera(GameObject rig, System.Collections.Generic.List<UnityEngine.Object> made)
+    {
+        if (UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline == null)
+            return;
+        var hdrp = Type.GetType("GameKitShadersHdrp, Game.ShadersHdrp.Editor", false);
+        if (hdrp != null)
+            hdrp.GetMethod("Prepare").Invoke(null, new object[] { rig, made });
     }
 
     /// An input picture, linear and point-filtered ("sphere" is the sphere's normal map).

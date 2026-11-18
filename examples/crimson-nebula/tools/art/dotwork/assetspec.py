@@ -33,6 +33,9 @@
 #           pick too (mapbuild.terrain_picks, #307); no change to the rules
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a map object must be a sprite (what every importer
 #           places); the variant pick walks atlases as listed, whatever their ids
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated_sprite's optional
+#           light (a firing light pulse: texture, colour, radius, energy per frame) and tracer (a ribbon along the
+#           real path: width, taper, spacing, length, colour steps), checked here; the loaded result is unchanged
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -46,7 +49,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SCHEMA_PATH = os.path.join(HERE, "asset_manifest.schema.json")
 
 FORMAT = "dotwork-assets"
-VERSION = "1.1.0"          # MAJOR.MINOR.PATCH: an importer reads every manifest of its own major version
+VERSION = "1.2.0"          # MAJOR.MINOR.PATCH: an importer reads every manifest of its own major version
 SUFFIX = ".assets.json"    # <assets_dir>/dotwork/<pack>.assets.json
 KINDS = ("animated_sprite", "sprite", "icon", "portrait", "tileset", "map", "font", "ui_kit",   # core: every importer
          "background", "particles", "transition", "normal_map", "image")                       # extra: may be skipped
@@ -377,6 +380,22 @@ def _check_asset(a, w, png, file_size, errs):
                     errs.append(f"{cw} frame {j}: without a sheet the rect is the whole file, [0, 0, {fw}, {fh}]")
             if not math.isclose(total, c["length"], rel_tol=1e-6, abs_tol=1e-9):
                 errs.append(f"{cw}: length {c['length']} is not the sum of its frame durations ({total})")
+        light = a.get("light")                     # 1.2.0: the firing light pulse (#164)
+        if light:
+            clip = next((c for c in a["clips"] if c["name"] == light["clip"]), None)
+            if clip is None:
+                errs.append(f"{w}: light names clip {light['clip']!r}, which is not in clips")
+            elif len(light["energy"]) != len(clip["frames"]):
+                errs.append(f"{w}: light has {len(light['energy'])} energies for the {len(clip['frames'])} frames of "
+                            f"{clip['name']}")
+            png(light["texture"], f"{w} light")
+        tracer = a.get("tracer")                   # 1.2.0: a ribbon along the real path (#164)
+        if tracer:
+            at = [st["at"] for st in tracer["steps"]]
+            if at != sorted(at) or at[0] != 0 or at[-1] > 1:
+                errs.append(f"{w}: tracer steps start at 0 and rise to at most 1, tail to head (got {at})")
+            if tracer["taper"] > 1:
+                errs.append(f"{w}: tracer taper is the tail's fraction of the head's width, 0 .. 1")
         for action, dirs in (a.get("directions") or {}).items():
             for d, clip in dirs.items():
                 if d not in DIRECTIONS:

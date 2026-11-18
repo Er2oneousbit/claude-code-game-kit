@@ -1,8 +1,9 @@
 // ---------------------------------------------------------------------------
 // GameShell.js
 // Purpose : The kit's shell rules, engine-free: the player's settings (defaults, the schema, a loader that repairs a
-//           damaged or old file, effectiveShake, telemetryAllowed), bindings and prompt glyph names (rebind with
-//           swap, conflicts, narration lines), i18n (fallback chain, placeholders, plurals, the pseudo-locale) and
+//           damaged or old file, effectiveShake, telemetryAllowed, bloodEnabled, cleanLanguage), bindings and prompt
+//           glyph names (rebind with swap, conflicts, narration lines), i18n (fallback chain, placeholders, CLDR
+//           plurals, @clean variants and the word mask, the pseudo-locale) and
 //           the versioned save envelope (parse, migrate, primary then backup). Plain JavaScript with no RPG Maker
 //           objects, so Node tests it (tests/gameShell.test.js) against the kit's golden vectors
 //           (data/golden/shell.json) and MZ loads it as an ordinary plugin.
@@ -27,6 +28,11 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DisplayStaging, the Display tab's Apply and its
 //           keep-or-revert confirm, held to shell.json (#308); MZ's Options window does not use it yet
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+//           bloodEnabled() and cleanLanguage(); CLDR 46 plurals with the .other fallback per locale, @clean lookups,
+//           maskWords and matureWords (#171, #207); GameAccess puts both switches on MZ's Options
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): compileWords and maskWordSet; tr and trPlural take a
+//           compiled set too, so a plugin folds its word list once (#207)
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -59,8 +65,22 @@
     const FALLBACK_LOCALE = "en";
     const PSEUDO_LOCALE = "pseudo";
     const PSEUDO_GROWTH = 0.40;            // translated text runs about 40 % longer than English (SOP-19)
-    const NO_PLURAL = ["ja", "zh", "ko"];  // one form for every count
-    const ZERO_IS_ONE = ["fr"];            // 0 and 1 take the singular
+    const CLEAN_SUFFIX = "@clean";         // "guard.insult@clean": the line with clean language on (#207)
+    const GRAWLIX = "#@$%";                // the mask: one character per code point, again for each word
+    // CLDR 46 whole-number plural rules: family -> languages (tools/golden_vectors.py PLURAL_LANGUAGES)
+    const PLURAL_LANGUAGES = {
+        other: "ja zh ko vi th id ms lo my km yo ig jv su",
+        one: "en de nl sv da nb nn no fi et gl el hu tr bg eu af sq ka kk ky mn az uz ur sw ta te ml mr",
+        zero_one: "hi bn fa gu kn hy", one_many: "es it ca", zero_one_many: "fr pt", one_21: "is mk",
+        fil: "fil tl", east_slavic: "ru uk be", pl: "pl", cs: "cs sk", lt: "lt", balkan: "hr sr bs", ro: "ro mo",
+        lv: "lv", he: "he", sl: "sl", ga: "ga", ar: "ar", cy: "cy",
+    };
+    // code point ranges that are never part of a word (the reference's MASK_BOUNDARY_RANGES)
+    const MASK_BOUNDARY_RANGES = [
+        [0x0080, 0x00bf], [0x00d7, 0x00d7], [0x00f7, 0x00f7], [0x2000, 0x2bff], [0x2e00, 0x2e7f], [0x3000, 0x303f],
+        [0xfe00, 0xfe0f], [0xfe10, 0xfe1f], [0xfe30, 0xfe6f], [0xfeff, 0xfeff], [0xff00, 0xff0f], [0xff1a, 0xff20],
+        [0xff3b, 0xff40], [0xff5b, 0xff65], [0x1f000, 0x1faff],
+    ];
     const SAVE_VERSION = 3;
     const SAVE_FORMAT = "save";
 
@@ -102,6 +122,7 @@
         },
         input: { bindings: deepCopy(DEFAULT_BINDINGS), deadzone: 0.2, invert_y: false, glyphs: "auto" },
         telemetry: { consent: "unset" },
+        content: { blood: true, clean_language: false },   // #171, #207: what the game shows
     };
 
     const num = (lo, hi) => ({ kind: "num", lo, hi });
@@ -122,6 +143,7 @@
         },
         input: { deadzone: num(0, 0.9), invert_y: bool, glyphs: choice(GLYPH_SETS) },
         telemetry: { consent: choice(CONSENT) },
+        content: { blood: bool, clean_language: bool },
     };
 
     const defaultSettings = () => deepCopy(DEFAULTS);
@@ -216,6 +238,10 @@
     const effectiveShake = (settings) => (settings.access.reduce_motion ? 0.0 : settings.access.shake_scale);
     // Telemetry is recorded only after an explicit yes
     const telemetryAllowed = (settings) => settings.telemetry.consent === "yes";
+    // #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18)
+    const bloodEnabled = (settings) => settings.content.blood;
+    // #207: tr() with clean = true picks @clean lines and masks the game's word list (SOP-19)
+    const cleanLanguage = (settings) => settings.content.clean_language;
     // The settings as file text (one-space indent, like the kit's other JSON files)
     const settingsText = (settings) => JSON.stringify(settings, null, 1) + "\n";
 
@@ -333,29 +359,183 @@
         return out;
     }
 
-    // The raw template for key through the fallback chain, or null
-    function lookup(tables, locale, key) {
+    // One table's text for key: key@clean first when clean is on, else key; null when neither
+    function pick(table, key, clean) {
+        if (!table) return null;
+        if (clean && own(table, key + CLEAN_SUFFIX)) return table[key + CLEAN_SUFFIX];
+        return own(table, key) ? table[key] : null;
+    }
+
+    // The raw template for key through the fallback chain (per locale @clean first when clean is on), or null
+    function lookup(tables, locale, key, clean = false) {
         for (const loc of localeChain(locale)) {
-            const table = own(tables, loc) ? tables[loc] : undefined;
-            if (table && own(table, key)) return table[key];
+            const text = pick(own(tables, loc) ? tables[loc] : undefined, key, clean);
+            if (text !== null) return text;
         }
         return null;
     }
 
-    // A string through the fallback chain; a missing key returns the key itself, so it shows
-    function tr(tables, locale, key, args = {}) {
-        const text = lookup(tables, locale, key);
-        return text === null ? key : fill(text, args);
+    function finish(text, args, clean, words) {
+        const out = fill(text, args);
+        if (!clean) return out;
+        return words instanceof Set ? maskWordSet(out, words) : maskWords(out, words);
     }
 
-    function plural(locale, n) {
-        const base = language(locale);
-        if (NO_PLURAL.includes(base)) return "other";
-        if (ZERO_IS_ONE.includes(base)) return n === 0 || n === 1 ? "one" : "other";
-        return n === 1 ? "one" : "other";
+    // A string through the fallback chain; a missing key returns the key itself, so it shows. clean: each locale
+    // gives key@clean, then key, and the filled text (placeholder values too) is masked with words
+    function tr(tables, locale, key, args = {}, clean = false, words = []) {
+        const text = lookup(tables, locale, key, clean);
+        return text === null ? key : finish(text, args, clean, words);
     }
 
-    const trPlural = (tables, locale, key, n, args = {}) => tr(tables, locale, `${key}.${plural(locale, n)}`, { ...args, n });
+    const FAMILY_OF = {};
+    for (const [fam, langs] of Object.entries(PLURAL_LANGUAGES)) for (const l of langs.split(" ")) FAMILY_OF[l] = fam;
+
+    // The rule family: the full locale (pt-PT) first, then its language, then English's rule
+    function pluralFamily(locale) {
+        const norm = locale.replace(/_/g, "-").toLowerCase();
+        if (norm === "pt-pt" || norm.startsWith("pt-pt-")) return "one_many";
+        const lang = norm.split("-")[0];
+        return own(FAMILY_OF, lang) ? FAMILY_OF[lang] : "one";
+    }
+
+    // The CLDR plural category of a whole number (a negative one counts as its absolute value)
+    function plural(locale, count) {
+        const fam = pluralFamily(locale);
+        const n = Math.abs(Math.trunc(count));
+        const m10 = n % 10;
+        const m100 = n % 100;
+        const inRange = (v, lo, hi) => v >= lo && v <= hi;
+        switch (fam) {
+            case "other": return "other";
+            case "one": return n === 1 ? "one" : "other";
+            case "zero_one": return n <= 1 ? "one" : "other";
+            case "one_many":
+            case "zero_one_many":
+                if (n === 1 || (n === 0 && fam === "zero_one_many")) return "one";
+                return n !== 0 && n % 1000000 === 0 ? "many" : "other";
+            case "one_21": return m10 === 1 && m100 !== 11 ? "one" : "other";
+            case "fil": return m10 === 4 || m10 === 6 || m10 === 9 ? "other" : "one";
+            case "east_slavic":
+            case "balkan":
+                if (m10 === 1 && m100 !== 11) return "one";
+                if (inRange(m10, 2, 4) && !inRange(m100, 12, 14)) return "few";
+                return fam === "east_slavic" ? "many" : "other";
+            case "pl":
+                if (n === 1) return "one";
+                return inRange(m10, 2, 4) && !inRange(m100, 12, 14) ? "few" : "many";
+            case "cs": return n === 1 ? "one" : inRange(n, 2, 4) ? "few" : "other";
+            case "lt":
+                if (inRange(m100, 11, 19)) return "other";
+                return m10 === 1 ? "one" : m10 >= 2 ? "few" : "other";
+            case "ro":
+                if (n === 1) return "one";
+                return n === 0 || inRange(m100, 1, 19) ? "few" : "other";
+            case "lv":
+                if (m10 === 0 || inRange(m100, 11, 19)) return "zero";
+                return m10 === 1 ? "one" : "other";
+            case "he": return n === 1 ? "one" : n === 2 ? "two" : "other";
+            case "sl": return m100 === 1 ? "one" : m100 === 2 ? "two" : inRange(m100, 3, 4) ? "few" : "other";
+            case "ga": return n === 1 ? "one" : n === 2 ? "two" : inRange(n, 3, 6) ? "few" : inRange(n, 7, 10) ? "many" : "other";
+            case "ar":
+                if (n <= 2) return ["zero", "one", "two"][n];
+                return inRange(m100, 3, 10) ? "few" : m100 >= 11 ? "many" : "other";
+            case "cy": return ({ 0: "zero", 1: "one", 2: "two", 3: "few", 6: "many" })[n] || "other";
+            default: throw new Error(`unknown plural family ${fam}`);
+        }
+    }
+
+    // key.<category> through the chain, each locale with its own category, then its key.other
+    function lookupPlural(tables, locale, key, n, clean = false) {
+        for (const loc of localeChain(locale)) {
+            const table = own(tables, loc) ? tables[loc] : undefined;
+            const cat = plural(loc, n);
+            for (const c of cat === "other" ? ["other"] : [cat, "other"]) {
+                const text = pick(table, `${key}.${c}`, clean);
+                if (text !== null) return text;
+            }
+        }
+        return null;
+    }
+
+    function trPlural(tables, locale, key, n, args = {}, clean = false, words = []) {
+        const text = lookupPlural(tables, locale, key, n, clean);
+        return text === null ? `${key}.${plural(locale, n)}` : finish(text, { ...args, n }, clean, words);
+    }
+
+    // ---- the word mask (#207): code points, the reference's pinned ranges and case fold -----------------------
+    function isWordChar(cp) {
+        if (cp < 0x80) return (cp >= 0x30 && cp <= 0x39) || (cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a);
+        for (const [lo, hi] of MASK_BOUNDARY_RANGES) if (cp >= lo && cp <= hi) return false;
+        return true;
+    }
+
+    function foldChar(cp) {
+        if ((cp >= 0x41 && cp <= 0x5a) || (cp >= 0xc0 && cp <= 0xde && cp !== 0xd7)) return cp + 0x20;
+        if (cp === 0x130) return 0x69;
+        if (cp === 0x178) return 0xff;
+        if (((cp >= 0x100 && cp <= 0x12f) || (cp >= 0x132 && cp <= 0x137) || (cp >= 0x14a && cp <= 0x177)) && cp % 2 === 0) return cp + 1;
+        if (((cp >= 0x139 && cp <= 0x148) || (cp >= 0x179 && cp <= 0x17e)) && cp % 2 === 1) return cp + 1;
+        if (cp >= 0x391 && cp <= 0x3ab && cp !== 0x3a2) return cp + 0x20;
+        if (cp === 0x386) return 0x3ac;
+        if (cp >= 0x388 && cp <= 0x38a) return cp + 0x25;
+        if (cp === 0x38c) return 0x3cc;
+        if (cp === 0x38e || cp === 0x38f) return cp + 0x3f;
+        if (cp === 0x3c2) return 0x3c3;
+        if (cp >= 0x400 && cp <= 0x40f) return cp + 0x50;
+        if (cp >= 0x410 && cp <= 0x42f) return cp + 0x20;
+        return cp;
+    }
+
+    const codePoints = (s) => Array.from(s, (c) => c.codePointAt(0));
+    const foldKey = (cps) => cps.map(foldChar).join(",");
+
+    // The folded set the mask matches against: build it once per word list, pass it to tr/trPlural as words
+    function compileWords(words) {
+        const wanted = new Set();
+        for (const w of words) {
+            const cps = codePoints(w);
+            if (cps.length > 0 && cps.every(isWordChar)) wanted.add(foldKey(cps));
+        }
+        return wanted;
+    }
+
+    // text with every whole word that is in words (case folded) replaced by a same-length grawlix
+    const maskWords = (text, words) => maskWordSet(text, compileWords(words));
+
+    // maskWords with the list compiled already (compileWords)
+    function maskWordSet(text, wanted) {
+        if (wanted.size === 0) return text;
+        const cps = codePoints(text);
+        let out = "";
+        let i = 0;
+        while (i < cps.length) {
+            if (!isWordChar(cps[i])) {
+                out += String.fromCodePoint(cps[i]);
+                i += 1;
+                continue;
+            }
+            let j = i;
+            while (j < cps.length && isWordChar(cps[j])) j += 1;
+            const word = cps.slice(i, j);
+            if (wanted.has(foldKey(word))) for (let k = 0; k < word.length; k++) out += GRAWLIX[k % GRAWLIX.length];
+            else out += String.fromCodePoint(...word);
+            i = j;
+        }
+        return out;
+    }
+
+    // A word list file's words ({"words": [...]}, strings only); anything else (or null, no file) is no words
+    function matureWords(text) {
+        let raw;
+        try {
+            raw = text === null ? {} : JSON.parse(text);
+        } catch (e) {
+            return [];
+        }
+        if (!isObject(raw) || !Array.isArray(raw.words)) return [];
+        return raw.words.filter((w) => typeof w === "string");
+    }
 
     // The pseudo-locale version of text: accented, 40 % longer, in brackets; placeholders untouched
     function pseudo(text) {
@@ -512,8 +692,10 @@
     const GameShell = {
         SETTINGS_VERSION, DIFFICULTIES, COLORBLIND, SUB_SIZES, DISPLAY_MODES, FRAME_CAPS, CONSENT, GLYPH_SETS, SCHEMA,
         DEFAULT_BINDINGS, defaultSettings, fixField, settingsLoad, effectiveShake, telemetryAllowed, settingsText,
+        bloodEnabled, cleanLanguage,
         groupOf, rebind, glyphSet, glyphName, promptBinding, findConflicts, narrationLine,
         FALLBACK_LOCALE, PSEUDO_LOCALE, localeChain, fill, lookup, tr, plural, trPlural, pseudo,
+        CLEAN_SUFFIX, GRAWLIX, pluralFamily, lookupPlural, maskWords, matureWords, compileWords, maskWordSet,
         SAVE_VERSION, SAVE_FORMAT, MIGRATIONS, parseSave, saveMigrate, saveLoad, saveText,
         DISPLAY_APPLY_ORDER, DISPLAY_CONFIRM_FIELDS, DISPLAY_CONFIRM_S, DisplayStaging,
     };

@@ -9,6 +9,8 @@
 //           its image, an image whose size is not the size the manifest gives (the extra kinds' images too).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): the extra kinds' image sizes are checked (#285)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the file walk skips a particles emitter (a real
+//           Dotwork particle pack names its texture there by bare name, which failed the game-manifest test)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { existsSync, readFileSync } from "node:fs";
@@ -61,7 +63,9 @@ export function checkPackFiles(manifestPath: string, pack: PackDef, doc = JSON.p
     if (typeof v === "string" && FILE_EXT.test(v)) {
       if (!existsSync(normalizePath(`${root}/${v}`))) bad.push(`${where}: ${v} is missing`);
     } else if (Array.isArray(v)) v.forEach((x, i) => walk(x, `${where}[${i}]`));
-    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) walk(x, `${where}.${k}`);
+    // a particles asset's emitter is Dotwork's own JSON: its "texture" is the asset's texture by its bare name, and a
+    // debris emitter's palette_from.source names the game PNG its colours came from, not a shipped file (#164)
+    else if (v && typeof v === "object") for (const [k, x] of Object.entries(v)) if (k !== "emitter") walk(x, `${where}.${k}`);
   };
   for (const a of doc.assets ?? []) walk(a, `${a.kind}/${a.name}`);
   if (bad.length) return bad; // the size checks below would only repeat them

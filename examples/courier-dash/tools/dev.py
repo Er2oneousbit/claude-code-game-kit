@@ -10,7 +10,7 @@
 #             smoke    production build, then boot it in headless Chromium; fail on errors
 #                      (--query autoplay --until ESCAPED --fail-on CAUGHT for scenario runs,
 #                       --screenshot FILE, --record DIR for a GIF;
-#                       --drive menus|crash|pseudo|pseudo-plant|display|show:<screen> for the shell's scripted runs,
+#                       --drive menus|crash|pseudo|pseudo-plant|display|content|show:<screen> for the shell's scripted runs,
 #                       --data-dir DIR, --locale ID, --compare BASELINE.png [--tolerance N])
 #             build    production build into dist/ (relative paths: upload dist/ anywhere)
 #             run      Vite dev server with hot reload (opens the browser)
@@ -18,7 +18,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : none required. NODE_OPTIONS is passed through.
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Runs the project-local tools with `node node_modules/...` (no npx, no .cmd shims),
@@ -50,6 +51,9 @@
 #           butler (tools/cloud/ship.py, #86); the engine's web build is its default --site, like a static site
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): smoke --drive display, show:apply, show:confirm
 #           (the Display tab's Apply and its keep-or-revert confirm, #308)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
+#           language rows, #171, #207)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -70,7 +74,8 @@ BOOT_MARKER = "BOOT_OK"                   # logged by src/shell/app.ts once the 
 # --drive, --data-dir, --locale: the shell (src/shell/drive.ts) runs the scenarios and reads both folders
 DRIVE_HELP = ("the game plays a scripted run (shell games): menus, crash (exits 1 on purpose), pseudo, "
               "pseudo-plant, display (Apply a Display change, let its confirm revert: about 20 s), "
-              "show:title|settings|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
+              "content (toggle Blood and Clean language from their rows: DRIVE_CONTENT lines), "
+              "show:title|settings|content|pause|subtitle|juice|credits|apply|confirm (with --screenshot); "
               "waits for DRIVE_DONE")
 DATA_DIR_HELP = ("user-data folder for this run (?data-dir=): loaded before, written back after "
                  "(default build/smoke-data with --drive)")
@@ -804,8 +809,8 @@ def build_parser():
     p.add_argument("--deep", action="store_true", help="also remove node_modules/ (reinstalled on the next command)")
     p.add_argument("--yes", action="store_true", help="accepted on every engine; web clean never asks")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

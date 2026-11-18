@@ -21,7 +21,10 @@ Follow `docs/sop/SOP-19-front-end-and-settings.md` (and `docs/sop/SOP-20-accessi
 5. **Input:** actions, not keys; full gamepad navigation with a visible focus; prompts follow the last device; new
    actions get defaults for keyboard and gamepad and appear in the rebinding screen.
 6. **Text:** every new visible string goes through `tr()` with a key in the English string table (data/i18n/en.json
-   where the overlay ships the shell); placeholders, not concatenation; plurals per category.
+   where the overlay ships the shell); placeholders, not concatenation; plurals per CLDR category. A line with strong
+   language gets a `<key>@clean` sibling for the clean-language setting (`content.clean_language`), and a game with
+   blood reads `blood_enabled()` (`content.blood`) and has a neutral hit effect for off (SOP-19 sections 2 and 5;
+   SOP-18 section 3). A game with neither hides the rows with `SHOW_BLOOD_SETTING` / `SHOW_LANGUAGE_SETTING`.
 7. **Prove it:** `check`, `test`, `smoke`, and, where the overlay ships the scripted front end (every overlay with a shell), the scenario runs from `docs/ENGINE_FLOW.md`: `--drive menus` (settings file changes), `--drive pseudo --locale pseudo`
    (nothing clipped), `--drive crash` (a crash file); screenshots of the changed screens with
    `--drive show:<screen> --screenshot`. Elsewhere (RPG Maker MZ has no `--drive`: MZ's own screens) make the same

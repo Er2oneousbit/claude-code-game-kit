@@ -24,6 +24,11 @@
 #           the corners4 and isometric maps
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the atlas_order tileset and map: atlases listed out of
 #           id order, so a port that sorts them by id picks other variants
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the duo font (#286): two pages, the sampled glyph on
+#           page 1 with an xoffset and a yoffset, and a kerning pair
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects (#164, spec 1.2.0): a muzzle flash
+#           (16x8 frames in a sheet, pivot on the barrel tip at the left edge), a muzzle light with its light field and
+#           texture, a tracer with its tracer field, and wall-impact debris particles in lane_vfx's emitter shape
 # ---------------------------------------------------------------------------
 import argparse
 import hashlib
@@ -197,6 +202,7 @@ def build_game(root, with_godot=False):
         _iso_map(g)
         _font_ui(g)
         _extras(g)
+        _shooting(g)
     finally:
         godot.ENABLED, godot.RECORD = True, None
     return g
@@ -425,6 +431,7 @@ def _font_ui(g):
     g.png(f"{out}/font_tiny.png", page, "font_page", font="font_tiny.fnt", scale=1, effect="none")
     g.text(f"{out}/font_tiny.fnt", "\n".join(lines) + "\n", "font", format="AngelCode BMFont text", glyphs=2,
            line_height=7, scale=1)
+    _font_duo(g, out)
     ui = "assets/art/ui/windows"
     win = Canvas(12, 12, INK).rect(1, 1, 10, 10, (40, 50, 110, 255)).rect(2, 2, 8, 8, (60, 75, 150, 255))
     g.png(f"{ui}/ui_window_plain.png", win, "ui_window", style="plain", scale=1,
@@ -436,6 +443,34 @@ def _font_ui(g):
     for i in range(6):
         cur.rect(0, i, i + 1, 1, (250, 250, 250, 255))
     g.png(f"{ui}/cursor_pointer.png", cur, "ui_cursor", scale=1, hotspot=[0, 0])
+
+
+DUO_PAGES = {0: [(66, 1, 0, 0, 4)], 1: [(65, 1, 1, 1, 5)]}   # page: [(id, x, xoffset, yoffset, xadvance)]
+
+
+def _font_duo(g, out):
+    """duo: a two-page font (#286). Glyph 65, the one every importer samples, sits on page 1 with an xoffset and a
+    yoffset, so an importer that draws from one texture (Phaser's BitmapText) or drops the offsets (an Unreal
+    offline Font) shows it; plus a kerning pair the other way round from tiny's."""
+    lines = ['info face="duo" size=5 bold=0 italic=0 charset="" unicode=1 stretchH=100 smooth=0 aa=0 '
+             'padding=0,0,0,0 spacing=1,1', "common lineHeight=8 base=6 scaleW=8 scaleH=8 pages=2 packed=0",
+             'page id=0 file="font_duo_0.png"', 'page id=1 file="font_duo_1.png"', "chars count=3",
+             "char id=32 x=0 y=0 width=0 height=0 xoffset=0 yoffset=0 xadvance=3 page=0 chnl=15"]
+    chars = []
+    for pg, glyphs in sorted(DUO_PAGES.items()):
+        page = Canvas(8, 8)
+        for cid, x0, xo, yo, adv in glyphs:
+            for y, row in enumerate(GLYPHS[cid]):
+                for x, bit in enumerate(row):
+                    if bit == "1":
+                        page.rect(x0 + x, 1 + y, 1, 1, (255, 255, 255, 255))
+            chars.append((cid, f"char id={cid} x={x0} y=1 width=3 height=5 xoffset={xo} yoffset={yo} "
+                               f"xadvance={adv} page={pg} chnl=15"))
+        g.png(f"{out}/font_duo_{pg}.png", page, "font_page", font="font_duo.fnt", scale=1, effect="none")
+    lines += [c for _, c in sorted(chars)]
+    lines += ["kernings count=1", "kerning first=66 second=65 amount=-2"]
+    g.text(f"{out}/font_duo.fnt", "\n".join(lines) + "\n", "font", format="AngelCode BMFont text", glyphs=2,
+           line_height=8, scale=1)
 
 
 def _extras(g):
@@ -460,6 +495,62 @@ def _extras(g):
     g.png("assets/art/lit/yard/props/spr_crate_n.png", nm, "normal_map", pairs_with="assets/art/props/spr_crate.png",
           convention="opengl (green up, as Godot 4 expects)")
     g.png("assets/art/brand/golden/logo_golden.png", Canvas(12, 4, (240, 200, 60, 255)), "logo", scale=4)
+
+
+def _shooting(g):
+    """The shooting effects (#164) as lane_vfx writes them: additive clips, the left (barrel tip) pivot, the 1.2.0
+    light and tracer fields, and a debris emitter whose colours were sampled from a surface."""
+    hot = (255, 230, 140, 255)
+    out = "assets/art/fx/vfx/muzzle"
+    files, sheet = [], Canvas(48, 8)
+    for i in range(3):                                   # 16x8: a non-square frame, so a port that swaps w and h fails
+        c = Canvas(16, 8).rect(0, 3, 12 - 4 * i, 2, hot).rect(0, 2, 4 - i, 4, (255, 255, 255, 255))
+        fn = f"spr_vfx_muzzle_{i:02d}.png"
+        g.png(f"{out}/{fn}", c, "fx_frame", canvas=[16, 8], anchor="left", blend="add")
+        sheet.paste(c, 16 * i, 0)
+        files.append(fn)
+    g.png(f"{out}/vfx_muzzle_sheet.png", sheet, "sheet", frames=3, fps=30, loop=False, blend="add")
+    godot.sprite_frames(g.path(f"{out}/vfx_muzzle_frames.tres"), f"{RES}/fx/vfx/muzzle", {"play": (files, 30, False)})
+    out = "assets/art/fx/vfx/muzzle_light"
+    # written out, not taken from lane_vfx: tuning the lane must not move the fixture every engine compares with
+    light = {"clip": "play", "texture": "vfx_muzzle_light_light.png", "color": "#ffe890", "radius": 8,
+             "energy": [1.2, 0.6, 0.0]}
+    tex = Canvas(8, 8).rect(2, 2, 4, 4, (255, 255, 255, 128)).rect(3, 3, 2, 2, (255, 255, 255, 255))
+    g.png(f"{out}/{light['texture']}", tex, "light_texture")
+    files = []
+    for i in range(3):
+        c = Canvas(8, 8).rect(3 - (2 - i), 3 - (2 - i), 2 + 2 * (2 - i), 2 + 2 * (2 - i), hot) if i < 2 else Canvas(8, 8)
+        fn = f"spr_vfx_muzzle_light_{i:02d}.png"
+        g.png(f"{out}/{fn}", c, "fx_frame", canvas=[8, 8], anchor="center", blend="add", light=light)
+        files.append(fn)
+    godot.sprite_frames(g.path(f"{out}/vfx_muzzle_light_frames.tres"), f"{RES}/fx/vfx/muzzle_light",
+                        {"play": (files, 30, False)})
+    out = "assets/art/fx/vfx/tracer"
+    steps = [(0.0, (122, 42, 8), 0.0), (0.1667, (122, 42, 8), 1.0), (0.3333, (216, 106, 24), 1.0),
+             (0.5, (255, 180, 56), 1.0), (0.6667, (255, 232, 144), 1.0), (0.8333, (255, 255, 255), 1.0)]
+    tracer = {"width": 1.36, "taper": 0.25, "spacing": 4.0, "length": 32,
+              "steps": [{"at": at, "rgba": [*rgb, a]} for at, rgb, a in steps]}
+    fly = []
+    for i in range(2):
+        fn = f"spr_vfx_tracer_{i:02d}.png"
+        g.png(f"{out}/{fn}", Canvas(8, 8).rect(2, 3, 5, 2, hot).rect(5 + i, 3, 1, 2, (255, 255, 255, 255)), "fx_frame",
+              canvas=[8, 8], anchor="center", blend="add", tracer=tracer)
+        fly.append(fn)
+    g.png(f"{out}/spr_vfx_tracer_trail_00.png", Canvas(16, 8).rect(4, 4, 12, 1, hot), "fx_frame",
+          canvas=[16, 8], anchor="right", blend="add")
+    godot.sprite_frames(g.path(f"{out}/vfx_tracer_frames.tres"), f"{RES}/fx/vfx/tracer",
+                        {"fly": (fly, 12, True), "trail": (["spr_vfx_tracer_trail_00.png"], 12, True)})
+    out = "assets/art/fx/vfx/stone_debris"
+    g.png(f"{out}/vfx_stone_debris_particle.png", Canvas(2, 2, (255, 255, 255, 255)).rect(1, 1, 1, 1, (0, 0, 0, 0)),
+          "particle_texture", mask="chip")
+    em = {"texture": "vfx_stone_debris_particle.png", "amount": 6, "lifetime": 0.7, "one_shot": True,
+          "explosiveness": 1.0, "randomness": 0.4, "blend": "mix",
+          "emission": {"shape": "sphere", "extents_px": [1.0, 1.0]}, "direction": [1, 0], "spread_deg": 60.0,
+          "speed_px_s": [40.0, 110.0], "gravity_px_s2": [0.0, 260.0], "damping": [8.0, 16.0],
+          "colour_steps": [{"from_life": 0.0, "rgba": [160, 152, 140, 1.0]}, {"from_life": 0.5, "rgba": [90, 84, 78, 1.0]},
+                           {"from_life": 0.8, "rgba": [90, 84, 78, 0.0]}],
+          "palette_from": {"source": "assets/art/props/spr_crate.png", "rect": [3, 4, 10, 11]}}
+    g.text(f"{out}/vfx_stone_debris_particles.json", json.dumps(em, indent=1) + "\n", "particles_json")
 
 
 ORDER_CELLS = [[0, 0], [2, 0], [4, 0], [0, 2], [2, 2], [4, 2]]   # lone cells: every one has the key 0
@@ -536,7 +627,8 @@ def _files_of(doc):
     def walk(v, key=None):
         if isinstance(v, dict):
             for k, x in v.items():
-                walk(x, k)
+                if k != "emitter":       # the emitter JSON is Dotwork's own: its texture is the asset's, not a path
+                    walk(x, k)
         elif isinstance(v, list):
             for x in v:
                 walk(x, key)

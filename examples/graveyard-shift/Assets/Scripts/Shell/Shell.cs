@@ -30,6 +30,13 @@
 //           (HudScale, #309)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): DriveOnCommandLine (a player's --drive arms the drive),
 //           and full screen falls back to a maximized window when Unity sees no display modes (PlayerRun, #308)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
+//           tables; T and Tn honour content.clean_language, each locale with its own CLDR plural rule;
+//           BloodEnabled (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit in an I18n.WordCache, folded once
+//           per locale and list, not on every T() (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform (docs/PLATFORM.md, #84) and Saves (save slots
+//           whose writes reach Platform.Saved); OverlayChanged for the store overlay's pause
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -57,6 +64,14 @@ namespace graveyard_shift.Shell
         public Dictionary<string, object> Settings = GameSettings.Defaults();
         public List<string> SettingsProblems = new List<string>();
         public Dictionary<string, Dictionary<string, string>> Tables = new Dictionary<string, Dictionary<string, string>>();
+        /// <summary>data/i18n/mature/&lt;locale&gt;.json: the clean-language word lists (#207); setting it drops the
+        /// folded cache.</summary>
+        public Dictionary<string, List<string>> Mature
+        {
+            get => _words.Lists;
+            set => _words.Lists = value;
+        }
+        private readonly I18n.WordCache _words = new I18n.WordCache();
         public string Locale = "en";
         public string LocaleOverride = "";
         public bool Smoke;
@@ -73,6 +88,14 @@ namespace graveyard_shift.Shell
         public event Action LocaleChanged;
         /// <summary>The HUD text factor (HudScale.Factor: ui_scale * text_scale) changed; the argument is the new one (#309).</summary>
         public event Action<double> HudScaleChanged;
+        /// <summary>The store overlay opened (true) or closed (false); FrontEnd pauses play on it (#84).</summary>
+        public event Action<bool> OverlayChanged;
+
+        /// <summary>Achievements, stats, presence and cloud hooks (docs/PLATFORM.md): the null backend unless the
+        /// game defines GAMEKIT_STEAM and Steam answered.</summary>
+        public PlatformService Platform;
+        /// <summary>Save slots in the data folder; each write reaches Platform.Saved (the cloud hook).</summary>
+        public SaveStore Saves;
 
         private readonly HudScale.Watch _hudWatch = new HudScale.Watch();
         private readonly HashSet<string> _missingKeys = new HashSet<string>();
@@ -127,7 +150,9 @@ namespace graveyard_shift.Shell
                 Debug.LogWarning($"[WARN][shell] cannot create the data folder {DataDir}: {e.Message}");
             }
             LoadSettings();
+            StartPlatform();
             Tables = LoadTables();
+            Mature = LoadMature();
             Colours = AccessColours.LoadData();
             ApplyAll();
             Debug.Log($"[INFO][shell] data folder: {DataDir}");
@@ -136,6 +161,25 @@ namespace graveyard_shift.Shell
         private void Update()
         {
             ShellReports.Tick();
+            bool? overlay = Platform?.Update();
+            if (overlay.HasValue)
+            {
+                OverlayChanged?.Invoke(overlay.Value);
+            }
+        }
+
+        private void StartPlatform()
+        {
+            // data/achievements.json is optional: without it every call is "unknown" and nothing is written
+            string text = ShellFiles.ReadOrNull("data/" + PlatformRules.ACHIEVEMENTS_FILE);
+            var defs = PlatformRules.AchievementsLoad(text, out _);
+            Platform = new PlatformService(DataDir, text, PlatformBackends.Make(Smoke, defs, DataDir));
+            foreach (string p in Platform.Problems)
+            {
+                Debug.LogWarning($"[WARN][platform] {p}");
+            }
+            Saves = new SaveStore(DataDir) { OnSaved = name => Platform.Saved(name) };
+            Debug.Log($"[INFO][platform] backend: {Platform.Backend.Name}");
         }
 
         private void OnDestroy()
@@ -214,6 +258,25 @@ namespace graveyard_shift.Shell
             return I18n.TablesFromJson(root);
         }
 
+        /// <summary>{locale: words} from every data/i18n/mature/&lt;locale&gt;.json (#207); a broken file is no words.</summary>
+        public static Dictionary<string, List<string>> LoadMature()
+        {
+            var lists = new Dictionary<string, List<string>>();
+            foreach (string path in ShellFiles.List(I18N_DIR + "/mature", "*.json"))
+            {
+                try
+                {
+                    Json.TryParse(File.ReadAllText(path, System.Text.Encoding.UTF8), out object parsed);
+                    lists[Path.GetFileNameWithoutExtension(path)] = I18n.MatureWords(parsed);
+                }
+                catch (IOException e)
+                {
+                    Debug.LogWarning($"[WARN][i18n] cannot read {path}: {e.Message}");
+                }
+            }
+            return lists;
+        }
+
         // ---- settings --------------------------------------------------------------
 
         public void SetValue(string section, string key, object value)
@@ -227,6 +290,10 @@ namespace graveyard_shift.Shell
                 case "access": ApplyAccess(); break;
             }
             SettingsChanged?.Invoke(section, key);
+            if (section == "content" && key == "clean_language")
+            {
+                LocaleChanged?.Invoke();               // every label is drawn again, with or without @clean (#207)
+            }
             if (_hudWatch.Update(Settings))            // ui_scale (on Apply) or text_scale: the HUD follows (#309)
             {
                 HudScaleChanged?.Invoke(_hudWatch.Scale);
@@ -319,9 +386,10 @@ namespace graveyard_shift.Shell
         /// <summary>A UI string in the current language; fallback (untranslated) when no table has the key.</summary>
         public string T(string key, IDictionary<string, object> args = null, string fallback = null)
         {
+            bool clean = GameSettings.CleanLanguage(Settings);   // #207: @clean lines, then the word mask
             if (Locale == PSEUDO_LOCALE)
             {
-                string raw = Lookup(I18n.FALLBACK_LOCALE, key);
+                string raw = I18n.Lookup(Tables, I18n.FALLBACK_LOCALE, key, clean);
                 if (raw == null)
                 {
                     if (fallback == null)
@@ -333,17 +401,43 @@ namespace graveyard_shift.Shell
                 }
                 return I18n.Fill(I18n.Pseudo(raw), args);
             }
-            string found = Lookup(Locale, key);
+            string found = I18n.Lookup(Tables, Locale, key, clean);
             if (found == null)
             {
                 if (fallback != null)
                 {
-                    return I18n.Fill(fallback, args);
+                    return I18n.Finish(fallback, args, clean, clean ? WordSet() : null);
                 }
                 Missing(key);
                 return key;
             }
-            return I18n.Fill(found, args);
+            return I18n.Finish(found, args, clean, clean ? WordSet() : null);
+        }
+
+        /// <summary>The chain's words folded once per locale and list: what T and Tn mask with.</summary>
+        public HashSet<string> WordSet()
+        {
+            return _words.Get(Locale == PSEUDO_LOCALE ? I18n.FALLBACK_LOCALE : Locale);
+        }
+
+        /// <summary>The word lists of every locale in the current chain (a fallback line can come from any of them).</summary>
+        public List<string> MatureWords()
+        {
+            var words = new List<string>();
+            foreach (string loc in I18n.LocaleChain(Locale == PSEUDO_LOCALE ? I18n.FALLBACK_LOCALE : Locale))
+            {
+                if (Mature.TryGetValue(loc, out List<string> list))
+                {
+                    words.AddRange(list);
+                }
+            }
+            return words;
+        }
+
+        /// <summary>#171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).</summary>
+        public bool BloodEnabled()
+        {
+            return GameSettings.BloodEnabled(Settings);
         }
 
         /// <summary>The game's name on the title and the main menu: game.title is "{name}" in every table, so a
@@ -355,10 +449,20 @@ namespace graveyard_shift.Shell
 
         public string Tn(string key, double n, IDictionary<string, object> args = null)
         {
+            // key.<category>, each locale of the chain with its own CLDR rule, then that locale's key.other
             var all = args != null ? new Dictionary<string, object>(args) : new Dictionary<string, object>();
             all["n"] = n;
-            string rules = Locale == PSEUDO_LOCALE ? I18n.FALLBACK_LOCALE : Locale;
-            return T(key + "." + I18n.Plural(rules, n), all);
+            bool clean = GameSettings.CleanLanguage(Settings);
+            bool pseudo = Locale == PSEUDO_LOCALE;
+            string locale = pseudo ? I18n.FALLBACK_LOCALE : Locale;
+            string found = I18n.LookupPlural(Tables, locale, key, n, clean);
+            if (found == null)
+            {
+                string missing = key + "." + I18n.Plural(locale, n);
+                Missing(missing);
+                return missing;
+            }
+            return pseudo ? I18n.Fill(I18n.Pseudo(found), all) : I18n.Finish(found, all, clean, clean ? WordSet() : null);
         }
 
         /// <summary>Text from data files (dialogue, credits): as written, pseudo-localized in the "pseudo" locale.</summary>

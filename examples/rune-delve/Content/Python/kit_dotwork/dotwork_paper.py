@@ -14,10 +14,18 @@
 #                                a rate where every frame's duration is a whole frame run (dotwork_spec.flipbook_rate)
 #             icon               textures only (one per size)
 #             portrait           Sprites/S_<name>_<expression> per expression; talking: the animated_sprite's flipbooks
-#             font               Fonts/F_<name>: an offline Font (Characters from chars, the pages as its textures)
+#             animated_sprite    (blend add: every frame and the flipbook use Materials/MI_DotworkAdditive, an
+#                                instance of Paper2D's translucent unlit sprite material with the blend mode
+#                                overridden to Additive, #286)
+#             font               Fonts/F_<name>: an offline Font drawn from re-laid-out pages (each glyph in a cell
+#                                xadvance - kerning wide with its xoffset drawn in, dotwork_spec.font_layout: an
+#                                offline Font has no per-glyph x offset, #286); the pages are written to
+#                                Saved/Dotwork/fonts/<pack>/ and imported as Fonts/T_<name>_page<i>
 #             ui_kit             UI/SB_<kit>_<part>: a Slate Brush asset (Box with the 9-slice margins, else Image)
 #             tileset            TileSets/TS_<name>_<atlas>: one PaperTileSet per atlas, per-tile collision boxes,
-#                                the surface as each tile's user data name, and the DrawingOffset that puts the
+#                                the surface and animation as each tile's user data name ("surface;anim=2@4",
+#                                dotwork_spec.tile_user_data; GameKit's UDotworkTileAnimator plays it), and the
+#                                DrawingOffset that puts the
 #                                atlas's tiles where the spec draws them (centre minus origin; taller iso blocks)
 #             map                Maps/TM_<name>: a PaperTileMap (Orthogonal or IsometricDiamond), terrain layers
 #                                resolved by cell_mask and the variant pick (Paper2D has no autotiling), stamps
@@ -33,7 +41,10 @@
 #           from Paper2D's own Tiled importer, which names them) and an offline font's page textures (UFont::Textures:
 #           set with the `set` console command, which only the pythonscript commandlet runs, so fonts are imported
 #           through `dev.py exec`; a full editor session builds the font without pages and says so).
-#           Re-running updates the assets in place (same names), so levels and Blueprints that use them keep working.
+#           Re-running updates the assets in place (same names), so levels and Blueprints that use them keep working;
+#           save() tags every asset it wrote with the run (dotwork.import) and deletes the assets under the pack's
+#           folder that an earlier run tagged and this one did not make (a pack that dropped an asset, #286). Assets
+#           without the tag (yours, or from before the tag) are never deleted.
 #           Pseudocode
 #             load + version check; texture(rel) imports a PNG once per path
 #             core kinds in build order (sprite, animated_sprite, icon, portrait, font, ui_kit, tileset, map),
@@ -45,6 +56,10 @@
 # Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners4 terrain, the variant
 #           pick by layer index, stamps layers, DrawingOffset from the tiles' origins, the loaded result's placed cells
 #           and centres read back from Paper2D, particles loaded (texture + emitter tag)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): additive clips (MI_DotworkAdditive), fonts with their
+#           x offsets (re-laid-out pages), animated tiles in the tile user data, assets a pack dropped pruned (#286)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (its
+#           texture imported, a light tag on its clip's flipbook) and tracer (a tag on every flipbook), kept in the records
 # ---------------------------------------------------------------------------
 import json
 import os
@@ -53,6 +68,7 @@ import uuid
 
 import unreal
 
+from kit_dotwork import dotwork_png as png
 from kit_dotwork import dotwork_spec as spec
 
 # ---- Tunables ------------------------------------------------------------------
@@ -65,6 +81,8 @@ SKIPPED_KINDS = ()                          # every spec 1.1.0 kind is built (pa
 FLIP_BITS = {1: 1 << 31, 2: 1 << 30, 4: 1 << 29}   # manifest flags -> EPaperTileFlags (H, V, diagonal)
 PROJECTION = {"square": "ORTHOGONAL", "isometric": "ISOMETRIC_DIAMOND"}   # tileset shape -> TileMapProjectionMode
 TILE_INDEX_MASK = ~(7 << 29)
+ADDITIVE_PARENT = "/Paper2D/TranslucentUnlitSpriteMaterial"   # MI_DotworkAdditive's parent (blend mode overridden)
+FONT_PAGES_DIR = "Dotwork/fonts"            # under Saved/: the re-laid-out font pages Unreal imports
 BAD_NAME = re.compile(r"[^A-Za-z0-9_]")
 
 
@@ -123,6 +141,8 @@ class Importer:
         self.textures, self.tex_rel = {}, {}
         self.records, self.made, self.errors, self.warnings = {}, [], [], []
         self.font_pages_blocked = False             # True in a full editor session (see _font)
+        self._additive = None                       # MI_DotworkAdditive, made on the first additive clip
+        self.pruned = []                            # asset paths save() deleted (an earlier run made them)
 
     # ---- helpers -------------------------------------------------------------------------------
     def warn(self, text):
@@ -166,6 +186,14 @@ class Importer:
             raise spec.ManifestError(f"{rel} not found under {self.base}")
         folder = "/".join([self.tex_root] + [safe(p) for p in rel.split("/")[:-1]])
         name = "T_" + safe(os.path.splitext(rel.split("/")[-1])[0])
+        tex = self.import_png(src, folder, name, repeat, normal)
+        self.tag(tex, "file", rel)
+        self.textures[rel] = tex
+        self.tex_rel[tex.get_path_name()] = rel
+        return tex
+
+    def import_png(self, src, folder, name, repeat="none", normal=False):
+        """A PNG file imported as folder/name with the pixel-art settings."""
         task = unreal.AssetImportTask()
         for key, value in (("filename", src), ("destination_path", folder), ("destination_name", name),
                            ("automated", True), ("replace_existing", True), ("save", False)):
@@ -174,7 +202,7 @@ class Importer:
         paths = task.get_editor_property("imported_object_paths")
         tex = unreal.load_asset(paths[0]) if paths else None
         if not isinstance(tex, unreal.Texture2D):
-            raise RuntimeError(f"could not import {rel} as a texture")
+            raise RuntimeError(f"could not import {src} as a texture")
         wrap, clamp = unreal.TextureAddress.TA_WRAP, unreal.TextureAddress.TA_CLAMP
         tex.set_editor_properties({
             "srgb": not normal,
@@ -185,12 +213,27 @@ class Importer:
             "mip_gen_settings": unreal.TextureMipGenSettings.TMGS_NO_MIPMAPS,
             "address_x": wrap if "x" in repeat else clamp,
             "address_y": wrap if "y" in repeat else clamp})
-        self.tag(tex, "file", rel)
-        self.textures[rel] = tex
-        self.tex_rel[tex.get_path_name()] = rel
         if not self.transient:
             self.made.append(tex)
         return tex
+
+    def additive_material(self):
+        """MI_DotworkAdditive: Paper2D's translucent unlit sprite material with its blend mode overridden to
+        Additive (Paper2D ships no additive sprite material), made once per pack."""
+        if self._additive is None:
+            parent = unreal.load_asset(ADDITIVE_PARENT)
+            if parent is None:
+                raise RuntimeError(f"{ADDITIVE_PARENT} not found (is the Paper2D plugin on?)")
+            mi = self.new(unreal.MaterialInstanceConstant, unreal.MaterialInstanceConstantFactoryNew,
+                          f"{self.dest}/Materials", "MI_DotworkAdditive")
+            unreal.MaterialEditingLibrary.set_material_instance_parent(mi, parent)
+            o = mi.get_editor_property("base_property_overrides")
+            o.set_editor_property("override_blend_mode", True)
+            o.set_editor_property("blend_mode", unreal.BlendMode.BLEND_ADDITIVE)
+            mi.set_editor_property("base_property_overrides", o)
+            unreal.MaterialEditingLibrary.update_material_instance(mi)
+            self._additive = mi
+        return self._additive
 
     def sprite(self, folder, name, tex, rect, pivot, collision=()):
         """A PaperSprite on rect of tex; pivot and collision rects in the rect's own pixels (y down: Paper2D's
@@ -236,9 +279,36 @@ class Importer:
     def save(self):
         """Writes every created or updated asset (nothing to save in transient mode)."""
         for obj in self.made:
+            self.tag(obj, "import", self.run_id)
             if not unreal.EditorAssetLibrary.save_loaded_asset(obj, False):
                 raise ImportFailed(f"could not save {obj.get_path_name()}")
         say(f"{self.pack}: saved {len(self.made)} asset(s) under {self.dest}")
+        self.prune()
+
+    def prune(self):
+        """Deletes the assets under the pack's folder that an earlier run made (tagged dotwork.import) and this
+        run did not: what the pack no longer has. Untagged assets are left alone."""
+        if self.transient:
+            return
+        mine = {obj.get_path_name().split(".")[0] for obj in self.made}
+        lib = unreal.EditorAssetLibrary
+        gone = []
+        for path in lib.list_assets(self.dest, recursive=True, include_folder=False):
+            path = str(path).split(".")[0]
+            if path in mine:
+                continue
+            obj = lib.load_asset(path)
+            if obj is not None and lib.get_metadata_tag(obj, META + "import"):
+                gone.append((isinstance(obj, unreal.Texture), path))
+        obj = None
+        # users before what they use (sprites and flipbooks before their textures): deleting a texture a loaded
+        # sprite still holds trips an ensure ("failed to unload all packages")
+        for _, path in sorted(gone):
+            unreal.SystemLibrary.collect_garbage()
+            if lib.delete_asset(path):
+                self.pruned.append(path)
+        if self.pruned:
+            say(f"{self.pack}: removed {len(self.pruned)} asset(s) the pack no longer has: {self.pruned[:5]}")
 
     # ---- core kinds ------------------------------------------------------------------------------
     def _sprite(self, a):
@@ -267,10 +337,13 @@ class Importer:
                           f"{rate:g} fps rounds them")
             sheet = c.get("sheet")
             keys = []
+            additive = self.additive_material() if a.get("blend") == "add" else None
             for i, (f, run) in enumerate(zip(frames, runs)):
                 tex = self.texture(sheet or f["file"])
                 sp = self.sprite(f"{self.dest}/Sprites/{safe(a['name'])}", f"S_{a['name']}_{c['name']}_{i:02d}",
                                  tex, f["rect"], c["pivot"])
+                if additive:
+                    sp.set_editor_property("default_material", additive)
                 k = unreal.PaperFlipbookKeyFrame()
                 k.set_editor_property("sprite", sp)
                 k.set_editor_property("frame_run", run)
@@ -279,15 +352,29 @@ class Importer:
                           f"FB_{a['name']}_{c['name']}")
             fb.set_editor_property("frames_per_second", rate)
             fb.set_editor_property("key_frames", keys)
+            if additive:
+                fb.set_editor_property("default_material", additive)
             self.tag(fb, "loop", "true" if c["loop"] else "false")
             self.tag(fb, "blend", a.get("blend", "normal"))
             if a.get("directions"):
                 self.tag(fb, "directions", a["directions"])
+            if a.get("tracer"):                       # spec 1.2.0 (#164): the ribbon a game draws along the real path
+                self.tag(fb, "tracer", a["tracer"])
             clips[c["name"]] = {"flipbook": fb, "sheet": sheet, "files": sorted({f["file"] for f in frames}),
                                 "loop": c["loop"]}
+        light = a.get("light")                        # spec 1.2.0 (#164): the firing light pulse
+        if light:
+            if light.get("clip") not in clips or len(light.get("energy") or []) != len(
+                    next(c for c in a["clips"] if c["name"] == light.get("clip"))["frames"]):
+                raise spec.ManifestError(f"{a['name']}: light names clip {light.get('clip')!r} or its energies do "
+                                        f"not match its frames")
+            light = dict(light, texture=self.texture(light["texture"]))
+            self.tag(clips[light["clip"]]["flipbook"], "light",
+                     {k: v for k, v in a["light"].items()})
         self.records[f"animated_sprite/{a['name']}"] = {"kind": "animated_sprite", "clips": clips,
                                                         "blend": a.get("blend", "normal"),
-                                                        "directions": a.get("directions") or {}}
+                                                        "directions": a.get("directions") or {},
+                                                        "light": light, "tracer": a.get("tracer")}
 
     def _icon(self, a):
         self.records[f"icon/{a['name']}"] = {"kind": "icon",
@@ -307,28 +394,41 @@ class Importer:
                                                  "animation": a.get("animation")}
 
     def _font(self, a):
-        """An offline Font: Characters indexed by code point (no remap table), metrics from the BMFont header.
-        Offline fonts keep one advance per glyph (its width) plus one font-wide Kerning, so a glyph's xoffset and
-        the kerning pairs cannot be kept; the most common gap between glyphs becomes the Kerning."""
-        pages = [self.texture(p) for p in a["pages"]]
+        """An offline Font: Characters indexed by code point (no remap table), metrics from the BMFont header. An
+        offline Font draws a glyph's USize pixels at the pen and advances by USize plus one font-wide Kerning, with
+        no x offset, so the pages are laid out again (dotwork_spec.font_layout): every glyph in a cell of its own,
+        xadvance - kerning wide, its pixels drawn xoffset into the cell. The pen then moves by each glyph's
+        xadvance and the ink lands at its xoffset, as the BMFont says. Kerning pairs still have no place."""
         chars = a["chars"]
-        gaps = [c[7] - c[3] - c[5] for c in chars if c[3] > 0]
-        kerning = max(set(gaps), key=gaps.count) if gaps else 0
+        kerning, cells, sizes, clipped = spec.font_layout(chars)
+        sources = [png.read(spec.resolve(self.base, p)) for p in a["pages"]]
+        if len(sizes) > len(sources):
+            raise RuntimeError(f"a glyph names page {len(sizes) - 1}; the font has {len(sources)} page(s)")
+        saved = unreal.Paths.convert_relative_path_to_full(unreal.Paths.project_saved_dir())
+        folder = os.path.join(saved, *FONT_PAGES_DIR.split("/"), self.pack)
+        os.makedirs(folder, exist_ok=True)
+        pages, files = [], []
+        for i, (pw, ph) in enumerate(sizes):
+            img = png.Image(pw, ph)
+            for code, (page, u, v, cw, h, dx, x, y, w) in cells.items():
+                if page == i and h > 0:
+                    img.paste(sources[i].crop(x, y, w, h), u + dx, v)
+            path = os.path.join(folder, f"{safe(a['name'])}_{i}.png")
+            png.write(path, img)
+            files.append(path)
+            pages.append(self.import_png(path, f"{self.tex_root}/Fonts", f"T_{a['name']}_page{i}"))
         top = max((c[0] for c in chars if c[0] <= 0xFFFF), default=0)
         table = [unreal.FontCharacter() for _ in range(top + 1)]
-        dropped = 0
+        dropped = [c[0] for c in chars if c[0] > 0xFFFF]
         for code, x, y, w, h, xoff, yoff, xadv, page in chars:
             if code > 0xFFFF:
-                dropped += 1
                 continue
-            fc = table[code]
-            if w > 0:
-                fc.set_editor_properties({"start_u": x, "start_v": y, "u_size": w, "v_size": h,
-                                          "vertical_offset": yoff, "texture_index": page})
+            pg, u, v, cw, ch, _, _, _, _ = cells[code]
+            if ch > 0:
+                table[code].set_editor_properties({"start_u": u, "start_v": v, "u_size": cw, "v_size": ch,
+                                                   "vertical_offset": yoff, "texture_index": pg})
             else:                             # a space: advance only, nothing drawn (no height)
-                fc.set_editor_properties({"u_size": max(0, xadv - kerning), "texture_index": page})
-            if xoff or (w > 0 and xadv - w != kerning):
-                dropped += 1
+                table[code].set_editor_properties({"u_size": cw, "texture_index": pg})
         font = self.new(unreal.Font, unreal.FontFactory, f"{self.dest}/Fonts", f"F_{a['name']}")
         font.set_editor_properties({"font_cache_type": unreal.FontCacheType.OFFLINE, "characters": table,
                                     "em_scale": 1.0, "ascent": float(a["base"]),
@@ -347,13 +447,17 @@ class Importer:
                                    "python tools/dev.py exec Content/Python/kit_dotwork/import_dotwork.py")
             self.warn(f"font {a['name']}: pages not attached (the editor blocks `set`; dev.py exec attaches them)")
         if dropped:
-            self.warn(f"font {a['name']}: {dropped} glyph(s) keep their pixels but not their exact offset or advance "
-                      "(an offline Font has neither per glyph)")
+            self.warn(f"font {a['name']}: {len(dropped)} glyph(s) past U+FFFF left out (an offline Font indexes "
+                      "16-bit code points)")
+        if clipped:
+            self.warn(f"font {a['name']}: {len(clipped)} glyph(s) with a negative xoffset start at the pen instead "
+                      f"({clipped[:6]}; an offline Font cannot draw left of it)")
         if a.get("kerning"):
             self.warn(f"font {a['name']}: {len(a['kerning'])} kerning pair(s) dropped (offline Fonts have none)")
         self.tag(font, "tint", "true" if a.get("tint", True) else "false")
         self.records[f"font/{a['name']}"] = {"kind": "font", "font": font, "codes": sorted(c[0] for c in chars),
-                                             "pages": len(pages)}
+                                             "pages": len(pages), "page_files": files,
+                                             "source": {c[0]: c[1:4] for c in chars}}
 
     def _ui_kit(self, a):
         parts = {}
@@ -403,8 +507,9 @@ class Importer:
                 if i >= len(data):
                     raise RuntimeError(f"tile {[at['id'], t['col'], t['row']]} lies outside {at['image']}")
                 md = data[i]
-                if t.get("surface"):
-                    md.set_editor_property("user_data_name", t["surface"])
+                user = spec.tile_user_data(t)       # "surface;anim=<frames>@<fps>" (#286)
+                if user:
+                    md.set_editor_property("user_data_name", user)
                 if t.get("collision"):
                     cd = md.get_editor_property("collision_data")
                     cd.set_editor_property("geometry_type", unreal.SpritePolygonMode.FULLY_CUSTOM)
@@ -416,8 +521,9 @@ class Importer:
             self.tag(ts, "atlas", {"tileset": a["name"], "id": at["id"], "role": at.get("role", "")})
             atlases[at["id"]] = {"tileset": ts, "across": across, "tile_size": [tw, th], "offset": [dx, dy]}
         if animated:
-            self.warn(f"tileset {a['name']}: {len(animated)} animated tile(s) show their first frame (Paper2D tile "
-                      "maps have no tile animation; the frames are in metadata dotwork.animated_tiles)")
+            self.warn(f"tileset {a['name']}: {len(animated)} animated tile(s): a tile map plays them only with "
+                      "GameKit's UDotworkTileAnimator on its actor (Paper2D has no tile animation; elsewhere they "
+                      "show their first frame); each tile's user data says anim=<frames>@<fps>")
             for info in atlases.values():
                 self.tag(info["tileset"], "animated_tiles", animated)
         if odd_origins:
@@ -630,7 +736,7 @@ def loaded(imp):
                 clips[name] = {"frames": len(rects), "rects": rects, "seconds": secs,
                                "length": r6(fb.get_total_duration()), "loop": c["loop"],
                                "pivot": [r6(piv.x - uv.x), r6(piv.y - uv.y)], "texture": texture}
-            out[key] = {"blend": rec["blend"], "clips": clips, "directions": rec["directions"]}
+            out[key] = {"blend": _blend_back(rec), "clips": clips, "directions": rec["directions"]}
         elif kind == "sprite":
             sp = rec["sprite"]
             uv, dim = _uvdim(sp)
@@ -667,8 +773,11 @@ def loaded(imp):
                 for md in info["tileset"].get_editor_property("per_tile_data"):
                     coll += bool(md.get_editor_property("collision_data").get_editor_property("shapes"))
             a = rec["doc"]
+            anim = sum(spec.parse_tile_user_data(md.get_editor_property("user_data_name"))[1] > 1
+                       for info in rec["atlases"].values()
+                       for md in info["tileset"].get_editor_property("per_tile_data"))
             out[key] = {"tile_size": a["tile_size"], "shape": a["shape"], "tiles": rec["tiles"],
-                        "collision_tiles": coll, "animated_tiles": rec["animated"], "terrains": rec["terrains"],
+                        "collision_tiles": coll, "animated_tiles": anim, "terrains": rec["terrains"],
                         "masks": rec["masks"]}
         elif kind == "map":
             out[key] = _map_back(rec)
@@ -685,19 +794,45 @@ def loaded(imp):
     return out
 
 
+def _blend_back(rec):
+    """"add" when every clip's flipbook draws with an additive material (MI_DotworkAdditive), else "normal"."""
+    for c in rec["clips"].values():
+        mat = c["flipbook"].get_editor_property("default_material")
+        if mat is None or mat.get_blend_mode() != unreal.BlendMode.BLEND_ADDITIVE:
+            return "normal"
+    return "add" if rec["clips"] else "normal"
+
+
 def _font_back(rec):
     font = rec["font"]
     chars = font.get_editor_property("characters")
     kerning = font.get_editor_property("kerning")
     present = [i for i, c in enumerate(chars) if c.get_editor_property("u_size") or c.get_editor_property("v_size")]
 
+    pages = [png.read(f) for f in rec.get("page_files", [])]
+
+    def ink_left(page, u, v, w, h):
+        """The first column with ink in a glyph's cell of the page Unreal draws: where the glyph lands right of
+        the pen (its xoffset, drawn into the page by font_layout)."""
+        if page >= len(pages):
+            return 0
+        cell = pages[page].crop(u, v, w, h)
+        for col in range(w):
+            if any(cell.pixel(col, row)[3] for row in range(h)):
+                return col
+        return 0
+
     def row(i):
-        """[id, x, y, w, h, xoffset, yoffset, xadvance, page] as the BMFont table has it; xoffset is always 0 (an
-        offline Font has none) and a glyph without height (a space) has width 0 and only its advance."""
+        """[id, x, y, w, h, xoffset, yoffset, xadvance, page] as the BMFont table has it: h, yoffset, xadvance (the
+        cell plus the Kerning, how far Unreal moves the pen) and page from the Font; xoffset from the ink in the
+        cell Unreal draws; x, y and w from the BMFont (where the glyph was before its page was laid out again). A
+        glyph without height (a space) has width 0 and only its advance."""
         c = chars[i]
         u, v = c.get_editor_property("u_size"), c.get_editor_property("v_size")
-        return [i, c.get_editor_property("start_u"), c.get_editor_property("start_v"), u if v else 0, v, 0,
-                c.get_editor_property("vertical_offset"), u + kerning, c.get_editor_property("texture_index")]
+        su, sv, page = c.get_editor_property("start_u"), c.get_editor_property("start_v"), c.get_editor_property("texture_index")
+        x, y, w = rec.get("source", {}).get(i, (su, sv, u))
+        return [i, x, y, w if v else 0, v, ink_left(page, su, sv, u, v) if v else 0,
+                c.get_editor_property("vertical_offset"), u + kerning, page]
 
     ascent, descent = font.get_editor_property("ascent"), font.get_editor_property("descent")
     sample = row(65) if 65 in present else (row(present[0]) if present else None)

@@ -30,6 +30,10 @@
 //           keep-or-revert confirm on a real-time clock; Back warns once about unapplied Display changes (#308)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the confirm is open, Keep saves (a mode
 //           the screen cannot show never reaches settings.json)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+//           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): a dimmed Apply is not focusable, like its place in the
+//           focus grid (the access sweep found a focusable Apply no key could reach, #308)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -67,6 +71,8 @@ namespace graveyard_shift.Shell.Screens
             new List<object> { 2560.0, 1440.0 }, new List<object> { 3840.0, 2160.0 },
         };
         public const float REBIND_TIMEOUT_S = 6f;
+        public const bool SHOW_BLOOD_SETTING = true;       // false: a game with no blood hides the Blood row (SOP-18)
+        public const bool SHOW_LANGUAGE_SETTING = true;    // false: no strong language hides Clean language (SOP-19)
         private const float LABEL_MIN_WIDTH = 160f;
         private const float BIND_MIN_WIDTH = 150f;
 
@@ -418,6 +424,7 @@ namespace graveyard_shift.Shell.Screens
             bool applyOn = _tab == "display" && _staging.HasPending;
             _apply.Element.style.display = _tab == "display" ? DisplayStyle.Flex : DisplayStyle.None;
             _apply.Element.style.opacity = applyOn ? 1f : 0.45f;
+            _apply.Element.focusable = applyOn;        // out of the grid: not a focus target either (sweep, #308)
             switch (_tab)
             {
                 case "display":
@@ -432,6 +439,17 @@ namespace graveyard_shift.Shell.Screens
                     foreach (GameSettings.FieldInfo field in GameSettings.Fields(TAB_SECTIONS[_tab]))
                     {
                         AddField(field);
+                    }
+                    if (_tab == "access")                  // what the game shows (content.*) sits with access
+                    {
+                        foreach (GameSettings.FieldInfo field in GameSettings.Fields("content"))
+                        {
+                            if ((field.Field == "blood" && SHOW_BLOOD_SETTING)
+                                || (field.Field == "clean_language" && SHOW_LANGUAGE_SETTING))
+                            {
+                                AddField(field);
+                            }
+                        }
                     }
                     break;
                 case "controls":

@@ -9,6 +9,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): a terrain cell without a tile is a problem in
 //           every mode (spec 1.1.0 defines the corners4 key); a normal map must be its target's size (#285)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a glyph is checked against its own page (#286)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { existsSync, openSync, readFileSync, readSync, closeSync } from "node:fs";
@@ -67,8 +68,12 @@ export function problems(plan: DotworkPlan): string[] {
     for (const o of m.objects) if (!plan.sprites.has(o.asset) && !plan.animatedSprites.has(o.asset)) out.push(`map ${m.name}: object ${o.asset} is not an asset of this pack`);
   }
   for (const f of plan.fonts.values()) {
-    const s = sizeOf(f.texture);
-    for (const c of f.chars) if (s && c[8] === 0 && !fits([c[1], c[2], c[3], c[4]], s)) out.push(`font ${f.name}: glyph ${c[0]} leaves page 0`);
+    for (const c of f.chars) {
+      const page = f.pages[c[8]];
+      const s = page ? sizeOf(page) : null;
+      if (!page) out.push(`font ${f.name}: glyph ${c[0]} names page ${c[8]}, which the font does not have`);
+      else if (s && !fits([c[1], c[2], c[3], c[4]], s)) out.push(`font ${f.name}: glyph ${c[0]} leaves page ${c[8]}`);
+    }
   }
   for (const k of plan.uiKits.values()) {
     for (const p of k.parts) {

@@ -1,0 +1,16 @@
+{
+ "name": "fonts_cyrillic",
+ "_comment": "The dialogue glyph font with Cyrillic, without a model: dialogue_latin plus U+0400-045F, Ukrainian GHE WITH UPTURN and the numero sign (Russian, Ukrainian, Belarusian, Bulgarian, Serbian, Macedonian), with the coverage check against strings_cyrillic.csv (a Godot translation CSV, one pangram per language): the pack fails, naming language and string id, if a string uses a character the font lacks. Authored: written with Claude (Opus 5.5, claude-opus-5-5).",
+ "fonts": [
+  {
+   "name": "dialogue_cyrillic",
+   "glyphs": "glyphs/dialogue_cyrillic.txt",
+   "scale": 2,
+   "effect": "shadow",
+   "check": [
+    "tools/art/dotwork/examples/strings_cyrillic.csv",
+    "tools/art/dotwork/examples/strings_latin.csv"
+   ]
+  }
+ ]
+}

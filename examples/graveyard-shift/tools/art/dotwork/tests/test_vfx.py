@@ -9,6 +9,8 @@
 # Usage   : python -I -B tools/art/dotwork/tests/test_vfx.py
 # Exit    : 0 all pass, 1 a case failed
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects (#164): muzzle flash frames and
+#           pivot, the light pulse's energies, the tracer's scene and field, debris colours sampled from a surface
 # ---------------------------------------------------------------------------
 import contextlib
 import io
@@ -28,9 +30,10 @@ from PIL import Image  # noqa: E402
 
 import fcore  # noqa: E402
 
-SPRITE_KINDS = ("arrow", "bolt", "orb", "dust", "footstep", "landing", "pickup_sparkle", "level_up")
-PARTICLE_KINDS = ("dust_particles", "sparkle_particles", "ember_particles")
-PROJECTILES = ("arrow", "bolt", "orb")
+SPRITE_KINDS = ("arrow", "bolt", "orb", "dust", "footstep", "landing", "pickup_sparkle", "level_up", "muzzle_flash",
+                "muzzle_light", "tracer")
+PARTICLE_KINDS = ("dust_particles", "sparkle_particles", "ember_particles", "debris")
+PROJECTILES = ("arrow", "bolt", "orb", "tracer")
 
 
 def read(path):
@@ -359,6 +362,111 @@ class VfxExam(unittest.TestCase):
         keys = dotwork.entry_keys("vfx")
         self.assertTrue({"kind", "size", "frames", "fps", "color", "colors", "trail", "amount", "one_shot"} <= keys)
 
+    # ---- shooting effects (#164)
+    def manifest_asset(self, kind, name):
+        import assetspec
+        doc = json.loads(read(os.path.join(self.tmp, "assets", "dotwork", "vfx.assets.json")))
+        self.assertEqual(assetspec.check(doc, os.path.join(self.tmp, "assets")), [])
+        return next(a for a in doc["assets"] if a["kind"] == kind and a["name"] == name)
+
+    def test_muzzle_flash_frames_pivot_and_blend(self):
+        v = self.lane()
+        ramp = v.ramp_of({"name": "m"}, "muzzle_flash")
+        for sparks in (False, True):
+            fr = v.frames("muzzle_flash", 16, 4, 7601, ramp, sparks=sparks)
+            lit = [int((f[..., 3] > 0).sum()) for f in fr]
+            self.assertEqual(len(fr), 4)
+            self.assertTrue(lit[0] > lit[1] > lit[2] > 0 and lit[3] == 0, lit)       # 3 shrinking frames, then empty
+            cols = np.nonzero(fr[0][..., 3].max(0))[0]
+            self.assertEqual(int(cols.min()), 0)                                      # it starts at the barrel tip
+            self.assertGreater(int(cols.max()), 10)                                   # and points right
+        plain = v.frames("muzzle_flash", 24, 4, 7601, ramp)[1]
+        sparky = v.frames("muzzle_flash", 24, 4, 7601, ramp, sparks=True)[1]
+        self.assertGreater(int((sparky[..., 3] > 0).sum()), int((plain[..., 3] > 0).sum()))
+        code, out = self.pack([{"name": "muzzle", "kind": "muzzle_flash"}])
+        self.assertEqual(code, 0, out)
+        a = self.manifest_asset("animated_sprite", "vfx_muzzle")
+        clip = a["clips"][0]
+        self.assertEqual((a["blend"], clip["name"], clip["loop"], clip["fps"], len(clip["frames"]), clip["pivot"]),
+                         ("add", "play", False, 30, 4, [0, 8]))
+        scn = read(os.path.join(self.art, "muzzle", "vfx_muzzle.tscn"))
+        self.assertIn("offset = Vector2(8, 0)", scn)                                  # the barrel tip on the origin
+        self.assertIn("mat_additive.tres", scn)
+
+    def test_muzzle_light_pulse_energies_and_light_field(self):
+        v = self.lane()
+        code, out = self.pack([{"name": "flash_light", "kind": "muzzle_light"}])
+        self.assertEqual(code, 0, out)
+        a = self.manifest_asset("animated_sprite", "vfx_flash_light")
+        light = a["light"]
+        self.assertEqual(light["clip"], "play")
+        self.assertEqual(light["energy"], [round(v.LIGHT_PEAK * e, 4) for e in (1.0, 2 / 3, 1 / 3, 0.0)])
+        self.assertEqual(len(light["energy"]), len(a["clips"][0]["frames"]))
+        with Image.open(os.path.join(self.tmp, "assets", *light["texture"].split("/"))) as im:
+            self.assertEqual(im.size, (v.LIGHT_TEXTURE, v.LIGHT_TEXTURE))
+            px = np.array(im)
+        c = v.LIGHT_TEXTURE // 2
+        self.assertGreater(px[c, c, 3], 240)
+        self.assertEqual(int(px[0, 0, 3]), 0)                                          # falls off to nothing
+        scn = read(os.path.join(self.art, "flash_light", "vfx_flash_light.tscn"))
+        self.assertIn('type="PointLight2D"', scn)
+        self.assertIn('NodePath("Light:energy")', scn)
+        self.assertIn("1.2, 0.8, 0.4, 0", scn)                                         # the pulse keys = energies
+
+    def test_tracer_trail_mode_scene_and_field(self):
+        v = self.lane()
+        code, out = self.pack([{"name": "round", "kind": "tracer"},
+                               {"name": "homing", "kind": "bolt", "trail": "tracer", "length": 80, "spacing": 3}])
+        self.assertEqual(code, 0, out)
+        for name, size, length, spacing in (("round", 12, 48, 4.0), ("homing", 24, 80, 3.0)):
+            a = self.manifest_asset("animated_sprite", f"vfx_{name}")
+            t = a["tracer"]
+            self.assertEqual((t["length"], t["spacing"], t["taper"]), (length, spacing, v.TRACER_TAPER))
+            self.assertEqual(t["steps"][0]["rgba"][3], 0.0)                            # the tail is transparent
+            self.assertEqual([s["at"] for s in t["steps"]], sorted(s["at"] for s in t["steps"]))
+            self.assertEqual({c["name"] for c in a["clips"]}, {"fly", "trail"})
+            trail = block(read(os.path.join(self.art, name, f"vfx_{name}.tscn")), r'name="Trail"')
+            self.assertIn("top_level = true", trail)                                   # world space: the real path
+            self.assertIn('width_curve = SubResource("Curve_taper")', trail)
+            self.assertIsNone(prop(trail, "points"))                                   # the game feeds the points
+        bad, out = self.pack([{"name": "x", "kind": "arrow", "trail": "line", "length": 40}])
+        self.assertEqual(bad, 2, out)
+        self.assertIn("length is for trail tracer", out)
+
+    def test_debris_palette_from_the_hit_surface(self):
+        v = self.lane()
+        tile = np.zeros((8, 16, 4), np.uint8)
+        tile[:, :8] = (120, 110, 100, 255)                                            # stone on the left half ...
+        tile[2:4, :8] = (60, 55, 50, 255)
+        tile[:, 8:] = (150, 90, 40, 255)                                              # ... wood on the right
+        tile[0, 15] = (255, 0, 255, 0)                                                # transparent: never a colour
+        os.makedirs(os.path.join(self.tmp, "assets", "art", "tiles"), exist_ok=True)
+        Image.fromarray(tile).save(os.path.join(self.tmp, "assets", "art", "tiles", "wall.png"))
+        ramp = v.sample_ramp("d", "assets/art/tiles/wall.png", [0, 0, 8, 8], self.tmp)
+        self.assertEqual([tuple(int(x) for x in c) for c in ramp], [(60, 55, 50), (120, 110, 100)])   # dark first
+        wood = v.sample_ramp("d", "assets/art/tiles/wall.png", [8, 0, 8, 8], self.tmp)
+        self.assertEqual([tuple(int(x) for x in c) for c in wood], [(90, 54, 24), (150, 90, 40)])     # one colour
+        code, out = self.pack([{"name": "stone_chips", "kind": "debris", "sample": "assets/art/tiles/wall.png",
+                                "sample_rect": [0, 0, 8, 8]}])
+        self.assertEqual(code, 0, out)
+        a = self.manifest_asset("particles", "vfx_stone_chips_particles")
+        em = a["emitter"]
+        self.assertEqual((em["one_shot"], em["explosiveness"], em["direction"]), (True, 1.0, [1, 0]))
+        self.assertGreater(em["gravity_px_s2"][1], 0)                                  # chips fall
+        self.assertEqual(em["palette_from"], {"source": "assets/art/tiles/wall.png", "rect": [0, 0, 8, 8]})
+        self.assertEqual({tuple(s["rgba"][:3]) for s in em["colour_steps"]}, {(60, 55, 50), (120, 110, 100)})
+        for spec, why in (({"name": "x", "kind": "debris", "sample": "../outside.png"}, "outside the game"),
+                          ({"name": "x", "kind": "debris", "sample": "assets/art/tiles/wall.png",
+                            "sample_rect": [10, 0, 8, 8]}, "sample_rect"),
+                          ({"name": "x", "kind": "debris", "sample": "assets/art/tiles/wall.png", "colors": ["#000000",
+                                                                                                         "#ffffff"]},
+                           "sample picks the colours"),
+                          ({"name": "x", "kind": "dust", "sample": "assets/art/tiles/wall.png"}, "sample is for"),
+                          ({"name": "x", "kind": "debris", "sample": "Q:/elsewhere/wall.png"}, "outside the game")):
+            code, out = self.pack([spec])
+            self.assertEqual(code, 2, (spec, out))
+            self.assertIn(why, out)
+
     # ---- the shipped example
     def test_example_spec(self):
         self.lane()
@@ -370,7 +478,7 @@ class VfxExam(unittest.TestCase):
         self.assertNotIn("is not read by Dotwork", err.getvalue())
         kinds = {e.get("kind", e["name"]) for e in spec["vfx"]}
         self.assertEqual(kinds, set(SPRITE_KINDS) | set(PARTICLE_KINDS))
-        self.assertEqual({e.get("trail") for e in spec["vfx"]} - {None}, {"line", "particles"})
+        self.assertEqual({e.get("trail") for e in spec["vfx"]} - {None}, {"line", "particles", "tracer"})
         text = read(path).lower()
         self.assertNotIn(chr(0x2014), text)                                                    # no em dash
         self.assertNotIn(":\\", text)                                                          # no local paths

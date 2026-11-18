@@ -28,12 +28,17 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): setDisplay() (the Display tab's Apply and its revert,
 //           with display log lines) and the open settings screen's staging (#308); onLook() listeners for a game
 //           HUD that follows ui_scale and text_scale (#309)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/*.json) and the
+//           clean-language switch reach the translator (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the platform layer (#84): `platform` (null backend;
+//           a browser has no Steam), saved() after each save, flush on pause and quit, onOverlay() for the pause hook
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "../core/atomicFile";
 import type { DisplayCall, DisplayStaging } from "../core/displayStaging";
 import { deepCopy } from "../core/jsonUtil";
-import { I18n, PSEUDO_LOCALE, type Tables } from "../core/i18n";
+import { I18n, PSEUDO_LOCALE, matureWords, type Tables } from "../core/i18n";
 import { Log } from "../core/log";
+import { PlatformService } from "../core/platform";
 import { SaveStore } from "../core/saveStore";
 import { defaultSettings, settingsLoad, settingsText, telemetryAllowed, type Settings } from "../core/settings";
 import { DEFAULT_DATA_PREFIX, MemoryStore, WebStorageStore, dataPrefix, type TextStore } from "../core/textStore";
@@ -88,6 +93,20 @@ function loadTables(): Tables {
   return tables;
 }
 
+/** The game's word lists for the clean-language setting (#207): data/i18n/mature/<locale>.json. */
+function loadMature(): Record<string, string[]> {
+  const files = import.meta.glob("../../data/i18n/mature/*.json", { eager: true, query: "?raw", import: "default" }) as Record<string, string>;
+  const out: Record<string, string[]> = {};
+  for (const [path, text] of Object.entries(files)) out[path.replace(/^.*\//, "").replace(/\.json$/, "")] = matureWords(text);
+  return out;
+}
+
+/** data/achievements.json as text, or null when the game has none (the platform layer then does nothing). */
+function achievementsText(): string | null {
+  const files = import.meta.glob("../../data/achievements.json", { eager: true, query: "?raw", import: "default" }) as Record<string, string>;
+  return Object.values(files)[0] ?? null;
+}
+
 function openStore(): TextStore {
   try {
     const s = new WebStorageStore(window.localStorage, dataPrefix(location.search));
@@ -123,6 +142,8 @@ export class Shell {
   readonly input: ShellInput;
   readonly telemetry: Telemetry;
   readonly saves: SaveStore;
+  /** Achievements, stats, presence, cloud hooks (docs/PLATFORM.md). The null backend: a browser has no Steam. */
+  readonly platform: PlatformService;
   readonly subtitles: SubtitleBar;
   /** Cognitive access (#167): the goal "What now?" shows, and every subtitle line shown (newest last). */
   objective = "";
@@ -183,6 +204,7 @@ export class Shell {
     const { settings, problems } = settingsLoad(text);
     this.settings = settings;
     this.i18n = new I18n(loadTables(), settings.language);
+    this.i18n.mature = loadMature();
     if (text !== null && problems.length) {
       Log.warn("settings", `${SETTINGS_FILE} repaired (${problems.join(", ")})`);
       queueMicrotask(() => this.toast("toast.repaired", { n: problems.length }));
@@ -199,7 +221,8 @@ export class Shell {
       if (code === "F8" && this.debugBuild) this.bugReport();
     };
     this.telemetry = new Telemetry(this.store, () => telemetryAllowed(this.settings));
-    this.saves = new SaveStore(this.store);
+    this.platform = new PlatformService(this.store, achievementsText());
+    this.saves = new SaveStore(this.store, (name) => this.platform.saved(name));
 
     const root = el("div");
     root.id = "shell";
@@ -246,6 +269,7 @@ export class Shell {
     const dt = this.lastT ? Math.min((t - this.lastT) / 1000, MAX_DT) : 0;
     this.lastT = t;
     this.input.poll();
+    this.platform.update();
     this.subtitles.update(dt);
     this.top?.tick?.(dt);
     if (t - this.lastFlush > LOG_FLUSH_MS) {
@@ -385,6 +409,7 @@ export class Shell {
     document.documentElement.classList.toggle("reduce-motion", s.access.reduce_motion);
     document.documentElement.classList.toggle("still", !!this.drive); // no blinking in scripted runs: stable screenshots
     this.i18n.locale = this.params.get("locale") || s.language;
+    this.i18n.clean = s.content.clean_language; // #207: @clean lines and the word mask
     document.documentElement.lang = this.i18n.locale === PSEUDO_LOCALE ? "en" : this.i18n.locale;
     const look = [s.display.ui_scale, s.access.text_scale, s.access.readable_font, s.access.line_spacing].join("|");
     if (look !== this.look) {
@@ -479,6 +504,12 @@ export class Shell {
     if (!this.scene || !this.host || this.topId === "pause") return;
     this.host.pause(this.scene);
     this.push(screens.pause(this));
+    this.platform.flush(); // a checkpoint (PLATFORM.md section 3)
+  }
+
+  /** A store overlay opened (active) or closed: over gameplay it opens the pause menu; closing never resumes. */
+  onOverlay(active: boolean): void {
+    if (this.platform.overlay(active, this.topId) === "pause") this.pauseGame();
   }
 
   resumeGame(): void {
@@ -507,6 +538,7 @@ export class Shell {
   quit(): void {
     this.stopGame();
     this.telemetry.event("quit");
+    this.platform.flush();
     this.log.flush();
     this.reset(screens.quit(this));
     Log.info("core", "QUIT");

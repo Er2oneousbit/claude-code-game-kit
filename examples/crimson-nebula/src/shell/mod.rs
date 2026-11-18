@@ -31,6 +31,12 @@
 //           confirm counted on the wall clock, Back that warns once, #308); the HudScale resource for a game HUD (#309)
 //           2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): nothing is saved while the display confirm is open, Keep saves;
 //           Back's unapplied warning stays up while the next Back discards (it timed out after MESSAGE_S)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists load with the tables, t_args() and
+//           tn() honour content.clean_language, blood_enabled() (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the word lists sit behind set_mature(), and t_args() and
+//           tn() mask with the chain's words folded once per locale and list (word_set) (#207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): shell.platform (docs/PLATFORM.md, #84): save_slot()
+//           calls its saved(), the pause screen and quit flush it, on_overlay() opens the pause menu over play
 // ---------------------------------------------------------------------------
 pub mod bug_report;
 pub mod crash;
@@ -59,6 +65,7 @@ use crate::logic::bindings::{self, Bindings};
 use crate::logic::display_staging::{self, Calls, DisplayStaging};
 use crate::logic::hud_scale;
 use crate::logic::i18n::{self, Tables};
+use crate::logic::platform::{self, PlatformService};
 use crate::logic::settings;
 use narrator::Narrator;
 use screens::{Row, RowKind};
@@ -204,6 +211,10 @@ pub struct Shell {
     pub store: Store,
     pub settings: Value,
     pub tables: Tables,
+    /// data/i18n/mature/<locale>.json: the clean-language word lists (#207); set_mature() changes them.
+    mature: BTreeMap<String, Vec<String>>,
+    /// The chain's words folded once: (locale, the fold); set_mature() empties it.
+    word_cache: std::sync::Mutex<Option<(String, std::sync::Arc<i18n::WordSet>)>>,
     /// --locale: beats the settings until the player picks a language.
     pub locale_override: Option<String>,
     pub presets: Value,
@@ -256,6 +267,9 @@ pub struct Shell {
     pub confirm_focus: usize,
     /// The wall clock at the last frame: the confirm counts real seconds (smoke runs step the game's clock by hand).
     real_last: Option<Instant>,
+    /// Achievements, stats, presence and cloud hooks (docs/PLATFORM.md): the null backend unless the game was
+    /// built with the `steam` feature and Steam answered.
+    pub platform: PlatformService,
 }
 
 /// The player's text size for a game HUD (#309): display.ui_scale and access.text_scale. The shell writes it only
@@ -304,6 +318,7 @@ impl HudScale {
 impl Shell {
     pub fn new(cfg: &GameConfig) -> Shell {
         let store = Store::new(cfg.data_dir.clone());
+        let cfg_data_dir = store.data_dir.clone();
         let (settings, problems) = settings::load_file(&store.settings_path());
         for p in &problems {
             if p != "unreadable" || store.settings_path().exists() {
@@ -312,6 +327,8 @@ impl Shell {
         }
         let mut shell = Shell {
             tables: load_tables(&store),
+            mature: load_mature(&store),
+            word_cache: std::sync::Mutex::new(None),
             presets: serde_json::from_str(store::BUILTIN_PRESETS).unwrap_or(Value::Null),
             colours: serde_json::from_str(store::BUILTIN_COLOURS).unwrap_or(Value::Null),
             store,
@@ -348,7 +365,17 @@ impl Shell {
             staging: DisplayStaging::default(),
             confirm_focus: 0,
             real_last: None,
+            platform: PlatformService::new(&cfg_data_dir, None, None, platform::CLOUD_MODE),
         };
+        // data/achievements.json is optional: without it every call is "unknown" and nothing is written. The `steam`
+        // feature and Steam running: its backend, with or without achievements (presence, the overlay and cloud saves
+        // need it too; docs/PLATFORM.md section 6); else the null backend
+        let text = shell.store.read_data(platform::ACHIEVEMENTS_FILE);
+        let defs = platform::achievements_load(text.as_deref()).0;
+        let backend = crate::logic::platform_steam::make(&defs, &cfg_data_dir, cfg.automated);
+        if text.is_some() || backend.is_some() {
+            shell.platform = PlatformService::new(&cfg_data_dir, text.as_deref(), backend, platform::CLOUD_MODE);
+        }
         if let Some(text) = shell.store.read_data("input/presets.json")
             && let Ok(v) = serde_json::from_str::<Value>(&text)
         {
@@ -382,10 +409,65 @@ impl Shell {
 
     pub fn t_args(&self, key: &str, args: &[(&str, &str)]) -> String {
         let lang = self.language();
+        let clean = settings::clean_language(&self.settings); // #207: @clean lines, then the word mask
         if lang == "pseudo" {
-            return i18n::pseudo(&i18n::tr(&self.tables, "en", key, args));
+            return i18n::pseudo(&i18n::tr_clean(&self.tables, "en", key, args, clean, &[]));
         }
-        i18n::tr(&self.tables, &lang, key, args)
+        if !clean {
+            return i18n::tr_clean_set(&self.tables, &lang, key, args, false, &i18n::WordSet::new());
+        }
+        i18n::tr_clean_set(&self.tables, &lang, key, args, true, &self.word_set())
+    }
+
+    /// key.<CLDR category of n> in the current language, each locale of the chain with its own rule.
+    pub fn tn(&self, key: &str, n: i64) -> String {
+        let lang = self.language();
+        let clean = settings::clean_language(&self.settings);
+        if lang == "pseudo" {
+            return i18n::pseudo(&i18n::tr_plural_clean(&self.tables, "en", key, n, &[], clean, &[]));
+        }
+        if !clean {
+            return i18n::tr_plural_clean_set(&self.tables, &lang, key, n, &[], false, &i18n::WordSet::new());
+        }
+        i18n::tr_plural_clean_set(&self.tables, &lang, key, n, &[], true, &self.word_set())
+    }
+
+    /// The word lists per locale (data/i18n/mature/<locale>.json).
+    pub fn mature(&self) -> &BTreeMap<String, Vec<String>> {
+        &self.mature
+    }
+
+    /// New word lists; the folded cache goes with the old ones.
+    pub fn set_mature(&mut self, lists: BTreeMap<String, Vec<String>>) {
+        self.mature = lists;
+        *self.word_cache.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    }
+
+    /// The chain's words folded once per locale and list (what t_args and tn mask with).
+    pub fn word_set(&self) -> std::sync::Arc<i18n::WordSet> {
+        let lang = self.language();
+        let mut cache = self.word_cache.lock().unwrap_or_else(|e| e.into_inner());
+        match cache.as_ref() {
+            Some((loc, set)) if *loc == lang => set.clone(),
+            _ => {
+                let set = std::sync::Arc::new(i18n::compile_words(&self.words()));
+                *cache = Some((lang, set.clone()));
+                set
+            }
+        }
+    }
+
+    /// The word lists of every locale in the current chain (a fallback line can come from any of them).
+    pub fn words(&self) -> Vec<String> {
+        i18n::locale_chain(&self.language())
+            .iter()
+            .flat_map(|loc| self.mature.get(loc).cloned().unwrap_or_default())
+            .collect()
+    }
+
+    /// #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).
+    pub fn blood_enabled(&self) -> bool {
+        settings::blood_enabled(&self.settings)
     }
 
     /// A value the game made up (a number, a name) through the "value.raw" template, so the pseudo check sees it.
@@ -694,6 +776,9 @@ impl Shell {
         screens::enter(self, &mut state);
         self.stack.push(state);
         info!("shell: screen {}", name.as_str());
+        if name == ScreenName::Pause {
+            self.platform.flush(); // a checkpoint (docs/PLATFORM.md)
+        }
         self.screen_changed = true;
         self.version += 1;
     }
@@ -812,7 +897,25 @@ impl Shell {
 
     pub fn quit(&mut self) {
         info!("shell: quit");
+        self.platform.flush();
         self.quit_requested = true;
+    }
+
+    /// A save slot in the data folder ("save_1.json") whose save reaches platform.saved (the cloud hook).
+    pub fn save_slot(&mut self, file_name: &str, data: &Value) -> Result<(), String> {
+        let path = self.store.data_dir.join(file_name);
+        let platform = &mut self.platform;
+        crate::logic::save_store::write_then(&path, data, |name| {
+            platform.saved(name);
+        })
+    }
+
+    /// A store overlay opened (true) or closed: over play it opens the pause menu; closing never resumes.
+    pub fn on_overlay(&mut self, active: bool) {
+        let screen = self.top_name().map(|n| n.as_str()).unwrap_or("");
+        if self.platform.overlay(active, screen) == "pause" {
+            self.push(ScreenName::Pause);
+        }
     }
 
     /// The loading screen, then `next` (Play or the juice demo).
@@ -1048,6 +1151,21 @@ fn load_tables(store: &Store) -> Tables {
     tables
 }
 
+/// The clean-language word lists: the built-in one, with data/i18n/mature/*.json on top (#207).
+fn load_mature(store: &Store) -> BTreeMap<String, Vec<String>> {
+    let mut out = BTreeMap::new();
+    let mut sources: Vec<(String, String)> = store::BUILTIN_MATURE
+        .iter()
+        .map(|(l, t)| (l.to_string(), t.to_string()))
+        .collect();
+    sources.extend(store.data_mature());
+    for (locale, text) in sources {
+        let value = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
+        out.insert(locale, i18n::mature_words(&value));
+    }
+    out
+}
+
 // ---- The plugin ------------------------------------------------------------------------------------------------
 pub struct ShellPlugin;
 
@@ -1074,6 +1192,9 @@ impl Plugin for ShellPlugin {
 /// One shell frame: timers, the pending presses, auto-repeat, the narrator.
 fn shell_frame(time: Res<Time>, mut shell: ResMut<Shell>, mut active: ResMut<GameActive>) {
     let dt = time.delta_secs_f64();
+    if let Some(active) = shell.platform.update() {
+        shell.on_overlay(active); // the store overlay opened or closed (a Steam build)
+    }
     shell.game_pressed.clear();
     shell.tick(dt);
     // the display confirm runs on the wall clock (#308): not game time, and not the fixed tick a smoke run steps

@@ -13,6 +13,7 @@
 // Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): the maps' placed cells and
 //           centres, the corners4 and roll vectors, stamps, the extra kinds loaded
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): a normal map without a size loads
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects' light and tracer (spec 1.2.0)
 // ---------------------------------------------------------------------------
 /// <reference types="node" />
 import { readFileSync } from "node:fs";
@@ -150,6 +151,18 @@ describe("Dotwork golden fixture (data/golden/dotwork/)", () => {
     expect(nm.target).toBe(pack.sprites.get("crate")!.image); // it lights the crate
     expect(pack.dataImages.has(nm.image) && !pack.dataImages.has(nm.target)).toBe(true);
     expect(pack.pictures.get("logo_golden")!.size).toEqual(pngSize(pack.pictures.get("logo_golden")!.image));
+  });
+
+  it("keeps the shooting effects' light and tracer for the game (spec 1.2.0, #164)", () => {
+    const muzzle = pack.animated.get("vfx_muzzle")!;
+    expect([muzzle.blend, muzzle.clips.get("play")!.pivot]).toEqual(["add", [0, 4]]);
+    const light = pack.animated.get("vfx_muzzle_light")!.light!;
+    expect(light.energy).toEqual([1.2, 0.6, 0]);
+    expect(pack.images.has(light.texture)).toBe(true);
+    const tracer = pack.animated.get("vfx_tracer")!.tracer!;
+    expect([tracer.spacing, tracer.length, tracer.steps[0].at]).toEqual([4, 32, 0]);
+    expect(pack.animated.get("hero")!.light).toBeNull();
+    expect(pack.particles.get("vfx_stone_debris_particles")!.emitter.direction).toEqual([1, 0]);
   });
 
   it("resolves paths as join(dirname(manifest), base, path)", () => {

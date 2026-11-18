@@ -33,6 +33,8 @@
 //           pick, the isometric centre, stamps layers, left/top per cell, the extra kinds loaded
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by
 //           id; a normal map's size is optional, as in the schema
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (its
+//           texture loaded) and tracer, kept for the game (SOP-18 step 4)
 // ---------------------------------------------------------------------------
 
 // ---- Constants -----------------------------------------------------------------
@@ -95,7 +97,14 @@ export interface AnimatedSpriteDef {
   blend: "normal" | "add";
   clips: Map<string, ClipDef>; // in the manifest's (Godot's SpriteFrames) order
   directions: Record<string, Record<string, string>>; // action -> dir -> clip
+  /** Spec 1.2.0 (#164): a light that pulses with `clip` (texture: an image url; energy: one per frame of the clip). */
+  light: LightDef | null;
+  /** Spec 1.2.0 (#164): a ribbon along the real path; the points come from core/feel.ts trailPush. */
+  tracer: TracerDef | null;
 }
+
+export interface LightDef { clip: string; texture: string; color: string; radius: number; energy: number[] }
+export interface TracerDef { width: number; taper: number; spacing: number; length: number; steps: { at: number; rgba: number[] }[] }
 
 export interface CollisionDef {
   rect: Rect;
@@ -691,7 +700,17 @@ export function importManifest(doc: unknown, manifestUrl: string, warn: (msg: st
             directions[action][dir] = String(clip);
           }
         }
-        pack.animated.set(name, { name, role: String(a.role ?? ""), blend: a.blend === "add" ? "add" : "normal", clips, directions });
+        let light: LightDef | null = null;
+        if (a.light && typeof a.light === "object") {
+          const L = a.light as Obj;
+          const clip = clips.get(String(L.clip));
+          if (!clip) throw new DotworkError(`${at}.light: clip "${L.clip}" is not one of its clips`);
+          const energy = (list(L.energy, `${at}.light.energy`) as unknown[]).map((e, i) => num(e, `${at}.light.energy[${i}]`));
+          if (energy.length !== clip.frames.length) throw new DotworkError(`${at}.light: ${energy.length} energies for ${clip.frames.length} frames`);
+          light = { clip: clip.name, texture: image(L.texture, `${at}.light`), color: String(L.color ?? "#ffffff"), radius: num(L.radius, `${at}.light.radius`), energy };
+        }
+        const tracer = a.tracer && typeof a.tracer === "object" ? (a.tracer as unknown as TracerDef) : null;
+        pack.animated.set(name, { name, role: String(a.role ?? ""), blend: a.blend === "add" ? "add" : "normal", clips, directions, light, tracer });
         break;
       }
       case "icon":

@@ -7,6 +7,7 @@
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 //           Updated : 2026-11-11 with Claude (Fable 5.1, claude-fable-5-1): spec 1.1.0 (#285): corners take -1, the
 //           five extra kinds (background, particles, transition, normal_map, image)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light and tracer
 // ---------------------------------------------------------------------------
 use std::collections::BTreeMap;
 
@@ -44,6 +45,20 @@ pub(super) struct AnimatedSpriteDef {
     pub(super) clips: Vec<ClipDef>,
     #[serde(default)]
     pub(super) directions: BTreeMap<String, BTreeMap<String, String>>,
+    /// Spec 1.2.0 (#164): the firing light pulse, and a tracer's ribbon (kept as JSON for the game).
+    #[serde(default)]
+    pub(super) light: Option<LightDef>,
+    #[serde(default)]
+    pub(super) tracer: Option<Value>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct LightDef {
+    pub(super) clip: String,
+    pub(super) texture: String,
+    pub(super) color: String,
+    pub(super) radius: f64,
+    pub(super) energy: Vec<f64>,
 }
 
 #[derive(Deserialize)]
