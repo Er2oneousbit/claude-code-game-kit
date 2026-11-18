@@ -221,7 +221,7 @@ ProjectSettings/         project config (text, edit with care)
   tests fail (0.0 degrees), and with looping taken out the loop checks fail. The Humanoid findings above come
   from a one-off editor script run the same day, not from a kept test.
 - **Not tested:** a player build with a run-time `Load` (glTFast's shaders must be in the build, see its docs
-  **(verify)**), URP and HDRP materials **(verify)**, a Humanoid model's own clips through `Attach` in a game
+  **(verify)**), URP and HDRP materials of your own **(verify)**, a Humanoid model's own clips through `Attach` in a game
   **(verify)**, macOS and Linux **(verify)**.
 
 ## Conventions
@@ -242,9 +242,12 @@ ProjectSettings/         project config (text, edit with care)
   picture as `_AuxTex`. Coordinates run 0 to 1 over the UVs: `u_texel` is one over the picture's size in texels,
   `u_canvas` the size pixel parameters (`u_light_pos`) are given in. Post effects (`crt`, `vignette`, `colorblind`)
   are `Graphics.Blit(source, destination, material)` (Built-in) or a full-screen pass (URP). Textures want Filter
-  Mode Point for pixel art. They are plain unlit passes, drawn by the Built-in pipeline and by URP (both checked);
-  HDRP is not checked. `check` compiles them (`ShaderUtil`), `smoke --shaders` draws each and compares it with its
-  golden image (a graphics device: no `-nographics`).
+  Mode Point for pixel art. They are plain unlit passes, drawn by the Built-in pipeline, URP and HDRP. `check` compiles them
+  (`ShaderUtil`), `smoke --shaders` draws each twice (a Blit, and through a camera so the active pipeline's own passes
+  run), compares both with the golden image and says which pipeline it ran on (a graphics device: no `-nographics`).
+  Under HDRP the check sets the camera up (fixed exposure of multiplier 1, no post processing, an R16G16B16A16 colour
+  buffer for alpha: `Assets/Editor/ShadersHdrp/`, compiled only when the HDRP package is installed); in your own HDRP
+  scene the recipes come out scaled by your exposure and tonemapped, since they return display colours.
 
 ## Gotchas (Claude: read before editing)
 1. **Never hand-edit** `Library/`, `Temp/`, `Logs/`, generated `.csproj`/`.sln`/`.slnx`. (`Logs/` is ignored by git, so `dev.py smoke` captures go there.)

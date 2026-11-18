@@ -48,6 +48,9 @@
 #           job object (WinJob), so a timeout also ends a grandchild whose parent already exited
 # Updated : 2026-11-02 with Claude (Opus 5.5, claude-opus-5-5): on Linux and macOS, killing an untimed command
 #           (Ctrl+C) also kills what it started, found through ps (it shares our process group)
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): smoke --shaders also draws every recipe through a
+#           camera (the active pipeline's own passes, HDRP included), compares it with the golden image and reports
+#           which pipeline it ran on (#260)
 # Updated : 2026-11-06 with Claude (Opus 5.5, claude-opus-5-5): the kit's shader recipes (Assets/Shaders/Kit):
 #           `check` compiles them in the same editor run, `smoke --shaders` draws and compares them
 # Updated : 2026-11-09 with Claude (Fable 5.1, claude-fable-5-1): smoke --drive / --data-dir / --locale for the
@@ -429,12 +432,20 @@ def shader_pass():
         if bad is None:
             print(f"[FAIL] GameKitShaders.Render did not report (exit {rc}); the log is {LOG_FILE}")
         return 2 if rc == 2 else 1
+    pipeline = re.search(r"^SHADER_PIPELINE (\S+) (\S+)", log, re.M)
+    if pipeline:                              # #260: a result says which pipeline and graphics API it ran on
+        print(f"[info] shader check ran on the {pipeline.group(1)} pipeline ({pipeline.group(2)})")
     rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir])
     print(out.rstrip())
-    if rc:
-        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if rc == 1 else
+    worst = rc
+    print("[info] through a camera (the pipeline's own passes):")
+    rc, out = run_tool([sys.executable, ROOT / "tools" / "shaders" / "shader_ref.py", "compare", out_dir / "camera"])
+    print(out.rstrip())
+    worst = max(worst, rc)
+    if worst:
+        print("[FAIL] a shader recipe differs from its golden image (see the lines above)" if worst == 1 else
               "[error] shader_ref.py compare could not run")
-    return rc
+    return worst
 
 
 def run_tests(platform, filt, graphics=False, env=None, until=None, fail_on=None):

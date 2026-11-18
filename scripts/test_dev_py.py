@@ -44,6 +44,8 @@
 #           BMP for .bmp, any other name refused before the build, BMP bytes in a .png fail, PNG frames (#314)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): UnrealStaleBuild, test and smoke build first when a
 #           C++ source is newer than its built module
+# Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnityShaders compares the camera pictures and names
+#           the pipeline, and the HDRP helper is gated on the package (#260)
 # Updated : 2026-11-17 with Claude (Sonnet 5.5, claude-sonnet-5-5): UnrealShaders compares the translucent and Post
 #           Process variants too (#260)
 # ---------------------------------------------------------------------------
@@ -2319,6 +2321,34 @@ class UnityShaders(TempRoot):
         rc, text = self.smoke(dev)
         self.assertEqual(rc, 1, text)
         self.assertIn("differs from its golden image", text)
+
+    def test_smoke_shaders_also_compares_the_camera_pictures_and_names_the_pipeline(self):
+        # #260: Render draws each recipe through a camera too (<out>/camera), so the active pipeline's own passes run
+        # (HDRP); each picture is compared with its golden image, and the log says which pipeline it ran on
+        log = "SHADER_PIPELINE HDRenderPipelineAsset Direct3D12\n" + self.OK_LOG
+        dev = self.dev(log, {"shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 0, text)
+        compares = [c for c in self.tools if "shader_ref.py compare" in c]
+        self.assertEqual(len(compares), 2, compares)
+        self.assertTrue(compares[1].endswith("camera"), compares[1])
+        self.assertIn("ran on the HDRenderPipelineAsset pipeline (Direct3D12)", text)
+
+    def test_a_differing_camera_picture_fails_smoke(self):
+        dev = self.dev(self.OK_LOG, {"camera": (1, "[FAIL] flash: 9 pixel(s) past 2"),
+                                     "shader_ref.py": (0, "[ OK ] all 1 effect(s) match")})
+        rc, text = self.smoke(dev)
+        self.assertEqual(rc, 1, text)
+        self.assertIn("differs from its golden image", text)
+
+    def test_the_hdrp_helper_is_gated_on_the_package(self):
+        # #260: without the HDRP package the helper must not compile (it names HDRP types); with it, the main file finds it by name
+        folder = KIT / "engines" / "unity" / "skeleton" / "Assets" / "Editor"
+        asmdef = json.loads((folder / "ShadersHdrp" / "Game.ShadersHdrp.Editor.asmdef").read_text(encoding="utf-8"))
+        self.assertEqual(asmdef["defineConstraints"], ["KIT_HDRP"])
+        self.assertEqual(asmdef["versionDefines"][0]["name"], "com.unity.render-pipelines.high-definition")
+        self.assertIn(f'GameKitShadersHdrp, {asmdef["name"]}', (folder / "GameKitShaders.cs").read_text(encoding="utf-8"))
+        self.assertIn("HDRenderPipelineAsset", (folder / "ShadersHdrp" / "GameKitShadersHdrp.cs").read_text(encoding="utf-8"))
 
     def test_unreadable_recipes_are_an_environment_problem(self):
         self.assertEqual(self.check(self.dev(self.OK_LOG, {"shader_gen.py": (2, "[error] recipes.json is malformed")}))[0], 2)
