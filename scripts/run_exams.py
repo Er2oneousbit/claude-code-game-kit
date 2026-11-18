@@ -43,6 +43,7 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the uv environment probe has a limit
 #           (UV_PROBE_TIMEOUT_S, a SKIP naming it); set_env goes on after the live vars are hidden, so it survives
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --coverage, the files no exam executes (#282)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the l10n row (the localization round trip, #87)
 # ---------------------------------------------------------------------------
 #
 # Pseudocode
@@ -173,6 +174,8 @@ EXAMS = [
     Exam("core/tools/test_session_context.py", "the SessionStart hook, as Claude Code runs it", covers=("core/tools/hooks/", "core/.claude/settings.json")),
     Exam("core/tools/test_seed_sweep.py", "the seed and settings sweep (#183), a fake dev.py", covers=("core/tools/seed_sweep.py",)),
     Exam("core/tools/test_check_i18n.py", "the translation check; the overlays' French tables in the kit", covers=("core/tools/check_i18n.py", "engines/*/skeleton/data/i18n/*.json")),
+    Exam("core/tools/i18n/test_l10n.py", "the localization round trip offline (a stand-in translator command and model server); L10N_LIVE_URL drafts with a real local model",
+         env=("L10N_LIVE_URL",), covers=("core/tools/i18n/", "core/tools/check_i18n.py", "core/data/golden/shell.json", "engines/*/skeleton/data/i18n/*.json")),
     # core/tools/access
     Exam("core/tools/access/test_colour.py", "colour-blind pairs, CIEDE2000, WCAG contrast"),
     Exam("core/tools/access/test_sweep.py", "the accessibility sweep's rules, canned drive logs"),
