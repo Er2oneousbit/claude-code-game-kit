@@ -10,7 +10,7 @@
 #             smoke    boot the game headless for N frames, fail on errors; --screenshot FILE and --record DIR then
 #                      capture it in a real window (tools/capture.gd; GIF: tools/art/frames_to_gif.py);
 #                      --drive SCENARIO runs a scripted visit of the menus (menus, crash, display, pseudo,
-#                      pseudo-plant, show:<title|settings|pause|subtitle|juice|credits|apply|confirm>,
+#                      pseudo-plant, show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>,
 #                      access[:res=WxH][,scale=N][,pad] for
 #                      tools/access/sweep.py), --locale pseudo checks every label,
 #                      --data-dir DIR keeps the game's files there, --compare BASE.png diffs the screenshot
@@ -143,7 +143,7 @@ SHADER_CRASH_TRIES = 3                        # #264: the shader run, crashed (o
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
 DRIVES = ("menus", "crash", "display", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
-SHOW_TARGETS = ("title", "settings", "pause", "subtitle", "juice", "credits", "apply",
+SHOW_TARGETS = ("title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply",
                 "confirm")   # smoke --drive show:<target>
 DRIVE_FPS = 60                           # drives run with --fixed-fps: every frame is 1/60 s, pictures repeat
 DRIVE_MAX_FRAMES = 1000000               # backstop only: headless fixed-fps frames run far faster than real time,
@@ -1424,7 +1424,7 @@ def build_parser():
                         "crash (a script error: crash file, exit 1), display (the Display tab: a staged change, Back "
                         "warns, Apply, the keep-or-revert confirm reverts on its own after 15 real seconds), pseudo "
                         "(every screen; use --locale pseudo), pseudo-plant (plus one label too small: exit 1), "
-                        "show:<title|settings|pause|subtitle|juice|credits|apply|confirm> "
+                        "show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm> "
                         "(open that screen; with --screenshot, photograph it), access[:res=WxH][,scale=N][,pad] (report "
                         "every screen for tools/access/sweep.py at that window size and text scale; pad presses with "
                         "gamepad events only). Runs at --fixed-fps 60")

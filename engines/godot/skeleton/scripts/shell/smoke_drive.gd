@@ -8,7 +8,8 @@
 #           python tools/dev.py smoke --drive pseudo --locale pseudo        # every screen, nothing clipped
 #           python tools/dev.py smoke --drive pseudo-plant --locale pseudo  # plus one label too small: exit 1
 #           python tools/dev.py smoke --drive show:settings --screenshot captures/settings.png
-#           (show: title, settings, pause, subtitle, juice, credits, apply, confirm)
+#           (show: title, settings, content, pause, subtitle, juice, credits, apply, confirm; content is the
+#           Accessibility tab scrolled to the Blood and Clean language rows)
 #           python tools/dev.py smoke --drive access:res=1280x800,scale=2,pad   # every screen (tools/access/sweep.py)
 # Notes   : Markers: DRIVE_DONE <scenario>, DRIVE_FAIL <why>, SETTINGS_BEFORE / SETTINGS_WRITTEN <path> ...,
 #           CRASH_WRITTEN <path> (from Shell), PSEUDO_FAIL / PSEUDO_OK, DRIVE_DISPLAY staged / warned / applied /
@@ -28,6 +29,7 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-10 with Claude (Opus 5.5, claude-opus-5-5): real input is ignored while a drive runs (#276)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits, a picture of the credits screen (#284)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 #           and the pseudo drive checks the Display tab's warning and confirm (#308)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning stays up on another tab, and
@@ -86,8 +88,8 @@ const JUICE_HIT_FRAME: int = 40 # frames into the juice demo before the drive at
 const JUICE_SHOT_FRAMES: int = 1 # frames after the hit; capture adds 3, still inside the hitstop freeze
 const PLANTED_NAME: String = "PlantedTooSmall"
 const PLANTED_WIDTH: float = 24.0
-const SHOW_TARGETS: PackedStringArray = ["title", "settings", "pause", "subtitle", "juice", "credits", "apply",
-		"confirm"]
+const SHOW_TARGETS: PackedStringArray = ["title", "settings", "content", "pause", "subtitle", "juice", "credits",
+		"apply", "confirm"]
 const CONFIRM_WAIT_MS: int = 25000 # real time the display drive gives the confirm to revert on its own
 const CONFIRM_MIN_MS: int = 14000 # sooner than this, the countdown did not run on real time
 const CAPTURE_AT_S: int = 3 # the display drive starts a rebind this close to the revert (a rebind gives up after 6 s)
@@ -389,6 +391,15 @@ func _show(target: String) -> void:
 			if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
 				return
 			if not await _nav_to("Tab_audio", "ui_right") or not await _nav_to("Setting_audio_master", "ui_down"):
+				return
+			await _frames(SETTLE_FRAMES)
+		"content":
+			if not await _to_main_menu():
+				return
+			if not await _nav_to("Settings", "ui_down") or not await _accept("settings"):
+				return
+			if not await _nav_to("Tab_access", "ui_right") \
+					or not await _nav_to("Setting_content_clean_language", "ui_down"):
 				return
 			await _frames(SETTLE_FRAMES)
 		"apply", "confirm":

@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
 # game_settings.gd
 # Purpose : The player's settings as data (engine-free): built-in defaults, the schema (ranges, choices), loading
-#           a settings file that may be old, hand-edited or broken, and the two derived values the game reads
-#           (effective shake, telemetry allowed).
+#           a settings file that may be old, hand-edited or broken, and the derived values the game reads
+#           (effective shake, telemetry allowed, blood enabled, clean language).
 # Usage   : var loaded := GameSettings.load_text(text)      # {"settings": Dictionary, "problems": PackedStringArray}
 #           var s: Dictionary = loaded.settings              # s.audio.master, s.access.reduce_motion, ...
 #           var text := GameSettings.to_text(s)              # what Shell writes to settings.json
@@ -18,6 +18,8 @@
 #     else fix by rule (bool / num clamp / enum / resolution), a change is a problem
 #   input.bindings: not an object -> defaults; per action a list of strings (others dropped, one problem)
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the content section (blood, clean_language) with
+#           blood_enabled() and clean_language() (#171, #207)
 # ---------------------------------------------------------------------------
 class_name GameSettings
 extends RefCounted
@@ -45,6 +47,7 @@ const DEFAULT_SETTINGS: Dictionary = {
 			"subtitle_hold": false, "timing_scale": 1.0, "auto_repeat": false, "narration": false},
 	"input": {"bindings": Bindings.DEFAULT_BINDINGS, "deadzone": 0.2, "invert_y": false, "glyphs": "auto"},
 	"telemetry": {"consent": "unset"},
+	"content": {"blood": true, "clean_language": false},
 }
 
 # Per field: ["num", lo, hi] | ["bool"] | ["enum", values] | ["res"]; the default comes from DEFAULT_SETTINGS.
@@ -63,6 +66,7 @@ const SCHEMA: Dictionary = {
 			"auto_repeat": ["bool"], "narration": ["bool"]},
 	"input": {"deadzone": ["num", 0.0, 0.9], "invert_y": ["bool"], "glyphs": ["enum", GLYPH_SETS]},
 	"telemetry": {"consent": ["enum", CONSENT]},
+	"content": {"blood": ["bool"], "clean_language": ["bool"]},
 }
 
 
@@ -129,6 +133,16 @@ static func effective_shake(settings: Dictionary) -> float:
 static func telemetry_allowed(settings: Dictionary) -> bool:
 	var consent: Variant = settings["telemetry"]["consent"]
 	return typeof(consent) == TYPE_STRING and consent == "yes"
+
+
+static func blood_enabled(settings: Dictionary) -> bool:
+	# #171: may the game show blood? Off: the game draws a neutral hit effect instead (SOP-18)
+	return bool(settings["content"]["blood"])
+
+
+static func clean_language(settings: Dictionary) -> bool:
+	# #207: Shell.t() picks @clean lines and masks the game's word list (SOP-19)
+	return bool(settings["content"]["clean_language"])
 
 
 static func is_num(v: Variant) -> bool:

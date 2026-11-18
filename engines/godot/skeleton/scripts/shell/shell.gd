@@ -30,6 +30,8 @@
 # Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): look_changed, for game HUDs that follow the player's
 #           text and menu size (UiTheme.hud_font_size, #309)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(), and t() / tn() honour the
+#           clean-language switch with the word lists of data/i18n/mature/ (#171, #207); CLDR plurals per locale
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -68,6 +70,7 @@ var settings: Dictionary = GameSettings.defaults()
 var settings_problems: PackedStringArray = []
 var settings_source: String = "none" # load_settings(): "file", "backup" or "tmp" (recovered), "none" (defaults)
 var tables: Dictionary = {}
+var mature: Dictionary = {} # data/i18n/mature/<locale>.json: the word lists for clean language (#207)
 var locale: String = "en"
 var locale_override: String = ""
 var last_device: String = "keyboard"
@@ -97,6 +100,7 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	version = str(ProjectSettings.get_setting("application/config/version", "0.0.0"))
 	tables = I18n.load_tables(I18N_DIR)
+	mature = I18n.load_mature(I18N_DIR)
 	active = not _is_tool_run()
 	if not active:
 		set_process(false)
@@ -278,6 +282,8 @@ func set_value(section: String, key: String, value: Variant) -> void:
 		"access":
 			_apply_access()
 	settings_changed.emit(section, key)
+	if section == "content" and key == "clean_language":
+		locale_changed.emit() # every label is redrawn with or without the @clean lines
 	if LOOK_KEYS.has(key):
 		look_changed.emit()
 
@@ -313,6 +319,25 @@ func access(key: String) -> Variant:
 	return (settings["access"] as Dictionary).get(key)
 
 
+## #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).
+func blood_enabled() -> bool:
+	return GameSettings.blood_enabled(settings)
+
+
+## #207: the clean-language switch t() and tn() follow.
+func clean_language() -> bool:
+	return GameSettings.clean_language(settings)
+
+
+## The word lists of every locale in the current chain (a fallback line can come from any of them).
+func mature_words() -> PackedStringArray:
+	var out: PackedStringArray = []
+	var loc: String = I18n.FALLBACK if locale == I18n.PSEUDO_LOCALE else locale
+	for l: String in I18n.locale_chain(loc):
+		out.append_array(mature.get(l, PackedStringArray()))
+	return out
+
+
 ## The goal "What now?" shows on the pause menu (#167); "" clears it. Pass translated text (Shell.t()).
 func set_objective(text: String) -> void:
 	objective = text
@@ -346,28 +371,38 @@ func game_speed() -> float:
 
 func t(key: String, args: Dictionary = {}, fallback: String = "") -> String:
 	# A UI string in the current language. fallback is used (and translated by nobody) when no table has key.
+	var clean: bool = clean_language()
 	if locale == I18n.PSEUDO_LOCALE:
-		var raw: Variant = I18n.lookup(tables, I18n.FALLBACK, key)
+		var raw: Variant = I18n.lookup(tables, I18n.FALLBACK, key, clean)
 		if typeof(raw) == TYPE_NIL:
 			if fallback == "":
 				_missing(key)
 				return key # left without brackets on purpose: the pseudo check flags it
 			raw = fallback
 		return I18n.fill(I18n.pseudo(str(raw)), args)
-	var found: Variant = I18n.lookup(tables, locale, key)
+	var found: Variant = I18n.lookup(tables, locale, key, clean)
 	if typeof(found) == TYPE_NIL:
 		if fallback != "":
-			return I18n.fill(fallback, args)
+			return I18n.finish(fallback, args, clean, mature_words())
 		_missing(key)
 		return key
-	return I18n.fill(str(found), args)
+	return I18n.finish(str(found), args, clean, mature_words())
 
 
 func tn(key: String, n: float, args: Dictionary = {}) -> String:
+	# key.<category>, each locale of the chain with its own CLDR rule, then that locale's key.other
 	var a: Dictionary = args.duplicate()
 	a["n"] = n
-	var rules: String = I18n.FALLBACK if locale == I18n.PSEUDO_LOCALE else locale
-	return t(key + "." + I18n.plural(rules, n), a)
+	var clean: bool = clean_language()
+	var pseudo_run: bool = locale == I18n.PSEUDO_LOCALE
+	var found: Variant = I18n.lookup_plural(tables, I18n.FALLBACK if pseudo_run else locale, key, n, clean)
+	if typeof(found) == TYPE_NIL:
+		var missing: String = key + "." + I18n.plural(I18n.FALLBACK if pseudo_run else locale, n)
+		_missing(missing)
+		return missing
+	if pseudo_run:
+		return I18n.fill(I18n.pseudo(str(found)), a)
+	return I18n.finish(str(found), a, clean, mature_words())
 
 
 func content(text: String) -> String:

@@ -27,6 +27,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the unapplied warning stays up across tabs while Back's
 #           next press would discard (a tab switch hid it, and the second Back then discarded without one); a
 #           revert while a rebind waits for its key cancels the rebind
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the Blood and Clean language rows at the end of the
+#           Accessibility tab (content.*, #171, #207), each hidden by its SHOW_ constant
 # ---------------------------------------------------------------------------
 class_name SettingsScreen
 extends ShellScreen
@@ -43,6 +45,8 @@ const DEFAULT_STEP: float = 0.05
 const TIMES_FIELDS: PackedStringArray = ["display.ui_scale", "access.text_scale"] # shown as 1.25x, others as %
 const RESOLUTIONS: Array = [[1280, 720], [1600, 900], [1920, 1080], [2560, 1440], [3840, 2160]]
 const REBIND_TIMEOUT_S: float = 6.0
+const SHOW_BLOOD_SETTING: bool = true # false: a game with no blood hides the Blood row (SOP-18)
+const SHOW_LANGUAGE_SETTING: bool = true # false: a game with no strong language hides Clean language (SOP-19)
 
 const PRESETS_FILE: String = "res://data/input/presets.json" # the one-handed layouts (#166)
 const PRESET_NAMES: PackedStringArray = ["one_hand_left", "one_hand_right"]
@@ -280,6 +284,11 @@ func _fill_tab() -> void:
 		"audio", "access":
 			for field: String in GameSettings.SCHEMA[TAB_SECTIONS[_tab]]:
 				_add_field(TAB_SECTIONS[_tab], field)
+			if _tab == "access": # what the game shows (content.*) sits with the accessibility rows
+				if SHOW_BLOOD_SETTING:
+					_add_field("content", "blood")
+				if SHOW_LANGUAGE_SETTING:
+					_add_field("content", "clean_language")
 		"controls":
 			for field: String in CONTROLS_FIELDS:
 				_add_field("input", field)
