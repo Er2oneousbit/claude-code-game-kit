@@ -40,7 +40,7 @@ return T
 `A.eq`, `A.near(got, want, tol)`, `A.truthy`, `A.falsy`, `A.same(got, want, tol)` (deep, numbers within tol),
 `A.raises(fn)`. Tests run with no window: keep `love.graphics` out of the code under test.
 
-The juice and shell logic in `src/core/` is checked against the kit's golden vectors: `tests/test_juice_golden.lua`
+The juice and shell logic in `src/core/` (the recipe helpers of SOP-18 step 4 in `feel.lua`) is checked against the kit's golden vectors: `tests/test_juice_golden.lua`
 and `tests/test_shell_golden.lua` load `data/golden/*.json` at test time and make one test per case (a case type
 with no handler fails). Change behaviour in `tools/golden_vectors.py` first, `--write`, then fix the Lua until the
 tests pass. JSON comes from `src/core/json.lua` (LÖVE has none): `null` is `Json.null`, and `Json.array({})` marks

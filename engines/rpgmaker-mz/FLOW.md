@@ -139,7 +139,8 @@ focus loss (the "background" option) and its own save files. So the kit does not
 the rules as plugins, the same as every other overlay's and checked against the same golden vectors, and wires the
 part that protects players into MZ (verify each hook in a test play: the overlay is not yet run against MZ):
 - **GameJuice.js** (engine-free): `Shake` (trauma on value noise), `Hitstop`, `ease`, `FollowCamera`, `InputBuffer`,
-  `CoyoteTimer`, `Spring` and `squash`, `FlashLimiter`, `HoldToggle`, `AutoRepeat`. MZ steps 60 frames a second:
+  `CoyoteTimer`, `Spring` and `squash`, `FlashLimiter`, `HoldToggle`, `AutoRepeat`, and the recipe helpers of SOP-18
+  step 4 (`impact`, `floatText`, `trailPush`, `trailShrink`, `trailLength`). MZ steps 60 frames a second:
   pass `dt = 1 / 60` (verify), and hold a scene still while `hitstop.scaledDt(dt)` is 0.
 - **GameShell.js** (engine-free): `settingsLoad` (defaults, repair, unknown keys kept), `effectiveShake`,
   `telemetryAllowed`, `rebind` with swap, `glyphSet` / `glyphName` / `promptBinding`, `narrationLine`, `tr` /

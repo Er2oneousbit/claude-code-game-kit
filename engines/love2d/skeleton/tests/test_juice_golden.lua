@@ -5,6 +5,8 @@
 --           file at test time, never from this code.
 -- Usage   : python tools/dev.py test     (or --filter juice)
 -- Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+-- Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the recipe helpers' cases (impact, float_text, trail;
+--           SOP-18 step 4, #170, #164)
 -- ---------------------------------------------------------------------------
 local Golden = require("tests.helpers.golden")
 local Shake = require("src.core.shake")
@@ -15,6 +17,7 @@ local InputBuffer = require("src.core.input_buffer")
 local CoyoteTimer = require("src.core.coyote_timer")
 local Spring = require("src.core.spring")
 local FlashLimiter = require("src.core.flash_limiter")
+local Feel = require("src.core.feel")
 
 local FILE = "juice.json"
 
@@ -144,6 +147,39 @@ function handlers.flash_limiter(case, tol, where)
     Golden.expect({ result = f:request(step.now) }, step.expect, tol, where .. " step " .. i)
   end
   return #case.steps
+end
+
+function handlers.impact(case, tol, where)
+  local p = case.params
+  for i, pt in ipairs(case.points) do
+    local r = Feel.impact(pt[1], pt[2], p.hitstop_min, p.hitstop_max, p.trauma_min, p.trauma_max, p.flash_at)
+    Golden.expect({ r.hitstop, r.trauma, r.flash }, { pt[3], pt[4], pt[5] }, tol, where .. " point " .. i)
+  end
+  return #case.points * 3
+end
+
+function handlers.float_text(case, tol, where)
+  local p = case.params
+  for i, pt in ipairs(case.points) do
+    local r = Feel.float_text(pt[1], p.life, p.rise, p.pop_s)
+    Golden.expect({ r.dy, r.scale, r.alpha, r.done }, { pt[2], pt[3], pt[4], pt[5] }, tol, where .. " point " .. i)
+  end
+  return #case.points * 4
+end
+
+function handlers.trail(case, tol, where)
+  local pts = {}
+  for i, step in ipairs(case.steps) do
+    if step.call == "push" then
+      pts = Feel.trail_push(pts, step.x, step.y, case.params.spacing, case.params.max_len)
+    elseif step.call == "shrink" then
+      pts = Feel.trail_shrink(pts, step.amount)
+    else
+      unknown_call(where, step)
+    end
+    Golden.expect({ points = pts, length = Feel.trail_length(pts) }, step.expect, tol, where .. " step " .. i)
+  end
+  return #case.steps * 2
 end
 
 return Golden.suite(Golden.load(FILE), handlers, FILE)
