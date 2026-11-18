@@ -6243,7 +6243,25 @@
      [
       "damn"
      ],
-     "3 #@$% coins"
+     "3 монеты"
+    ],
+    [
+     "ru",
+     "coins",
+     5,
+     {},
+     true,
+     [],
+     "5 монет"
+    ],
+    [
+     "ru",
+     "nothing",
+     5,
+     {},
+     true,
+     [],
+     "nothing.many"
     ]
    ],
    "tables": {
@@ -6262,6 +6280,10 @@
      "guard.bye": "Merde, salut.",
      "guard.bye@clean": "Bon, salut.",
      "guard.insult": "Dégage, espèce de {name} !"
+    },
+    "ru": {
+     "coins.few": "{n} монеты",
+     "coins.other@clean": "{n} монет"
     }
    },
    "type": "tr_clean"

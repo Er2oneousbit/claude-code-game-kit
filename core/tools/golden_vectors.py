@@ -1281,6 +1281,8 @@ CLEAN_TABLES = {
            "coins.other": "{n} damn coins"},
     "fr": {"guard.insult": "Dégage, espèce de {name} !", "guard.bye": "Merde, salut.", "guard.bye@clean": "Bon, salut.",
            "coins.one": "{n} pièce", "coins.other": "{n} pièces"},
+    # the category beats @clean inside a locale: few (plain) before other@clean
+    "ru": {"coins.few": "{n} монеты", "coins.other@clean": "{n} монет"},
 }
 CLEAN_POINTS = [                                     # locale, key, n (None: tr), args, clean, words
     ("en", "guard.insult", None, {"name": "Ana"}, False, []),
@@ -1298,6 +1300,8 @@ CLEAN_POINTS = [                                     # locale, key, n (None: tr)
     ("en", "coins", 2, {}, False, ["damn"]),
     ("fr", "coins", 0, {}, True, ["pièce"]),
     ("ru", "coins", 3, {}, True, ["damn"]),
+    ("ru", "coins", 5, {}, True, []),
+    ("ru", "nothing", 5, {}, True, []),              # nowhere: the key with the requested locale's category
 ]
 MASK_POINTS = [                                      # text, words
     ("What the hell?", ["hell"]),
