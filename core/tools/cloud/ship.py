@@ -69,10 +69,12 @@
 #                     steam_appid.txt, secret-type file or token; --branch is never default (set live by hand);
 #                     the version is known
 #             -> write deploy/steam/app_build_<app>.vdf (ContentRoot = the depots' common folder, one inline
-#                FileMapping per depot, *.pdb excluded, SetLive only with --branch, Preview with --preview)
+#                FileMapping per depot, *.pdb excluded, SetLive only with --branch and never in a preview,
+#                Preview with --preview)
 #             --dry-run: print the VDF and the exact steamcmd line; runs nothing, needs no login
 #             --preview / upload: a build account must be named (--steam-user or STEAM_USER: a name, never a
-#                     password) -> an upload is confirmed (the slug in a terminal, --yes elsewhere) ->
+#                     password) -> confirmed, a preview too until a real run proves it uploads nothing (the slug
+#                     in a terminal, --yes elsewhere) ->
 #                     steamcmd +login <account> +run_app_build <vdf> +quit, streaming its lines; outside a terminal
 #                     its stdin is closed so a login prompt fails instead of waiting
 #           The first login (password and Steam Guard code) is by hand in a terminal; steamcmd keeps its own login.
@@ -83,7 +85,8 @@
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): --target itch hands butler the absolute --site, so
 #           a path relative to another folder pushes the folder that was scanned, not a same-named one in the root
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): --target steam uploads with steamcmd and a SteamPipe
-#           app build VDF (#86): --dry-run prints the VDF and command, --preview, no stored login, no steam_appid.txt
+#           app build VDF (#86): --dry-run prints the VDF and command, --preview, no stored login, no steam_appid.txt;
+#           a confirm prompt that reads end-of-file asks for --yes instead of a traceback (every target)
 # ---------------------------------------------------------------------------
 import argparse
 import datetime
@@ -349,7 +352,10 @@ def confirm(a, what, slug):
         return
     if not sys.stdin or not sys.stdin.isatty():
         raise ToolError(f"{what} changes your {a.target} account: pass --yes (no terminal here to ask)")
-    answer = input(f"{what} on {a.target} for {slug}. Type the game's slug to go ahead: ").strip()
+    try:
+        answer = input(f"{what} on {a.target} for {slug}. Type the game's slug to go ahead: ").strip()
+    except EOFError:                        # a closed stdin that says it is a terminal (Windows reports NUL so)
+        raise ToolError(f"{what} changes your {a.target} account: pass --yes (nobody answered the prompt)")
     if answer != slug:
         raise Refused("not confirmed")
 
@@ -823,10 +829,15 @@ def cmd_steam(a):
     slug = game_slug()
     user = steam_account(a)
     deploy = ROOT / "deploy" / "steam"
-    content_root = Path(os.path.commonpath([str(f) for _, f in depots]))
+    try:                                    # one ContentRoot: every depot folder on the same drive
+        content_root = Path(os.path.commonpath([str(f) for _, f in depots]))
+    except ValueError:
+        raise ToolError("the depot folders are on different drives: SteamPipe takes one content root, so put the "
+                        "builds under one folder")
     desc = f"{slug} {version}" + (f" ({branch})" if branch else "")
     vdf_path = deploy / f"app_build_{a.app}.vdf"
-    text = steam_vdf(a.app, depots, content_root, deploy / "output", desc, branch, a.preview)
+    # A preview never sets a branch live, whatever SteamPipe makes of "Preview" (verify): SetLive stays out of it
+    text = steam_vdf(a.app, depots, content_root, deploy / "output", desc, None if a.preview else branch, a.preview)
     run = ["+login", user or STEAM_USER_PLACEHOLDER, "+run_app_build", str(vdf_path), "+quit"]
     print(f"[ OK ] steamcmd: {exe}")
     for did, folder in depots:
@@ -854,9 +865,10 @@ def cmd_steam(a):
         raise ToolError(f"no Steam build account: pass --steam-user NAME or set {STEAM_USER_ENV}. " + STEAM_LOGIN)
     if a.app == STEAM_TEST_APP:
         raise Refused(f"app {STEAM_TEST_APP} (Spacewar) is Valve's: upload to your own app id")
-    if not a.preview:
-        confirm(a, f"upload {', '.join('depot ' + d for d, _ in depots)} to app {a.app}"
-                   + (f" and set it live on {branch}" if branch else ""), slug)
+    # A preview is confirmed like an upload until a real run proves it uploads nothing (verify)
+    confirm(a, ("preview (SteamPipe should upload nothing) of " if a.preview else "upload ")
+               + f"{', '.join('depot ' + d for d, _ in depots)} to app {a.app}"
+               + (f" and set it live on {branch}" if branch and not a.preview else ""), slug)
     print("[info] running: " + shown_command([exe, *run]))
     rc = steamcmd(exe, run)
     if rc != 0:

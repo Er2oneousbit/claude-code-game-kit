@@ -51,13 +51,14 @@ are from Valve's own documentation read on 2026-11-01 (F39), itch.io facts from 
    writes `deploy/steam/app_build_<app>.vdf` (git-ignored: it holds this machine's absolute paths) and prints it with
    the exact steamcmd line. It runs nothing and needs no login. The VDF has every depot inline under one content root
    (the depots' common folder), excludes `*.pdb`, and has `SetLive` only with `--branch`; `--branch default` is refused.
-   `--preview` adds SteamPipe's `"Preview" "1"`, which builds the manifest and the log without uploading (E76 page;
-   **verify** on the first run). An upload asks for the game's slug in a terminal and needs `--yes` anywhere else.
+   `--preview` adds SteamPipe's `"Preview" "1"`, which should build the manifest and the log without uploading
+   (**verify** on the first run); it never carries `SetLive`. An upload, and a preview until that is verified, asks
+   for the game's slug in a terminal and needs `--yes` anywhere else.
    **The login is never stored by the kit.** `--steam-user` (or `STEAM_USER`) is the account's name only. Log in by
    hand once, in a terminal on the machine that uploads: `steamcmd +login <build account> +quit`, then type the
    password and the Steam Guard code it asks for; steamcmd keeps its own login after that (**verify** how long), and
-   the kit never reads its files (Claude Code's deny rules cover `~/Steam/config/` and `~/.steam/`; on Windows the
-   files sit in steamcmd's own folder). Outside a terminal steamcmd gets a closed stdin, so a missing login fails at
+   the kit never reads its files (Claude Code's deny rules cover `~/Steam/config/` and `~/.steam/`, where steamcmd
+   keeps them on Linux and macOS: **verify**; on Windows they sit in steamcmd's own folder). Outside a terminal steamcmd gets a closed stdin, so a missing login fails at
    once instead of waiting. Not done yet: a real upload through the kit (tested with a stand-in steamcmd only), the
    VDF details (Windows path spelling, inline depots, `Recursive`) and whether steamcmd's exit code reports every
    failure: **verify** all on the first upload, and check the build on Steamworks (App Admin, SteamPipe, Builds).

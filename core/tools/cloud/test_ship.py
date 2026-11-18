@@ -716,13 +716,40 @@ class SteamUpload(unittest.TestCase):
         self.assertIn(f'"LocalPath" "{os.path.join("linux", "*")}"', vdf)
         self.assertLess(vdf.index('"1234561"'), vdf.index('"1234562"'))   # in the order given
 
-    def test_the_preview_runs_steamcmd_with_preview_and_asks_nothing(self):
+    def test_the_preview_never_sets_a_branch_live_and_is_confirmed_like_an_upload(self):
+        # "Preview" "1" is not proven by a real run yet (verify): a preview asks like an upload and drops SetLive
+        argv = ["--app", 1234560, "--depot", 1234561, "--site", self.win, "--branch", "beta", "--steam-user",
+                "buildbot", "--preview"]
         with unittest.mock.patch.object(self.g.ship.sys, "stdin", None):   # no terminal, no --yes
-            code, out = self.steam("--app", 1234560, "--depot", 1234561, "--site", self.win, "--steam-user",
-                                   "buildbot", "--preview")
+            code, out = self.steam(*argv)
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass --yes", out)
+        self.assertEqual(self.fake.calls, [])
+        code, out = self.steam(*argv, "--yes")
         self.assertEqual(code, 0, out)
         self.assertIn('"Preview" "1"', self.fake.vdfs[0])
+        self.assertNotIn('"SetLive"', self.fake.vdfs[0])
         self.assertIn("nothing uploaded", out)
+
+    def test_depots_on_two_drives_are_a_usage_error(self):
+        with unittest.mock.patch.object(self.g.ship.os.path, "commonpath",
+                                        unittest.mock.Mock(side_effect=ValueError("different drives"))):
+            code, out = self.steam("--app", 1234560, "--depot", f"1={self.win}", "--depot", f"2={self.lin}",
+                                   "--dry-run")
+        self.assertEqual(code, 2, out)
+        self.assertIn("different drives", out)
+        self.assertNotIn("Traceback", out)
+
+    def test_a_prompt_that_reads_end_of_file_asks_for_yes(self):
+        # Windows reports the NUL device as a terminal, so input() can hit end-of-file: no traceback, exit 2
+        tty = unittest.mock.Mock()
+        tty.isatty.return_value = True
+        with unittest.mock.patch.object(self.g.ship.sys, "stdin", tty), \
+                unittest.mock.patch("builtins.input", unittest.mock.Mock(side_effect=EOFError)):
+            code, out = self.steam("--app", 1234560, "--depot", 1, "--site", self.win, "--steam-user", "buildbot")
+        self.assertEqual(code, 2, out)
+        self.assertIn("pass --yes (nobody answered the prompt)", out)
+        self.assertEqual(self.fake.calls, [])
 
     def test_an_upload_never_goes_ahead_unasked(self):
         with unittest.mock.patch.object(self.g.ship.sys, "stdin", None):

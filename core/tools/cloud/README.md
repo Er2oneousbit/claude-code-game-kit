@@ -120,14 +120,15 @@ python tools/dev.py ship --target steam --app 1234560 --depot 1234561 --site bui
 - **Guardrails:** every depot folder must exist, not be empty, and hold no `<build>/steam_appid.txt` (a dev-only file), no
   secret-type file and no token (the same scan as itch.io). A quote or a line break in a VDF value is refused.
 - **`--dry-run`** prints the VDF and the exact steamcmd line; it runs nothing and needs no login. **`--preview`**
-  runs steamcmd with `"Preview" "1"`: SteamPipe builds the manifest and its log in `deploy/steam/output/` and uploads
-  nothing (it does log in). **An upload** asks for the game's slug in a terminal and needs `--yes` anywhere else.
+  runs steamcmd with `"Preview" "1"` and no `SetLive`: SteamPipe should build the manifest and its log in
+  `deploy/steam/output/` and upload nothing (it does log in; verify on the first run). **An upload**, and a preview
+  until that is verified, asks for the game's slug in a terminal and needs `--yes` anywhere else.
 - **The login:** `--steam-user NAME` or `STEAM_USER` is the build account's name only (it needs the Edit App Metadata
   permission). There is no password option: log in by hand once in a terminal, `steamcmd +login <build account>
   +quit`, and type the password and the Steam Guard code there; steamcmd keeps its own login (verify how long). Run
   from a terminal, steamcmd can ask again; anywhere else its stdin is closed, so a missing login fails at once.
-  Claude Code may not read `~/Steam/config/` or `~/.steam/` (deny rules); on Windows, steamcmd keeps its login in its
-  own folder, so do not point Claude at it.
+  Claude Code may not read `~/Steam/config/` or `~/.steam/` (deny rules; where steamcmd keeps its login on Linux and
+  macOS, verify); on Windows, steamcmd keeps its login in its own folder, so do not point Claude at it.
 - **Which steamcmd:** `--steamcmd`, `STEAMCMD_BIN`, then `steamcmd` on PATH; missing is exit 2.
 
 **Not run against Steam yet.** The dry run, the preview, the upload and every guardrail are tested with a stand-in
