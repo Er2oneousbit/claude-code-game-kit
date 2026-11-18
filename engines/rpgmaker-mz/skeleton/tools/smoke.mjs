@@ -71,10 +71,19 @@ if (!VW || !VH) {
   process.exit(2);
 }
 
-const { DRIVES } = createRequire(import.meta.url)("./mz_drives.js");
-if (DRIVE && !DRIVES[DRIVE]) {
-  console.error(`[error] no drive ${JSON.stringify(DRIVE)}: the drives are ${Object.keys(DRIVES).join(", ")}`);
-  process.exit(2);
+let DRIVES = {};
+if (DRIVE) {
+  // only a --drive run needs tools/mz_drives.js (a project without it still boots and records)
+  try {
+    ({ DRIVES } = createRequire(import.meta.url)("./mz_drives.js"));
+  } catch (err) {
+    console.error(`[error] --drive needs tools/mz_drives.js (${String(err.message).split("\n")[0]})`);
+    process.exit(2);
+  }
+  if (!DRIVES[DRIVE]) {
+    console.error(`[error] no drive ${JSON.stringify(DRIVE)}: the drives are ${Object.keys(DRIVES).join(", ")}`);
+    process.exit(2);
+  }
 }
 
 const { serve } = await import("./serve.mjs");
