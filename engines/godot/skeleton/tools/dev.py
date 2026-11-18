@@ -82,6 +82,7 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): smoke -h names show:content (the Blood and Clean
 #           language rows, #171, #207)
+# Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): --drive content (the switches toggled from their rows)
 # ---------------------------------------------------------------------------
 import argparse
 import os
@@ -144,7 +145,7 @@ SHADER_CACHE_ERROR = r"SPIR-V|reflect_spirv|shader_data\.is_empty"   # Godot's l
 SHADER_CRASH_TRIES = 3                        # #264: the shader run, crashed (or its cache unreadable), runs again up to 3 runs
 KILL_TIMEOUT_S = 10                      # after a timeout: seconds to wait for the killed tree's pipe
 SMOKE_DATA = "build/smoke-data"          # the game's data folder in a smoke run without --data-dir (wiped each run)
-DRIVES = ("menus", "crash", "display", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
+DRIVES = ("menus", "crash", "display", "content", "pseudo", "pseudo-plant")   # smoke --drive scenarios (scripts/shell/smoke_drive.gd)
 SHOW_TARGETS = ("title", "settings", "content", "pause", "subtitle", "juice", "credits", "apply",
                 "confirm")   # smoke --drive show:<target>
 DRIVE_FPS = 60                           # drives run with --fixed-fps: every frame is 1/60 s, pictures repeat
