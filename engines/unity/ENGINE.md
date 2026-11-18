@@ -20,7 +20,8 @@ Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possi
                          Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter, Feel: the SOP-18 recipe
                          helpers), shell logic
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
-                         (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json; Analog
+                         (AudioDirector, MusicDirector, AudioAccess), the platform layer (Platform: achievements, stats,
+                         presence, cloud hooks; docs/PLATFORM.md; Shell.I.Platform), checked against data/golden/*.json; Analog
                          (stick and trigger shaping), CrashText (crash file text, log tail) and UiComposite (a UI
                          panel's texture over the camera's picture, blended as the screen does)
 Assets/Scripts/Shell/    the front end on UI Toolkit (Game.Shell assembly): Shell (settings, strings, data folder),

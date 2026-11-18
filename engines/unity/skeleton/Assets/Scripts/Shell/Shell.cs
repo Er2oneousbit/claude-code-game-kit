@@ -33,6 +33,8 @@
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the word lists (data/i18n/mature/) load with the
 //           tables; T and Tn honour content.clean_language, each locale with its own CLDR plural rule;
 //           BloodEnabled (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform (docs/PLATFORM.md, #84) and Saves (save slots
+//           whose writes reach Platform.Saved); OverlayChanged for the store overlay's pause
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -78,6 +80,14 @@ namespace {{GAME_SLUG}}.Shell
         public event Action LocaleChanged;
         /// <summary>The HUD text factor (HudScale.Factor: ui_scale * text_scale) changed; the argument is the new one (#309).</summary>
         public event Action<double> HudScaleChanged;
+        /// <summary>The store overlay opened (true) or closed (false); FrontEnd pauses play on it (#84).</summary>
+        public event Action<bool> OverlayChanged;
+
+        /// <summary>Achievements, stats, presence and cloud hooks (docs/PLATFORM.md): the null backend unless the
+        /// game defines GAMEKIT_STEAM and Steam answered.</summary>
+        public PlatformService Platform;
+        /// <summary>Save slots in the data folder; each write reaches Platform.Saved (the cloud hook).</summary>
+        public SaveStore Saves;
 
         private readonly HudScale.Watch _hudWatch = new HudScale.Watch();
         private readonly HashSet<string> _missingKeys = new HashSet<string>();
@@ -132,6 +142,7 @@ namespace {{GAME_SLUG}}.Shell
                 Debug.LogWarning($"[WARN][shell] cannot create the data folder {DataDir}: {e.Message}");
             }
             LoadSettings();
+            StartPlatform();
             Tables = LoadTables();
             Mature = LoadMature();
             Colours = AccessColours.LoadData();
@@ -142,6 +153,24 @@ namespace {{GAME_SLUG}}.Shell
         private void Update()
         {
             ShellReports.Tick();
+            bool? overlay = Platform?.Update();
+            if (overlay.HasValue)
+            {
+                OverlayChanged?.Invoke(overlay.Value);
+            }
+        }
+
+        private void StartPlatform()
+        {
+            // data/achievements.json is optional: without it every call is "unknown" and nothing is written
+            string text = ShellFiles.ReadOrNull("data/" + PlatformRules.ACHIEVEMENTS_FILE);
+            Platform = new PlatformService(DataDir, text, PlatformBackends.Make(Smoke));
+            foreach (string p in Platform.Problems)
+            {
+                Debug.LogWarning($"[WARN][platform] {p}");
+            }
+            Saves = new SaveStore(DataDir) { OnSaved = name => Platform.Saved(name) };
+            Debug.Log($"[INFO][platform] backend: {Platform.Backend.Name}");
         }
 
         private void OnDestroy()
