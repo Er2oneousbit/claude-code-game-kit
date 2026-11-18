@@ -21,6 +21,8 @@
 //           centres on both shapes, corners4 keys, the variant pick, stamps, the extra kinds loaded, the
 //           rendered-character golden
 //           2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): DotworkMap.Bounds on both shapes (#297)
+//           2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects keep their light and tracer
+//           (asset manifest 1.2.0, #164)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -149,6 +151,23 @@ namespace {{GAME_SLUG}}.Tests
                 GoldenVectors.AssertClose(Json.Parse(p.emitter.text), DotworkManifest.Obj(a, "emitter"), TOL, $"particles/{p.name} emitter");
                 Assert.AreEqual(m.Resolve(DotworkManifest.Str(a, "texture")), AssetDatabase.GetAssetPath(p.texture.texture));
             }
+        }
+
+        [Test]
+        public void Dotwork_ShootingEffectsKeepLightAndTracer()
+        {
+            DotworkAnimated glow = _pack.animated.Find(x => x.name == "vfx_muzzle_light");
+            Assert.IsNotNull(glow, "vfx_muzzle_light");
+            Assert.IsTrue(glow.hasLight);
+            Assert.AreEqual(new[] { 1.2f, 0.6f, 0f }, glow.light.energy);
+            Assert.IsNotNull(glow.light.texture, "the light's texture");
+            DotworkAnimated tracer = _pack.animated.Find(x => x.name == "vfx_tracer");
+            Assert.IsNotNull(tracer, "vfx_tracer");
+            var t = Json.AsObject(Json.Parse(tracer.tracerJson));
+            Assert.AreEqual(4.0, Json.ToNumber(t["spacing"]), 1e-9);
+            Assert.AreEqual(32.0, Json.ToNumber(t["length"]), 1e-9);
+            Assert.IsFalse(_pack.animated.Find(x => x.name == "hero").hasLight);
+            Assert.AreEqual("add", _pack.animated.Find(x => x.name == "vfx_muzzle").blend);
         }
 
         [Test]

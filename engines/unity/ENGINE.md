@@ -17,7 +17,8 @@
 ## Layout
 ```
 Assets/Scripts/Core/     engine-agnostic logic (no UnityEngine types where possible), unit tested: juice (Shake, Hitstop,
-                         Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter), shell logic
+                         Ease, FollowCamera, InputBuffer, CoyoteTimer, Spring, FlashLimiter, Feel: the SOP-18 recipe
+                         helpers), shell logic
                          (GameSettings, Bindings, SaveStore, I18n, AtomicFile, Json, DialogueData) and audio decisions
                          (AudioDirector, MusicDirector, AudioAccess), checked against data/golden/*.json; Analog
                          (stick and trigger shaping), CrashText (crash file text, log tail) and UiComposite (a UI
