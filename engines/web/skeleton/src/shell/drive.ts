@@ -2,7 +2,7 @@
 // drive.ts
 // Purpose : Scripted runs for `dev.py smoke --drive <scenario>`: the game plays itself through the real input
 //           path (injected actions, the same route a key press takes) and logs markers smoke waits for.
-// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | display
+// Usage   : ?drive=menus | crash | pseudo | pseudo-plant | display | content
 //           | show:<title|settings|content|pause|subtitle|juice|credits|apply|confirm>
 //           | access[:res=WxH][,scale=N][,pad] (every screen reported for tools/access/sweep.py)
 //           (dev.py smoke --drive X adds it to the URL; --locale pseudo adds ?locale=pseudo)
@@ -39,6 +39,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm,
 //           and the pseudo tour checks the Display tab's pending, warning and confirm states (#308)
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): show:content, the content rows (#171, #207)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): the content drive: each switch toggled from its row,
+//           focus kept and the screen redrawn (DRIVE_CONTENT lines), settings.json holds both
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): display: the warning goes once the mode is stepped back,
 //           and a rebind waiting when the confirm reverts is cancelled
 // ---------------------------------------------------------------------------
@@ -204,6 +206,42 @@ async function menus(shell: Shell, d: Driver): Promise<void> {
   if (problems.length || slideAction(settings.audio.master, MENU_TARGET.master) || settings.access.reduce_motion !== MENU_TARGET.reduceMotion) {
     throw new Error(`${SETTINGS_FILE} does not hold the new values (master ${settings.audio.master}, reduce_motion ${settings.access.reduce_motion})`);
   }
+  await d.choose("menu", "menu.quit");
+  await d.screen("quit");
+}
+
+// content (#171, #207): Blood and Clean language toggled from their rows with ui_right; the focus stays on the row,
+// the row shows its new value, clean language reaches the translator, and Back saves both
+async function content(shell: Shell, d: Driver): Promise<void> {
+  await d.toMenu();
+  await d.choose("menu", "menu.settings");
+  await d.screen("settings");
+  await d.tab("access");
+  const rows: [string, () => boolean][] = [
+    ["content.clean_language", () => shell.settings.content.clean_language],
+    ["content.blood", () => shell.settings.content.blood],
+  ];
+  const wanted: Record<string, boolean> = {};
+  for (const [id, read] of rows) {
+    await d.focus(id);
+    const before = read();
+    await d.press("ui_right");
+    const focused = shell.top?.menu?.focused;
+    if (read() === before) throw new Error(`${id} did not change`);
+    if (focused?.id !== id || !focused.el.isConnected) throw new Error(`focus left ${id} (now ${focused?.id})`);
+    const shown = shell.i18n.t(read() ? "opt.on" : "opt.off");
+    if (!(focused.el.textContent ?? "").includes(shown)) throw new Error(`${id} does not show "${shown}"`);
+    if (id === "content.clean_language" && shell.i18n.clean !== read()) throw new Error("the translator did not follow");
+    wanted[id] = read();
+    Log.info("drive", `DRIVE_CONTENT ${id} ${before} -> ${read()}, focus kept, the row shows ${shown}`);
+  }
+  await d.press("ui_cancel"); // back saves
+  await d.screen("menu");
+  const { settings } = settingsLoad(shell.store.read(SETTINGS_FILE));
+  if (settings.content.clean_language !== wanted["content.clean_language"] || settings.content.blood !== wanted["content.blood"]) {
+    throw new Error(`${SETTINGS_FILE} does not hold the switches (${JSON.stringify(settings.content)})`);
+  }
+  Log.info("drive", `DRIVE_CONTENT saved ${JSON.stringify(settings.content)}`);
   await d.choose("menu", "menu.quit");
   await d.screen("quit");
 }
@@ -530,11 +568,12 @@ export async function runDrive(shell: Shell, scenario: string): Promise<void> {
   Log.info("drive", `DRIVE_START ${scenario}`);
   if (scenario === "menus") await menus(shell, d);
   else if (scenario === "display") await display(shell, d);
+  else if (scenario === "content") await content(shell, d);
   else if (scenario === "crash") return crash(shell, d);
   else if (scenario === "pseudo" || scenario === "pseudo-plant") await pseudoTour(shell, d);
   else if (scenario.startsWith("show:")) await show(shell, d, scenario.slice(5));
   else if (scenario === "access" || scenario.startsWith("access:")) await access(shell, d, scenario.slice(7));
-  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, display, access[:...], show:<screen>)`);
+  else throw new Error(`unknown scenario "${scenario}" (menus, crash, pseudo, pseudo-plant, display, content, access[:...], show:<screen>)`);
   Log.info("drive", `DRIVE_DONE ${scenario}`);
 }
 
