@@ -17,7 +17,8 @@
 //           pause menu: opening it flushes, and so do a save and quitting; DataManager.saveGame calls saved() for
 //           save/file<N>.rmmzsave once MZ's write resolved. The overlay over Scene_Map asks the map for its menu
 //           (menuCalling, so MZ opens it when the menu is allowed); over a battle, an event or a menu it does
-//           nothing. A browser build has no Steam and keeps the null backend.
+//           nothing. A browser build has no Steam and keeps the null backend; a desktop (NW.js) build with
+//           Greenworks next to index.html and Steam running uses GreenworksBackend (verify: built without MZ).
 //           The last lines make the same file a global (GamePlatform) in MZ and a CommonJS module in Node.
 //
 // Pseudocode:
@@ -691,12 +692,78 @@
         return scene && scene.constructor ? scene.constructor.name : "none";
     }
 
+    // ---- the Steam backend through Greenworks (NW.js; MIT) ----------------------------------
+    /** Greenworks-shaped binding (gw) -> a backend, or null when Steam does not start. Names follow Greenworks'
+     *  docs (initAPI, activateAchievement, setStat, getStatInt, getStatFloat, storeStats,
+     *  indicateAchievementProgress, saveTextToFile, the "game-overlay-activated" event) (verify against the
+     *  Greenworks build that matches your NW.js). Greenworks' storeStats and activateAchievement are
+     *  asynchronous: send() reports the store as accepted, and a failure that arrives later is logged and takes the
+     *  layer offline at the next frame (until the next connect). Greenworks has no rich presence call (verify):
+     *  set_presence and clear_presence do nothing on it, and the store's unlocks are not read back (remote() has
+     *  the stats only). */
+    class GreenworksBackend {
+        name = "steam";
+        overlay = null;
+        storeFailed = false;
+        constructor(gw, defs, store) {
+            this.gw = gw;
+            this.defs = defs;
+            this.store = store;
+            if (typeof gw.on === "function") gw.on("game-overlay-activated", (active) => { this.overlay = !!active; });
+        }
+        static make(gw, defs, store) {
+            let ok = false;
+            try {
+                ok = (gw.initAPI || gw.init).call(gw) === true;
+            } catch {
+                ok = false;
+            }
+            if (!ok) {
+                Log.warn("platform", "Greenworks is installed but Steam did not start (the null backend runs)");
+                return null;
+            }
+            return new GreenworksBackend(gw, defs, store);
+        }
+        available() {
+            return true;
+        }
+        remote() {
+            const stats = {};
+            for (const s of this.defs.stats) stats[s.id] = s.type === "int" ? this.gw.getStatInt(s.id) : this.gw.getStatFloat(s.id);
+            return { unlocked: [], stats };
+        }
+        send(call) {
+            const [name, a, b] = call;
+            const fail = (what) => (err) => {
+                Log.warn("platform", `Steam ${what} failed: ${err}`);
+                if (what === "storeStats") this.storeFailed = true;
+            };
+            if (name === "set_achievement") this.gw.activateAchievement(a, () => {}, fail("activateAchievement"));
+            else if (name === "set_stat") this.gw.setStat(a, b);
+            else if (name === "store_stats") this.gw.storeStats(() => {}, fail("storeStats"));
+            else if (name === "indicate_progress") this.gw.indicateAchievementProgress(a, b, call[3]);
+            else if (name === "cloud_write") {
+                const text = this.store.read(a);
+                if (text !== null) this.gw.saveTextToFile(a, text, () => {}, fail("saveTextToFile"));
+            }
+            return true;
+        }
+        /** Each frame: true / false once when the overlay opened / closed, else null (Greenworks runs callbacks). */
+        update() {
+            const o = this.overlay;
+            this.overlay = null;
+            return o;
+        }
+    }
+
     const GamePlatform = {
         PLATFORM_FORMAT, PLATFORM_STATE_VERSION, PLATFORM_STATE_FILE, PLATFORM_ID_MAX, STAT_TYPES, PRESENCE_MAX_KEYS,
         PRESENCE_MAX_VALUE_BYTES, CLOUD_MODES, CLOUD_LOCAL_NAMES, CLOUD_LOCAL_SUFFIXES, CLOUD_LOCAL_DIRS,
         OVERLAY_PAUSE_SCREENS, CLOUD_MODE, ACHIEVEMENTS_URL: "data/achievements.json",
         platformIdOk, statInitial, achievementsLoad, cloudPartition, overlayAction, NullBackend, Platform,
-        platformStateLoad, PlatformService, MemoryStore, sceneScreen,
+        platformStateLoad, PlatformService, MemoryStore, sceneScreen, GreenworksBackend,
+        /** The Greenworks module NW.js loads (greenworks.js next to index.html, with its native lib folder). */
+        GREENWORKS_MODULE: "./greenworks",
         /** The live service (MZ): a service with no achievements until data/achievements.json has loaded. */
         service: null,
         /** A store overlay opened (true) or closed: over the map it asks for MZ's menu; closing never resumes. */
@@ -709,13 +776,27 @@
     // ---- the MZ glue (only inside RPG Maker MZ) ------------------------------------------
     if (typeof SceneManager !== "undefined" && typeof DataManager !== "undefined" && typeof Scene_Menu !== "undefined") {
         const store = mzStore();
+        // Greenworks in a desktop (NW.js) build and Steam running: its backend; else the null backend
+        const steamBackend = (defs) => {
+            if (typeof require !== "function" || typeof Utils === "undefined" || !Utils.isNwjs()) return undefined;
+            let gw;
+            try {
+                gw = require(GamePlatform.GREENWORKS_MODULE);
+            } catch {
+                return undefined;   // no Greenworks: the usual case
+            }
+            return GreenworksBackend.make(gw, defs, store) ?? undefined;
+        };
         GamePlatform.service = new PlatformService(store, null);
         // data/achievements.json is optional: a missing file keeps the service that does nothing
         const xhr = new XMLHttpRequest();
         xhr.open("GET", GamePlatform.ACHIEVEMENTS_URL);
         xhr.overrideMimeType("application/json");
         xhr.onload = () => {
-            if (xhr.status < 400 && xhr.responseText) GamePlatform.service = new PlatformService(store, xhr.responseText);
+            if (xhr.status < 400 && xhr.responseText) {
+                const backend = steamBackend(achievementsLoad(xhr.responseText).defs);
+                GamePlatform.service = new PlatformService(store, xhr.responseText, backend);
+            }
         };
         xhr.onerror = () => {};
         xhr.send();
@@ -723,7 +804,13 @@
         const updateMain = SceneManager.updateMain;
         SceneManager.updateMain = function () {
             updateMain.call(this);
-            GamePlatform.service.update();
+            const backend = GamePlatform.service.backend;
+            if (backend.storeFailed) {
+                backend.storeFailed = false;
+                GamePlatform.service.platform.disconnect();   // a late store failure: offline until the next connect
+            }
+            const overlay = backend.update ? backend.update() : null;
+            if (overlay === true || overlay === false) GamePlatform.onOverlay(overlay);
         };
         const menuStart = Scene_Menu.prototype.start;
         Scene_Menu.prototype.start = function () {

@@ -176,6 +176,38 @@ test("with achievements, a save in api mode reaches saved() and MZ's menu flushe
     assert.ok(world.localStorage.getItem("kit platform_state.json").includes('"kills": 3'));
 });
 
+test("the Greenworks adapter maps calls, reports a late store failure and the overlay", () => {
+    const log = [];
+    const events = {};
+    let initOk = true;
+    const gw = {
+        initAPI: () => initOk,
+        on: (name, fn) => { events[name] = fn; },
+        activateAchievement: (id) => log.push(`activateAchievement ${id}`),
+        setStat: (id, v) => log.push(`setStat ${id} ${v}`),
+        storeStats: (ok, fail) => { log.push("storeStats"); gw.lastFail = fail; },
+        getStatInt: () => 4,
+        getStatFloat: () => 0.5,
+        indicateAchievementProgress: (id, a, b) => log.push(`indicate ${id} ${a} ${b}`),
+        saveTextToFile: (name) => log.push(`saveTextToFile ${name}`),
+    };
+    const defs = GP.achievementsLoad(SAMPLE).defs;
+    const store = new GP.MemoryStore();
+    const backend = GP.GreenworksBackend.make(gw, defs, store);
+    assert.ok(backend, "initAPI true: a backend");
+    assert.deepEqual(backend.remote(), { unlocked: [], stats: { kills: 4 } });
+    const ps = new GP.PlatformService(store, SAMPLE, backend);
+    assert.equal(ps.addStat("kills", 12), "ok");
+    assert.deepEqual(log, ["setStat kills 16", "activateAchievement kills_10", "storeStats"]);   // the store had 4
+    gw.lastFail("network");
+    assert.equal(backend.storeFailed, true, "a late failure is seen at the next frame");
+    events["game-overlay-activated"](true);
+    assert.equal(backend.update(), true);
+    assert.equal(backend.update(), null);
+    initOk = false;
+    assert.equal(GP.GreenworksBackend.make(gw, defs, store), null, "Steam not running: the null backend");
+});
+
 test("golden values were checked", (t) => {
     assert.ok(checkedCount() >= 0);
     t.diagnostic(`checked ${checkedCount()} golden values in this run`);
