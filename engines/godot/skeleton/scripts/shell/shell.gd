@@ -33,7 +33,7 @@
 # Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(), and t() / tn() honour the
 #           clean-language switch with the word lists of data/i18n/mature/ (#171, #207); CLDR plurals per locale
 # Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): `platform` (docs/PLATFORM.md, #84): the null backend,
-#           saves call its saved(); overlay_changed for the pause hook
+#           or GodotSteam's (platform_steam.gd) when installed; saves call its saved(); overlay_changed for the pause hook
 # ---------------------------------------------------------------------------
 extends Node
 
@@ -175,7 +175,9 @@ func _start_platform() -> void:
 	var text: Variant = null
 	if FileAccess.file_exists(PlatformLayer.ACHIEVEMENTS_FILE):
 		text = FileAccess.get_file_as_string(PlatformLayer.ACHIEVEMENTS_FILE)
-	var backend: Object = null # the null backend
+	# GodotSteam installed and Steam running: its backend; else (and in a smoke run) the null backend
+	var defs: Dictionary = PlatformLayer.achievements_load(text)["defs"]
+	var backend: Object = null if smoke else PlatformSteam.make(defs, data_dir)
 	platform = PlatformLayer.Service.new(data_dir, text, backend)
 	if backend != null and backend.has_signal("overlay_toggled"):
 		backend.connect("overlay_toggled", func(on: bool) -> void: overlay_changed.emit(on))

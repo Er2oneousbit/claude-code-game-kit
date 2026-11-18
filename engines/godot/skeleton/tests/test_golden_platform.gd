@@ -200,3 +200,76 @@ func test_save_store_calls_saved() -> void:
 	assert_eq(err, OK)
 	_check(seen, ["save_1.json"], "saved names")
 	_check((ps.backend as PlatformLayer.NullBackend).cloud, ["save_1.json"], "cloud writes")
+
+
+# ---- the GodotSteam adapter against a fake binding (no GodotSteam, no Steam) --------------------------------
+
+class FakeSteam:
+	extends Object
+	signal overlay_toggled(active: bool, user_initiated: bool, app_id: int)
+	var log: Array = []
+	var store_ok: bool = true
+	var achieved: Dictionary = {"first": true}
+
+	func setAchievement(id: String) -> bool:
+		log.append(["setAchievement", id])
+		return true
+
+	func setStatInt(id: String, v: int) -> bool:
+		log.append(["setStatInt", id, v])
+		return true
+
+	func setStatFloat(id: String, v: float) -> bool:
+		log.append(["setStatFloat", id, v])
+		return true
+
+	func storeStats() -> bool:
+		log.append(["storeStats"])
+		return store_ok
+
+	func getAchievement(id: String) -> Dictionary:
+		return {"ret": true, "achieved": achieved.get(id, false)}
+
+	func getStatInt(_id: String) -> int:
+		return 4
+
+	func getStatFloat(_id: String) -> float:
+		return 0.0
+
+	func setRichPresence(k: String, v: String) -> bool:
+		log.append(["setRichPresence", k, v])
+		return true
+
+	func run_callbacks() -> void:
+		log.append(["run_callbacks"])
+
+
+func test_steam_adapter_maps_calls_and_a_refused_store() -> void:
+	var fake: FakeSteam = FakeSteam.new()
+	var defs: Dictionary = PlatformLayer.achievements_load(SAMPLE)["defs"]
+	var steam: PlatformSteam = PlatformSteam.new(fake, defs, _scratch())
+	_check(steam.remote(), {"unlocked": ["first"], "stats": {"kills": 4}}, "remote")
+	var rules: PlatformLayer.Rules = PlatformLayer.Rules.new(defs, steam, true)
+	assert_eq(rules.add_stat("kills", 12)["out"], "ok")
+	_check(fake.log, [["setStatInt", "kills", 12], ["setAchievement", "kills_10"], ["storeStats"]],
+			"the threshold unlock flushed at once")
+	fake.log.clear()
+	fake.store_ok = false
+	assert_eq(rules.unlock("first")["out"], "unlocked")
+	assert_false(rules.online, "a refused StoreStats takes the layer offline")
+	assert_eq(rules.set_presence("status", "Menu")["out"], "ok")
+	_check(fake.log, [["setAchievement", "first"], ["storeStats"]], "offline: presence waits")
+	var seen: Array = []
+	steam.overlay_toggled.connect(func(on: bool) -> void: seen.append(on))
+	fake.overlay_toggled.emit(true, true, 480)
+	_check(seen, [true], "the overlay signal reaches the shell")
+	steam.update()
+	_check(fake.log.back(), ["run_callbacks"], "update runs the callbacks")
+	fake.free()
+
+
+func test_steam_adapter_is_off_without_godotsteam() -> void:
+	if Engine.has_singleton("Steam"):
+		pass_test("GodotSteam is installed here: make() may return a backend")
+		return
+	assert_null(PlatformSteam.make({}, _scratch()), "no GodotSteam: the null backend")
