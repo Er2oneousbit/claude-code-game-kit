@@ -24,6 +24,8 @@
 //   service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): store_failed and take_store_failure: a store that failed
+//           after it was accepted (Steam's UserStatsStored) goes back on the queue
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -80,6 +82,9 @@ public:
     virtual nlohmann::json remote() = 0;               // {"unlocked": [...], "stats": {...}}
     virtual bool send(const nlohmann::json& call) = 0;
     virtual void update() {}                            // each frame: run the SDK's callbacks
+    // A store that failed after send(["store_stats"]) returned true (Steam's UserStatsStored): its set_stat and
+    // set_achievement calls, oldest first; nullopt when none.
+    virtual std::optional<nlohmann::json> take_store_failure() { return std::nullopt; }
     std::function<void(bool)> on_overlay;               // the adapter calls it when the store overlay opens/closes
 };
 
@@ -124,6 +129,9 @@ public:
     PlatformOut connect(const nlohmann::json& remote);
     PlatformOut disconnect();
     PlatformOut reset_all();
+    // A store the backend accepted failed later: the same as a refused store_stats. The batch's stats and unlocks
+    // are pending again and the layer is offline until connect().
+    PlatformOut store_failed(const nlohmann::json& batch);
 
     nlohmann::json state() const;                       // what the state file holds
     void restore(const nlohmann::json& state);          // takes over platform_state_load's state
@@ -185,7 +193,7 @@ public:
     std::string clear_presence() { return after(rules_.clear_presence()); }
     std::string saved(const std::string& path) { return after(rules_.saved(path)); }
     std::string overlay(bool active, const std::string& screen) const { return overlay_action(active, screen); }
-    void update() { backend_->update(); }
+    void update();   // the backend's callbacks; a store that failed late goes back on the queue, offline
     PlatformBackend& backend() { return *backend_; }
     Platform& rules() { return rules_; }
 

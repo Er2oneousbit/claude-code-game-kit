@@ -6,6 +6,7 @@
 //           overlay_action, platform_state_load). A stat value is kept as JSON: an int stat as an integer, a float
 //           stat as a double, so the state file and the calls carry the same numbers as the reference.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform::store_failed, PlatformService::update (#84)
 // ---------------------------------------------------------------------------
 #include "core/Platform.hpp"
 
@@ -609,6 +610,20 @@ PlatformOut Platform::disconnect() {
     return done("offline");
 }
 
+PlatformOut Platform::store_failed(const json& batch) {
+    online_ = false;
+    for (const auto& call : batch) {
+        const std::string name = call.at(0).get<std::string>();
+        const std::string id = call.at(1).get<std::string>();
+        if (name == "set_stat" && stat_index_.count(id) && !contains(pending_stats_, id)) {
+            pending_stats_.push_back(id);
+        } else if (name == "set_achievement" && contains(unlocked_, id) && !contains(pending_unlocks_, id)) {
+            pending_unlocks_.push_back(id);
+        }
+    }
+    return done("failed");
+}
+
 PlatformOut Platform::reset_all() {
     if (!online_) {
         return done("offline");
@@ -736,6 +751,14 @@ void PlatformService::persist() {
         last_ = text;
     } else {
         LOG_WARN("platform", kPlatformStateFile << " not written: " << error);
+    }
+}
+
+void PlatformService::update() {
+    backend_->update();
+    while (const std::optional<json> batch = backend_->take_store_failure()) {
+        LOG_WARN("platform", "a store the backend accepted failed later: kept for the next connect");
+        after(rules_.store_failed(*batch));
     }
 }
 

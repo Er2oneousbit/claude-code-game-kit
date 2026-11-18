@@ -40,8 +40,17 @@ public:
     virtual bool FileWrite(const char* pchFile, const void* pvData, int32 cubData) = 0;
 };
 
+typedef std::uint64_t uint64;
+
+enum EResult { k_EResultOK = 1, k_EResultFail = 2 };
+
 struct GameOverlayActivated_t {
     uint8 m_bActive;
+};
+
+struct UserStatsStored_t {
+    uint64 m_nGameID;
+    EResult m_eResult;
 };
 
 ISteamUserStats* SteamUserStats();

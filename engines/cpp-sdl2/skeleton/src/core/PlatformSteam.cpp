@@ -6,6 +6,7 @@
 // Notes   : The #if GAMEKIT_STEAM half is compiled only against the real SDK (STEAMWORKS_SDK), which this kit never
 //           ships or downloads; its calls follow the Steamworks API reference (verify against your SDK version).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStatsStored failures reach the layer; make_steam_backend
 // ---------------------------------------------------------------------------
 #include "core/PlatformSteam.hpp"
 
@@ -71,6 +72,9 @@ json SteamBackend::remote() {
 bool SteamBackend::send(const json& call) {
     const std::string name = call.at(0).get<std::string>();
     auto str = [&call](std::size_t i) { return call.at(i).get<std::string>(); };
+    if (name == "set_achievement" || name == "set_stat") {
+        staged_.push_back(call);
+    }
     if (name == "set_achievement") {
         calls_.set_achievement(str(1));
     } else if (name == "set_stat") {
@@ -80,7 +84,12 @@ bool SteamBackend::send(const json& call) {
             calls_.set_stat_float(str(1), static_cast<float>(call.at(2).get<double>()));
         }
     } else if (name == "store_stats") {
-        return calls_.store_stats();
+        const bool ok = calls_.store_stats();
+        if (ok) {
+            inflight_.push_back(staged_);
+        }
+        staged_ = json::array();
+        return ok;
     } else if (name == "indicate_progress") {
         calls_.indicate_progress(str(1), static_cast<std::uint32_t>(call.at(2).get<double>()),
                                  static_cast<std::uint32_t>(call.at(3).get<double>()));
@@ -99,6 +108,40 @@ bool SteamBackend::send(const json& call) {
     return true;
 }
 
+void SteamBackend::stats_stored(bool ok) {
+    if (inflight_.empty()) {
+        return;
+    }
+    json batch = std::move(inflight_.front());
+    inflight_.erase(inflight_.begin());
+    if (!ok) {
+        failed_.push_back(std::move(batch));
+    }
+}
+
+std::optional<json> SteamBackend::take_store_failure() {
+    if (failed_.empty()) {
+        return std::nullopt;
+    }
+    json batch = std::move(failed_.front());
+    failed_.erase(failed_.begin());
+    return batch;
+}
+
+std::unique_ptr<SteamBackend> make_steam_backend(const json& defs, const std::filesystem::path& data_dir, bool automated,
+                                                 const std::function<bool()>& init,
+                                                 const std::function<SteamCalls()>& calls) {
+    if (automated) {
+        return nullptr;   // a smoke run never asks a store
+    }
+    if (!init()) {
+        LOG_WARN("platform", "built with Steam, but Steam did not start (not running, or the app is not owned): "
+                             "the null backend runs");
+        return nullptr;
+    }
+    return std::make_unique<SteamBackend>(defs, data_dir, calls());
+}
+
 void SteamBackend::update() {
     if (calls_.run_callbacks) {
         calls_.run_callbacks();
@@ -112,15 +155,22 @@ void SteamBackend::update() {
 #if defined(GAMEKIT_STEAM)
 namespace {
 
-// The SDK's overlay callback, forwarded to the backend (registered while it lives).
+// The SDK's overlay and stats-stored callbacks, forwarded to the backend (registered while it lives).
 struct OverlayListener {
     SteamBackend* backend = nullptr;
     STEAM_CALLBACK(OverlayListener, on_overlay, GameOverlayActivated_t);
+    STEAM_CALLBACK(OverlayListener, on_stats_stored, UserStatsStored_t);
 };
 
 void OverlayListener::on_overlay(GameOverlayActivated_t* e) {
     if (backend) {
         backend->overlay_changed(e->m_bActive != 0);
+    }
+}
+
+void OverlayListener::on_stats_stored(UserStatsStored_t* e) {
+    if (backend) {
+        backend->stats_stored(e->m_eResult == k_EResultOK);
     }
 }
 
@@ -161,17 +211,11 @@ SteamCalls steam_calls() {
 std::unique_ptr<PlatformBackend> make_platform_backend(const json& defs, const std::filesystem::path& data_dir,
                                                        bool automated) {
 #if defined(GAMEKIT_STEAM)
-    if (automated) {
-        return nullptr;   // a smoke run never asks a store
+    auto backend = make_steam_backend(defs, data_dir, automated, [] { return SteamAPI_Init(); }, steam_calls);
+    if (backend) {
+        g_listener = new OverlayListener();
+        g_listener->backend = backend.get();
     }
-    if (!SteamAPI_Init()) {
-        LOG_WARN("platform", "built with Steam, but Steam did not start (not running, or the app is not owned): "
-                             "the null backend runs");
-        return nullptr;
-    }
-    auto backend = std::make_unique<SteamBackend>(defs, data_dir, steam_calls());
-    g_listener = new OverlayListener();
-    g_listener->backend = backend.get();
     return backend;
 #else
     (void)defs;
