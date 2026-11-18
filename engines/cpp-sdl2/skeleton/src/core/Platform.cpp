@@ -739,10 +739,6 @@ void PlatformService::persist() {
     }
 }
 
-std::unique_ptr<PlatformBackend> make_platform_backend(bool /*automated*/) {
-    return nullptr;   // the null backend
-}
-
 std::string PlatformService::after(const PlatformOut& r) {
     persist();
     return r.out.is_string() ? r.out.get<std::string>() : "";

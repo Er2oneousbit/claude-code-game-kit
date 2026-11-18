@@ -200,9 +200,11 @@ private:
     std::string last_;
 };
 
-// The store backend for this build: the Steamworks adapter when the game was built with -DGAMEKIT_STEAM=ON and
-// Steam answered, else nullptr (PlatformService then uses a NullBackend). automated (dev.py smoke, tests): nullptr.
-std::unique_ptr<PlatformBackend> make_platform_backend(bool automated);
+// The store backend for this build (PlatformSteam.cpp): the Steamworks adapter when the game was built with
+// -DGAMEKIT_STEAM=ON and Steam answered, else nullptr (PlatformService then uses a NullBackend). automated
+// (dev.py smoke, tests): nullptr.
+std::unique_ptr<PlatformBackend> make_platform_backend(const nlohmann::json& defs, const std::filesystem::path& data_dir,
+                                                       bool automated);
 
 }  // namespace core
 

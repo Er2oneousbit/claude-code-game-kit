@@ -292,7 +292,7 @@ void Shell::start_platform() {
     const fs::path ach = game_dir_ / core::path_from_utf8(core::kAchievementsFile);
     std::error_code ec;
     const std::optional<std::string> text = fs::exists(ach, ec) ? core::read_file(ach) : std::nullopt;
-    platform_ = std::make_unique<core::PlatformService>(data_dir_, text, core::make_platform_backend(opts_.automated));
+    platform_ = std::make_unique<core::PlatformService>(data_dir_, text, core::make_platform_backend(core::achievements_load(text).defs, data_dir_, opts_.automated));
     platform_->backend().on_overlay = [this](bool active) { on_overlay(active); };
     LOG_INFO("platform", "backend " << platform_->backend().name());
 }

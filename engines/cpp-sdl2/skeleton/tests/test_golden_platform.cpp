@@ -18,11 +18,13 @@
 #include <map>
 #include <string>
 #include <system_error>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
 #include "core/AtomicFile.hpp"
 #include "core/Platform.hpp"
+#include "core/PlatformSteam.hpp"
 #include "core/SaveStore.hpp"
 
 #ifndef GOLDEN_DIR
@@ -272,6 +274,51 @@ TEST_CASE("a save calls the platform layer's saved() once it is on disk") {
     REQUIRE(store.save(json{{"level", 1}}));
     CHECK(seen == std::vector<std::string>{"save_1.json"});
     same(static_cast<core::NullBackend&>(ps.backend()).cloud, json::array({"save_1.json"}), "cloud writes");
+}
+
+TEST_CASE("the Steam backend maps platform calls to the SDK calls (fake SDK) and a refused StoreStats fails the store") {
+    TempDir dir;
+    std::vector<std::string> log;
+    bool store_ok = true;
+    core::SteamCalls calls;
+    calls.set_achievement = [&](const std::string& id) { log.push_back("SetAchievement " + id); return true; };
+    calls.get_achievement = [](const std::string& id, bool* out) { *out = id == "first"; return true; };
+    calls.set_stat_int = [&](const std::string& id, std::int32_t v) { log.push_back("SetStat " + id + " " + std::to_string(v)); return true; };
+    calls.set_stat_float = [&](const std::string& id, float) { log.push_back("SetStatF " + id); return true; };
+    calls.get_stat_int = [](const std::string&, std::int32_t* out) { *out = 4; return true; };
+    calls.get_stat_float = [](const std::string&, float* out) { *out = 0.0f; return true; };
+    calls.store_stats = [&] { log.push_back("StoreStats"); return store_ok; };
+    calls.set_rich_presence = [&](const std::string& k, const std::string& v) { log.push_back("SetRichPresence " + k + " " + v); return true; };
+    calls.run_callbacks = [&] { log.push_back("RunCallbacks"); };
+    const json defs = core::achievements_load(std::string(kSample)).defs;
+    auto backend = std::make_unique<core::SteamBackend>(defs, dir.path, calls);
+    core::SteamBackend* steam = backend.get();
+    same(steam->remote(), json{{"unlocked", {"first"}}, {"stats", {{"kills", 4}}}}, "remote");
+    core::PlatformService ps(dir.path, std::string(kSample), std::move(backend));
+    CHECK(ps.add_stat("kills", 12) == "ok");   // the store had 4: 16, and kills_10 unlocks
+    CHECK(log == std::vector<std::string>{"SetStat kills 16", "SetAchievement kills_10", "StoreStats"});
+    log.clear();
+    store_ok = false;
+    CHECK(ps.unlock("first") == "already");
+    CHECK(ps.set_presence("status", "Menu") == "ok");
+    CHECK(log == std::vector<std::string>{"SetRichPresence status Menu"});
+    ps.rules().set_stat("kills", 20);
+    CHECK(ps.flush() == "failed");
+    CHECK_FALSE(ps.rules().online());
+    bool seen = false;
+    steam->on_overlay = [&](bool active) { seen = active; };
+    steam->overlay_changed(true);
+    ps.update();
+    CHECK(seen);
+    CHECK(log.back() == "RunCallbacks");
+}
+
+TEST_CASE("without GAMEKIT_STEAM (or in an automated run) the backend is the null one") {
+    TempDir dir;
+    CHECK(core::make_platform_backend(json::object(), dir.path, true) == nullptr);
+#if !defined(GAMEKIT_STEAM)
+    CHECK(core::make_platform_backend(json::object(), dir.path, false) == nullptr);
+#endif
 }
 
 // {{FOOTER}}
