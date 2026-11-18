@@ -99,6 +99,7 @@ widgets. It ships disabled (`"EnabledByDefault": false`), so a project that does
 |---|---|
 | `GameKitShake.h`, `GameKitHitstop.h`, `GameKitEase.h`, `GameKitFollowCamera.h` | trauma screen shake and its noise, hitstop (`ScaledDt`), 14 easing curves by enum or name, deadzone and look-ahead camera follow |
 | `GameKitInputBuffer.h`, `GameKitCoyoteTimer.h`, `GameKitSpring.h`, `GameKitFlashLimiter.h` | buffered presses, coyote time, a damped spring plus `GameKit::Squash`, at most three full-screen flashes per second |
+| `GameKitFeel.h` | the SOP-18 recipe helpers: `Impact` (a hit confirm scaled by damage), `FloatText` (a damage number's rise, pop and fade), `TrailPush` / `TrailShrink` / `TrailLength` (a tracer's path, by distance) |
 | `GameKitSettings.h`, `GameKitBindings.h` | settings defaults and validated loading (bad fields fixed and listed), rebinding with swaps, button-glyph names |
 | `GameKitSaveStore.h`, `GameKitAtomicFile.h` | versioned saves with migrations, a `.bak` of the last good save, crash-safe writes (`.tmp`, flush, rename) |
 | `GameKitI18n.h`, `GameKitJson.h` | `Tr` with a fr-CA -> fr -> en fallback, plurals, the pseudo-locale; JSON helpers that never log |
