@@ -36,6 +36,8 @@
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the variant pick walks atlases as listed, not by id
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): fonts of several pages (#286): fontAtlas stacks them
 //           into one texture, bitmapFontData keeps every glyph (page 1 and later were dropped)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): spec 1.2.0 (#164): an animated sprite's light (its
+//           texture loaded) and tracer, kept for the game (SOP-18 step 4)
 // ---------------------------------------------------------------------------
 
 export const FORMAT = "dotwork-assets";
@@ -228,7 +230,14 @@ export interface PlanAnimatedSprite {
   blend: string;
   clips: PlanClip[];
   directions: Record<string, Record<string, string>>;
+  /** Spec 1.2.0: a light that pulses with `clip` (texture: a texture key; energy: one per frame of that clip). */
+  light: PlanLight | null;
+  /** Spec 1.2.0: a ribbon along the real path (width, taper, spacing, length, steps tail to head); feel.ts trailPush. */
+  tracer: PlanTracer | null;
 }
+
+export interface PlanLight { clip: string; texture: string; color: string; radius: number; energy: number[] }
+export interface PlanTracer { width: number; taper: number; spacing: number; length: number; steps: { at: number; rgba: number[] }[] }
 
 export interface PlanSprite {
   name: string;
@@ -601,7 +610,18 @@ class Planner {
       };
     });
     const directions = isObj(a.directions) ? (a.directions as Record<string, Record<string, string>>) : {};
-    this.plan.animatedSprites.set(name, { name, role: str(a, "role", where, ""), blend: str(a, "blend", where, "normal"), clips, directions });
+    let light: PlanLight | null = null;
+    if (isObj(a.light)) {
+      const L = a.light as Obj;
+      const lw = `${where} light`;
+      const energy = Array.isArray(L.energy) && L.energy.every((e) => typeof e === "number") ? (L.energy as number[]) : [];
+      const clip = clips.find((c) => c.name === L.clip);
+      if (!clip) throw new DotworkError(`${lw}: clip ${String(L.clip)} is not one of its clips`);
+      if (energy.length !== clip.frames.length) throw new DotworkError(`${lw}: ${energy.length} energies for ${clip.frames.length} frames`);
+      light = { clip: clip.name, texture: this.texture(L.texture, `${lw} texture`), color: str(L, "color", lw), radius: num(L, "radius", lw), energy };
+    }
+    const tracer = isObj(a.tracer) ? (a.tracer as unknown as PlanTracer) : null;
+    this.plan.animatedSprites.set(name, { name, role: str(a, "role", where, ""), blend: str(a, "blend", where, "normal"), clips, directions, light, tracer });
   }
 
   sprite(a: Obj, name: string, where: string): void {
