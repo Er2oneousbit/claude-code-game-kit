@@ -21,6 +21,8 @@
 //           tile size, placed cells and centres, corner keys, the extra kinds loaded, a stamps layer
 // Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): a `blend: add` clip spawns as an additive quad, not
 //           a sprite (#286; a headless App, no renderer)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): the shooting effects keep their light and tracer
+//           (spec 1.2.0, #164)
 // ---------------------------------------------------------------------------
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -417,6 +419,32 @@ fn extra_kinds_are_loaded_with_their_data() {
     );
     let logo = &pack.images["logo_golden"];
     assert_eq!((logo.role.as_str(), logo.anchor), ("logo", Anchor::CENTER));
+}
+
+#[test]
+fn shooting_effects_keep_their_light_and_tracer() {
+    let pack = golden_pack();
+    let muzzle = &pack.animated["vfx_muzzle"];
+    assert!(muzzle.additive);
+    let light = pack.animated["vfx_muzzle_light"]
+        .light
+        .as_ref()
+        .expect("the muzzle light's light");
+    assert_eq!(light.energy, vec![1.2, 0.6, 0.0]);
+    assert!(light.texture.ends_with("vfx_muzzle_light_light.png"));
+    let tracer = pack.animated["vfx_tracer"]
+        .tracer
+        .as_ref()
+        .expect("the tracer's ribbon");
+    assert_eq!(
+        (tracer["spacing"].as_f64(), tracer["length"].as_f64()),
+        (Some(4.0), Some(32.0))
+    );
+    assert!(pack.animated["hero"].light.is_none());
+    assert_eq!(
+        pack.particles["vfx_stone_debris_particles"].emitter["direction"],
+        json!([1, 0])
+    );
 }
 
 #[test]

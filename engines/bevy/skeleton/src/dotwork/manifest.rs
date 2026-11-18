@@ -413,12 +413,38 @@ fn animated(name: &str, d: AnimatedSpriteDef, files: &Files) -> Result<AnimatedS
             }
         }
     }
+    let light = match d.light {
+        Some(l) => {
+            let clip = clips
+                .iter()
+                .find(|c| c.name == l.clip)
+                .ok_or_else(|| format!("light names clip {:?}, which is not here", l.clip))?;
+            if l.energy.len() != clip.durations.len() {
+                return Err(format!(
+                    "light has {} energies for the {} frames of {}",
+                    l.energy.len(),
+                    clip.durations.len(),
+                    l.clip
+                ));
+            }
+            Some(Light {
+                texture: files.existing(&l.texture).map_err(|e| format!("light: {e}"))?,
+                clip: l.clip,
+                color: l.color,
+                radius: l.radius,
+                energy: l.energy,
+            })
+        }
+        None => None,
+    };
     Ok(AnimatedSprite {
         name: name.into(),
         role: d.role,
         additive: d.blend.as_deref() == Some("add"),
         clips,
         directions: d.directions,
+        light,
+        tracer: d.tracer,
     })
 }
 

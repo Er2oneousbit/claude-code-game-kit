@@ -66,6 +66,22 @@ pub struct AnimatedSprite {
     pub clips: Vec<Clip>,
     /// `{action: {direction: clip}}`, such as walk -> s -> walk_s.
     pub directions: BTreeMap<String, BTreeMap<String, String>>,
+    /// Spec 1.2.0 (#164): a light that pulses with a clip (a muzzle light), for a game that draws 2D lights.
+    pub light: Option<Light>,
+    /// Spec 1.2.0 (#164): a ribbon along the real path (width, taper, spacing, length, steps); logic::feel::trail_push
+    /// keeps its points.
+    pub tracer: Option<Value>,
+}
+
+/// A light that pulses with `clip`: frame i shows `energy[i]` (the last is 0).
+#[derive(Debug, Clone)]
+pub struct Light {
+    pub clip: String,
+    /// Asset path of a white radial falloff.
+    pub texture: String,
+    pub color: String,
+    pub radius: f64,
+    pub energy: Vec<f64>,
 }
 
 impl AnimatedSprite {

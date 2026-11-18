@@ -44,6 +44,20 @@ pub(super) struct AnimatedSpriteDef {
     pub(super) clips: Vec<ClipDef>,
     #[serde(default)]
     pub(super) directions: BTreeMap<String, BTreeMap<String, String>>,
+    /// Spec 1.2.0 (#164): the firing light pulse, and a tracer's ribbon (kept as JSON for the game).
+    #[serde(default)]
+    pub(super) light: Option<LightDef>,
+    #[serde(default)]
+    pub(super) tracer: Option<Value>,
+}
+
+#[derive(Deserialize)]
+pub(super) struct LightDef {
+    pub(super) clip: String,
+    pub(super) texture: String,
+    pub(super) color: String,
+    pub(super) radius: f64,
+    pub(super) energy: Vec<f64>,
 }
 
 #[derive(Deserialize)]

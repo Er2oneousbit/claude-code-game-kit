@@ -80,7 +80,7 @@ src/main.rs        launcher: command line -> app::build -> exit code
 src/app.rs         plugin sets per run mode (window, headless smoke, capture, tests), tick rate, smoke budget
 src/cli.rs         the program's own options (--smoke, --screenshot, ...)
 src/logic/         engine-free rules and helpers (math, seeded Rng). Plain Rust, unit tested
-                   juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter
+                   juice: shake, hitstop, ease, follow, input_buffer, coyote, spring (+ squash), flash_limiter, feel (the SOP-18 recipe helpers)
                    shell: settings, bindings (+ glyphs), save_store, i18n (+ pseudo-locale), atomic_file, auto_repeat,
                    charmap (which characters a font can draw)
                    audio: audio_director (events, voices, ducking), music_director, audio_access (sliders, arrows)
