@@ -27,7 +27,8 @@
 #             doctor   verify the local environment
 #             ship     put the game online (tools/cloud/ship.py): ship --target aws|azure|gcp|linode|do
 #                      --kind static|container --plan, then --apply / --destroy; or upload to itch.io:
-#                      ship --target itch --project user/game --dry-run, then without it; ship -h for its options
+#                      ship --target itch --project user/game --dry-run, then without it; or to Steam with
+#                      steamcmd: ship --target steam --app ID --depot ID --site DIR --dry-run; ship -h for all
 # Env     : UE_ROOT  engine install folder (contains Engine/)
 # Exit    : 0 ok, 1 task failed, 2 environment/usage problem
 # Notes   : Run against UE 5.8 on Windows (2026-10-20) with VS 2022 Build Tools:
@@ -106,6 +107,7 @@
 #           the help (the Display tab's Apply, #308)
 # Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): test and smoke build first when a C++ source is newer
 #           than its built module (they ran the old binaries and passed on code that was never compiled)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship's help names --target steam (SteamPipe, #86)
 # ---------------------------------------------------------------------------
 import argparse
 import json
@@ -1453,8 +1455,8 @@ def build_parser():
     p.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     p.add_argument("--deep", action="store_true", help="also remove DerivedDataCache/ (slow to rebuild)")
     p.set_defaults(fn=cmd_clean)
-    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io with butler "
-                   "(tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
+    sub.add_parser("ship", help="put the game online with OpenTofu, or upload it to itch.io (butler) or Steam "
+                   "(steamcmd; tools/cloud/ship.py; ship -h for its options)").set_defaults(fn=cmd_ship)
     sub.add_parser("doctor", help="verify the local environment").set_defaults(fn=cmd_doctor)
     return ap
 

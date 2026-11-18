@@ -33,6 +33,8 @@
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): AllSkipped, the [SKIP] line on five engines (#295)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): show:credits on every engine with show drives (#284)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): ship --target itch defaults to the web build (#86)
+# Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): ship --target steam is forwarded untouched, and the nine
+#           ship help texts match (#86)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the display drive, show:apply and show:confirm on the
 #           Unity, C++/SDL3, Bevy and Unreal smoke help, Unity's drive names (#308)
 # Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): CppTestNames, check refuses a doctest name with ';'
@@ -2995,6 +2997,30 @@ class ShipCommand(TempRoot):
                 rc, text, calls = self.ship(engine, "ship", "--target", "do", "--kind", "static", "--plan",
                                             "--site", "my/site")
                 self.assertEqual(calls[0][-2:], ["--site", "my/site"])   # an explicit --site wins
+
+    def test_a_steam_upload_is_forwarded_untouched(self):
+        # #86: a Steam depot is a desktop build, so dev.py adds no web build: ship.py asks for the folder itself
+        for engine in ENGINES:
+            with self.subTest(engine=engine):
+                argv = ["--target", "steam", "--app", "1234560", "--depot", "1234561", "--dry-run"]
+                rc, text, calls = self.ship(engine, "ship", *argv)
+                self.assertEqual(rc, 0, text)
+                self.assertEqual(calls[0][2:], argv)
+                rc, text, calls = self.ship(engine, "--debug", "ship", "--target=steam", "--app", "1",
+                                            "--depot", "2=build/windows", "--preview")
+                self.assertEqual(calls[0][2:], ["--target=steam", "--app", "1", "--depot", "2=build/windows",
+                                                "--preview"])
+
+    def test_every_engines_ship_help_names_the_same_targets(self):
+        """The nine dev.py files describe ship the same way (CLAUDE.md: keep all nine in step)."""
+        helps = {}
+        for engine in ENGINES:
+            text = (KIT / "engines" / engine / "skeleton" / "tools" / "dev.py").read_text(encoding="utf-8")
+            head = text[text.index("#             ship "):]
+            helps[engine] = head[:head.index("# Env")]
+            self.assertIn("--target steam", helps[engine], engine)
+            self.assertIn('"(steamcmd; tools/cloud/ship.py; ship -h for its options)"', text, engine)
+        self.assertEqual(len(set(helps.values())), 1, helps)
 
     def test_an_itch_push_defaults_to_the_engines_web_build(self):
         # #86: `ship --target itch` uploads a folder with butler; with no --site it is the engine's web build
