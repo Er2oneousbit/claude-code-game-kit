@@ -43,6 +43,8 @@
 // Updated : 2026-11-13 with Claude (Opus 5.5, claude-opus-5-5): the Display tab's Apply and keep-or-revert confirm,
 //           counted in real time (#308); hud_scale() and play.hud_scale_changed for a game HUD (#309)
 // Updated : 2026-11-14 with Claude (Opus 5.5, claude-opus-5-5): the F8 report's screenshot is screenshot.png (#314)
+// Updated : 2026-11-17 with Claude (Opus 5.5, claude-opus-5-5): blood_enabled(); t() honours clean language with the
+//           word lists of data/i18n/mature/ (#171, #207)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -142,6 +144,8 @@ public:
     nlohmann::json& settings() { return settings_; }
     const nlohmann::json& settings() const { return settings_; }
     std::string t(const std::string& key, const core::TrArgs& args = {}) const;
+    // #171: may the game show blood? The effect is the game's; off means a neutral hit effect (SOP-18).
+    bool blood_enabled() const;
     bool access_flag(const char* key) const;          // settings.access.<key> as a bool
     double access_number(const char* key, double fallback) const;
     double game_speed() const { return access_number("game_speed", 1.0); }
@@ -201,6 +205,7 @@ private:
     nlohmann::json settings_;
     bool settings_existed_ = false;
     core::StringTables tables_;
+    std::map<std::string, core::WordList> mature_;   // data/i18n/mature/<locale>.json: clean-language words (#207)
     std::string locale_ = core::kFallbackLocale;
     nlohmann::json presets_;
     nlohmann::json colours_;

@@ -909,7 +909,7 @@ def build_parser():
                         "one label too small: exit 1), bug (F8: the bug report, DRIVE_BUG), display (the Display tab's "
                         "Apply: stage, warn, apply, the 15 s confirm reverts in real time, discard; DRIVE_DISPLAY lines), "
                         "access[:res=WxH,scale=N,pad,read] (the accessibility sweep's tour, tools/access/sweep.py), "
-                        "show:<screen> (title, menu, settings, pause, subtitle, play, juice, credits, apply or confirm: "
+                        "show:<screen> (title, menu, settings, content, pause, subtitle, play, juice, credits, apply or confirm: "
                         "opens that screen; add "
                         "--screenshot); "
                         "the run ends at DRIVE_DONE")
