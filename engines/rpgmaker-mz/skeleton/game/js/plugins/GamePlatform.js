@@ -28,6 +28,8 @@
 //   service: defs <- achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): a Greenworks storeStats that fails later puts its batch
+//           back on the queue (Platform.storeFailed, takeStoreFailure); Steam starts without achievements too
 // ---------------------------------------------------------------------------
 /*:
  * @target MZ
@@ -498,6 +500,18 @@
             this.online = false;
             return this.done("offline");
         }
+        /** A store the backend accepted failed later: the same as a refused store_stats. The batch's stats and unlocks
+         *  are pending again and the layer is offline until connect(). */
+        storeFailed(batch) {
+            this.online = false;
+            for (const [name, id] of batch) {
+                if (name === "set_stat" && this.statDefs.has(id) && !this.pendingStats.includes(id))
+                    this.pendingStats.push(id);
+                else if (name === "set_achievement" && this.unlocked.includes(id) && !this.pendingUnlocks.includes(id))
+                    this.pendingUnlocks.push(id);
+            }
+            return this.done("failed");
+        }
         /** Testing only: refused offline (a reset is never queued). */
         resetAll() {
             if (!this.online)
@@ -653,9 +667,15 @@
         overlay(active, screen) {
             return overlayAction(active, screen);
         }
-        /** Each frame (the null backend does nothing). */
+        /** Each frame (the null backend does nothing); a store that failed late goes back on the queue, offline.
+         *  Returns what the backend's update returned (the overlay's change). */
         update() {
-            this.backend.update?.();
+            const r = this.backend.update?.();
+            for (let batch = this.backend.takeStoreFailure?.(); batch; batch = this.backend.takeStoreFailure?.()) {
+                Log.warn("platform", "a store the backend accepted failed later: kept for the next connect");
+                this.after(this.platform.storeFailed(batch));
+            }
+            return r;
         }
     }
 
@@ -705,14 +725,16 @@
      *  docs (initAPI, activateAchievement, setStat, getStatInt, getStatFloat, storeStats,
      *  indicateAchievementProgress, saveTextToFile, the "game-overlay-activated" event) (verify against the
      *  Greenworks build that matches your NW.js). Greenworks' storeStats and activateAchievement are
-     *  asynchronous: send() reports the store as accepted, and a failure that arrives later is logged and takes the
-     *  layer offline at the next frame (until the next connect). Greenworks has no rich presence call (verify):
+     *  asynchronous: send() reports the store as accepted, and a failure that arrives later (its error callback, the
+     *  equivalent of UserStatsStored) puts that store's stats and unlocks back on the queue and takes the layer
+     *  offline at the next frame (until the next connect). Greenworks has no rich presence call (verify):
      *  set_presence and clear_presence do nothing on it, and the store's unlocks are not read back (remote() has
      *  the stats only). */
     class GreenworksBackend {
         name = "steam";
         overlay = null;
-        storeFailed = false;
+        staged = [];
+        failed = [];
         constructor(gw, defs, store) {
             this.gw = gw;
             this.defs = defs;
@@ -742,19 +764,28 @@
         }
         send(call) {
             const [name, a, b] = call;
-            const fail = (what) => (err) => {
-                Log.warn("platform", `Steam ${what} failed: ${err}`);
-                if (what === "storeStats") this.storeFailed = true;
-            };
+            const fail = (what) => (err) => Log.warn("platform", `Steam ${what} failed: ${err}`);
+            if (name === "set_achievement" || name === "set_stat") this.staged.push([...call]);
             if (name === "set_achievement") this.gw.activateAchievement(a, () => {}, fail("activateAchievement"));
             else if (name === "set_stat") this.gw.setStat(a, b);
-            else if (name === "store_stats") this.gw.storeStats(() => {}, fail("storeStats"));
+            else if (name === "store_stats") {
+                const batch = this.staged;
+                this.staged = [];
+                this.gw.storeStats(() => {}, (err) => {
+                    fail("storeStats")(err);
+                    this.failed.push(batch);
+                });
+            }
             else if (name === "indicate_progress") this.gw.indicateAchievementProgress(a, b, call[3]);
             else if (name === "cloud_write") {
                 const text = this.store.read(a);
                 if (text !== null) this.gw.saveTextToFile(a, text, () => {}, fail("saveTextToFile"));
             }
             return true;
+        }
+        /** The oldest store whose storeStats failed after send() accepted it, or null. */
+        takeStoreFailure() {
+            return this.failed.shift() ?? null;
         }
         /** Each frame: true / false once when the overlay opened / closed, else null (Greenworks runs callbacks). */
         update() {
@@ -795,7 +826,10 @@
             }
             return GreenworksBackend.make(gw, defs, store) ?? undefined;
         };
-        GamePlatform.service = new PlatformService(store, null);
+        // the Steam backend starts whether or not the game has achievements (presence, the overlay and cloud saves
+        // need it too); it gets the definitions once data/achievements.json has loaded
+        const backend = steamBackend({ version: PLATFORM_STATE_VERSION, stats: [], achievements: [] });
+        GamePlatform.service = new PlatformService(store, null, backend);
         // data/achievements.json only when the plugin parameter says the game has one: probing for a missing file
         // is an HTTP 404, a console error MZ's smoke test (and a player's F8 console) counts against the game
         const wanted = PluginManager.parameters("GamePlatform").achievements === "true";
@@ -805,7 +839,7 @@
             xhr.overrideMimeType("application/json");
             xhr.onload = () => {
                 if (xhr.status < 400 && xhr.responseText) {
-                    const backend = steamBackend(achievementsLoad(xhr.responseText).defs);
+                    if (backend) backend.defs = achievementsLoad(xhr.responseText).defs;
                     GamePlatform.service = new PlatformService(store, xhr.responseText, backend);
                 }
             };
@@ -816,12 +850,7 @@
         const updateMain = SceneManager.updateMain;
         SceneManager.updateMain = function () {
             updateMain.call(this);
-            const backend = GamePlatform.service.backend;
-            if (backend.storeFailed) {
-                backend.storeFailed = false;
-                GamePlatform.service.platform.disconnect();   // a late store failure: offline until the next connect
-            }
-            const overlay = backend.update ? backend.update() : null;
+            const overlay = GamePlatform.service.update();   // late store failures go back on the queue there
             if (overlay === true || overlay === false) GamePlatform.onOverlay(overlay);
         };
         const menuStart = Scene_Menu.prototype.start;

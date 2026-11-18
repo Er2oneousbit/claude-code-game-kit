@@ -7,10 +7,13 @@
 // Usage   : core::SteamCalls calls = ...;                        // tests: lambdas; a Steam build: steam_calls()
 //           auto backend = std::make_unique<core::SteamBackend>(defs, data_dir, std::move(calls));
 //           make_platform_backend(automated) does this when the SDK is compiled in and SteamAPI_Init succeeds.
-// Notes   : Only StoreStats returning false counts as a failed store; a later UserStatsStored_t failure is not
-//           seen (verify). Stats are read with GetStat after the SDK's init (Steamworks 1.61+ loads them without
+// Notes   : A store StoreStats accepted that UserStatsStored_t later reports failed goes back to the layer through
+//           take_store_failure() (its stats and unlocks are queued again). Steam starts whether or not
+//           data/achievements.json exists (presence, the overlay and cloud saves need it too). Stats are read with GetStat after the SDK's init (Steamworks 1.61+ loads them without
 //           RequestCurrentStats, verify). The overlay arrives through GameOverlayActivated_t (verify).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStatsStored failures reach the layer
+//           (stats_stored, take_store_failure); make_steam_backend starts Steam without achievements too
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -19,6 +22,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <nlohmann/json.hpp>
 
@@ -55,6 +59,9 @@ public:
     void update() override;
     // The SDK half reports the overlay here; update() hands it to on_overlay on the game's thread.
     void overlay_changed(bool active) { overlay_ = active; }
+    // The SDK half reports UserStatsStored_t here (true: k_EResultOK); a failure queues that store's batch.
+    void stats_stored(bool ok);
+    std::optional<nlohmann::json> take_store_failure() override;
 
 private:
     bool is_int(const std::string& id) const;
@@ -62,7 +69,16 @@ private:
     std::filesystem::path data_dir_;
     SteamCalls calls_;
     std::optional<bool> overlay_;
+    nlohmann::json staged_ = nlohmann::json::array();   // set_stat / set_achievement since the last store_stats
+    std::vector<nlohmann::json> inflight_;               // batches stores accepted, until their UserStatsStored
+    std::vector<nlohmann::json> failed_;                 // batches whose UserStatsStored failed
 };
+
+// The Steam backend when init() succeeds (SteamAPI_Init in a Steam build), whatever defs holds (none is fine), else
+// nullptr; automated: nullptr. make_platform_backend uses it with the SDK; tests pass fakes.
+std::unique_ptr<SteamBackend> make_steam_backend(const nlohmann::json& defs, const std::filesystem::path& data_dir,
+                                                 bool automated, const std::function<bool()>& init,
+                                                 const std::function<SteamCalls()>& calls);
 
 }  // namespace core
 

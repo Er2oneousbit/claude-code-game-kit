@@ -4,6 +4,7 @@
 // Usage   : see GameKitPlatformSteam.h
 // Notes   : No Steamworks types here: the SDK half lives in GameKitShellUI (GameKitPlatformBackends.cpp).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): StatsStored, TakeStoreFailure, MakeSteamBackend
 // ---------------------------------------------------------------------------
 #include "GameKitPlatformSteam.h"
 
@@ -82,6 +83,10 @@ namespace GameKit
 	{
 		const FString Name = Call[0]->AsString();
 		auto S = [&Call](int32 N) { return Call[N]->AsString(); };
+		if (Name == TEXT("set_achievement") || Name == TEXT("set_stat"))
+		{
+			Staged.Add(Json::MakeArray(Call));
+		}
 		auto N = [&Call](int32 I) { return Call[I]->AsNumber(); };
 		if (Name == TEXT("set_achievement"))
 		{
@@ -100,7 +105,13 @@ namespace GameKit
 		}
 		else if (Name == TEXT("store_stats"))
 		{
-			return Calls.StoreStats();
+			const bool bOk = Calls.StoreStats();
+			if (bOk)
+			{
+				Inflight.Add(Staged);
+			}
+			Staged.Reset();
+			return bOk;
 		}
 		else if (Name == TEXT("indicate_progress"))
 		{
@@ -126,6 +137,41 @@ namespace GameKit
 			}
 		}
 		return true;
+	}
+
+	void FSteamPlatformBackend::StatsStored(bool bOk)
+	{
+		if (Inflight.IsEmpty())
+		{
+			return;
+		}
+		TArray<TSharedPtr<FJsonValue>> Batch = Inflight[0];
+		Inflight.RemoveAt(0);
+		if (!bOk)
+		{
+			Failed.Add(MoveTemp(Batch));
+		}
+	}
+
+	TOptional<TArray<TSharedPtr<FJsonValue>>> FSteamPlatformBackend::TakeStoreFailure()
+	{
+		if (Failed.IsEmpty())
+		{
+			return {};
+		}
+		TArray<TSharedPtr<FJsonValue>> Batch = Failed[0];
+		Failed.RemoveAt(0);
+		return Batch;
+	}
+
+	TUniquePtr<FSteamPlatformBackend> MakeSteamBackend(const TSharedRef<FJsonObject>& Defs, const FString& DataDir, bool bAutomated,
+	                                                   TFunctionRef<bool()> Init, TFunctionRef<FSteamCalls()> MakeCalls)
+	{
+		if (bAutomated || !Init())
+		{
+			return nullptr;   // an automated run never asks a store; Init false: Steam did not start
+		}
+		return MakeUnique<FSteamPlatformBackend>(Defs, DataDir, MakeCalls());
 	}
 
 	TOptional<bool> FSteamPlatformBackend::Update()

@@ -313,6 +313,48 @@ TEST_CASE("the Steam backend maps platform calls to the SDK calls (fake SDK) and
     CHECK(log.back() == "RunCallbacks");
 }
 
+TEST_CASE("an enabled Steam backend starts without data/achievements.json (docs/PLATFORM.md section 6)") {
+    TempDir dir;
+    std::vector<std::string> log;
+    core::SteamCalls calls;
+    calls.set_rich_presence = [&](const std::string& k, const std::string& v) { log.push_back(k + " " + v); return true; };
+    calls.get_achievement = [](const std::string&, bool* out) { *out = false; return true; };
+    const json none = core::achievements_load(std::nullopt).defs;
+    auto backend = core::make_steam_backend(none, dir.path, false, [] { return true; }, [&] { return calls; });
+    REQUIRE(backend != nullptr);
+    core::PlatformService ps(dir.path, std::nullopt, std::move(backend));
+    CHECK(ps.set_presence("status", "Menu") == "ok");
+    CHECK(log == std::vector<std::string>{"status Menu"});
+    CHECK(core::make_steam_backend(none, dir.path, false, [] { return false; }, [&] { return calls; }) == nullptr);
+    CHECK(core::make_steam_backend(none, dir.path, true, [] { return true; }, [&] { return calls; }) == nullptr);
+}
+
+TEST_CASE("a store UserStatsStored reports failed after StoreStats accepted it goes back on the queue, offline") {
+    TempDir dir;
+    std::vector<std::string> log;
+    core::SteamCalls calls;
+    calls.set_achievement = [&](const std::string& id) { log.push_back("SetAchievement " + id); return true; };
+    calls.get_achievement = [](const std::string&, bool* out) { *out = false; return true; };
+    calls.set_stat_int = [&](const std::string& id, std::int32_t v) { log.push_back("SetStat " + id + " " + std::to_string(v)); return true; };
+    calls.get_stat_int = [](const std::string&, std::int32_t* out) { *out = 0; return true; };
+    calls.store_stats = [&] { log.push_back("StoreStats"); return true; };
+    auto backend = std::make_unique<core::SteamBackend>(core::achievements_load(std::string(kSample)).defs, dir.path, calls);
+    core::SteamBackend* steam = backend.get();
+    core::PlatformService ps(dir.path, std::string(kSample), std::move(backend));
+    CHECK(ps.add_stat("kills", 12) == "ok");   // kills_10 unlocks and flushes; StoreStats accepts it
+    CHECK(ps.rules().online());
+    steam->stats_stored(false);                // UserStatsStored_t: k_EResultFail
+    ps.update();
+    CHECK_FALSE(ps.rules().online());
+    same(ps.rules().state()["pending"], json{{"stats", {"kills"}}, {"unlocks", {"kills_10"}}, {"cloud", json::array()}}, "queued again");
+    log.clear();
+    ps.rules().connect(json::object());
+    CHECK(log == std::vector<std::string>{"SetStat kills 12", "SetAchievement kills_10", "StoreStats"});
+    steam->stats_stored(true);
+    ps.update();
+    CHECK(ps.rules().online());
+}
+
 TEST_CASE("without GAMEKIT_STEAM (or in an automated run) the backend is the null one") {
     TempDir dir;
     CHECK(core::make_platform_backend(json::object(), dir.path, true) == nullptr);

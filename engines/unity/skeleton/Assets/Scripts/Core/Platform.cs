@@ -24,6 +24,9 @@
 //   service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): TakeStoreFailure and StoreFailed: a store that failed after
+//           it was accepted (Steam's UserStatsStored) goes back on the queue; PlatformStart (Steam starts without
+//           achievements too)
 // ---------------------------------------------------------------------------
 using System;
 using System.Collections.Generic;
@@ -43,6 +46,20 @@ namespace {{GAME_SLUG}}.Core
         bool Send(List<object> call);
         /// <summary>Each frame: run the SDK's callbacks; true/false when the store overlay opened/closed, else null.</summary>
         bool? Update();
+        /// <summary>A store that failed after Send(["store_stats"]) returned true (Steam's UserStatsStored): its
+        /// set_stat and set_achievement calls, oldest first; null when none.</summary>
+        List<object> TakeStoreFailure() => null;
+    }
+
+    /// <summary>The start rule (docs/PLATFORM.md section 6): an enabled store backend starts whether or not the game
+    /// has achievements, since presence, the overlay and cloud saves need it too; a smoke run never asks.</summary>
+    public static class PlatformStart
+    {
+        public static IPlatformBackend Make(bool smoke, Dictionary<string, object> defs, string dataFolder,
+                                            Func<Dictionary<string, object>, string, IPlatformBackend> factory)
+        {
+            return smoke || factory == null ? null : factory(defs, dataFolder);
+        }
     }
 
     /// <summary>The backend every game runs by default: records every call and keeps what a store would hold.</summary>
@@ -557,6 +574,21 @@ namespace {{GAME_SLUG}}.Core
             return Done("offline");
         }
 
+        /// <summary>A store the backend accepted failed later: the same as a refused store_stats. The batch's stats
+        /// and unlocks are pending again and the layer is offline until Connect().</summary>
+        public PlatformOut StoreFailed(List<object> batch)
+        {
+            Online = false;
+            foreach (object o in batch)
+            {
+                var call = (List<object>)o;
+                string id = (string)call[1];
+                if ((string)call[0] == "set_stat" && StatDef(id) != null && !PendingStats.Contains(id)) PendingStats.Add(id);
+                else if ((string)call[0] == "set_achievement" && Unlocked.Contains(id) && !PendingUnlocks.Contains(id)) PendingUnlocks.Add(id);
+            }
+            return Done("failed");
+        }
+
         /// <summary>Testing only: refused offline (a reset is never queued).</summary>
         public PlatformOut ResetAll()
         {
@@ -695,7 +727,16 @@ namespace {{GAME_SLUG}}.Core
         /// <summary>The store overlay opened or closed over screen: "pause" means open the pause menu.</summary>
         public string Overlay(bool active, string screen) => PlatformRules.OverlayAction(active, screen);
         /// <summary>Each frame: the backend's callbacks; true/false when the store overlay opened/closed.</summary>
-        public bool? Update() => Backend.Update();
+        public bool? Update()
+        {
+            bool? overlay = Backend.Update();
+            for (List<object> batch = Backend.TakeStoreFailure(); batch != null; batch = Backend.TakeStoreFailure())
+            {
+                Problems.Add("a store the backend accepted failed later: kept for the next connect");
+                After(Rules.StoreFailed(batch));
+            }
+            return overlay;
+        }
     }
 }
 

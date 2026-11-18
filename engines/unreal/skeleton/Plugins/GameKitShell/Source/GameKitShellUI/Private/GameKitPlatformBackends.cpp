@@ -7,6 +7,7 @@
 // Notes   : The SDK calls follow the Steamworks API reference for the SDK Unreal bundles (v1.64 in UE 5.8; verify
 //           after an engine upgrade). STEAM_CALLBACK registers the overlay listener while the backend lives.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStatsStored_t reaches the backend; MakeSteamBackend
 // ---------------------------------------------------------------------------
 #include "GameKitPlatformBackends.h"
 
@@ -29,7 +30,16 @@ namespace GameKit
 		{
 			FSteamPlatformBackend* Backend = nullptr;
 			STEAM_CALLBACK(FOverlayListener, OnOverlay, GameOverlayActivated_t);
+			STEAM_CALLBACK(FOverlayListener, OnStatsStored, UserStatsStored_t);
 		};
+
+		void FOverlayListener::OnStatsStored(UserStatsStored_t* E)
+		{
+			if (Backend)
+			{
+				Backend->StatsStored(E->m_eResult == k_EResultOK);
+			}
+		}
 
 		void FOverlayListener::OnOverlay(GameOverlayActivated_t* E)
 		{
@@ -80,18 +90,20 @@ namespace GameKit
 	TUniquePtr<IPlatformBackend> MakePlatformBackend(const TSharedRef<FJsonObject>& Defs, const FString& DataDir, bool bAutomated)
 	{
 #if GAMEKIT_STEAM
-		if (bAutomated)
+		TUniquePtr<FSteamPlatformBackend> Backend = MakeSteamBackend(Defs, DataDir, bAutomated, [bAutomated]
 		{
-			return nullptr;   // an automated run never asks a store
-		}
-		if (!SteamAPI_Init())
+			const bool bOk = SteamAPI_Init();
+			if (!bOk && !bAutomated)
+			{
+				UE_LOG(LogGameKitShell, Warning, TEXT("platform: built with Steam, but Steam did not start: the null backend runs"));
+			}
+			return bOk;
+		}, [] { return SteamworksCalls(); });
+		if (Backend.IsValid())
 		{
-			UE_LOG(LogGameKitShell, Warning, TEXT("platform: built with Steam, but Steam did not start: the null backend runs"));
-			return nullptr;
+			GListener = new FOverlayListener();
+			GListener->Backend = Backend.Get();
 		}
-		TUniquePtr<FSteamPlatformBackend> Backend = MakeUnique<FSteamPlatformBackend>(Defs, DataDir, SteamworksCalls());
-		GListener = new FOverlayListener();
-		GListener->Backend = Backend.Get();
 		return Backend;
 #else
 		return nullptr;   // the null backend: this build has no Steam

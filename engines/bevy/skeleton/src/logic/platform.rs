@@ -22,6 +22,8 @@
 //   service: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Backend::take_store_failure and Platform::store_failed: a
+//           store that failed after it was accepted (Steam's UserStatsStored) goes back on the queue
 // ---------------------------------------------------------------------------
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -254,6 +256,11 @@ pub trait Backend: Send + Sync {
     fn update(&mut self) -> Option<bool> {
         None
     }
+    /// A store that failed after send(["store_stats"]) returned true (Steam's UserStatsStored): its set_stat and
+    /// set_achievement calls, oldest first; None when none.
+    fn take_store_failure(&mut self) -> Option<Value> {
+        None
+    }
 }
 
 impl Backend for Box<dyn Backend> {
@@ -271,6 +278,9 @@ impl Backend for Box<dyn Backend> {
     }
     fn update(&mut self) -> Option<bool> {
         (**self).update()
+    }
+    fn take_store_failure(&mut self) -> Option<Value> {
+        (**self).take_store_failure()
     }
 }
 
@@ -694,6 +704,25 @@ impl<B: Backend> Platform<B> {
         self.done("offline")
     }
 
+    /// A store the backend accepted failed later: the same as a refused store_stats. The batch's stats and unlocks
+    /// are pending again and the layer is offline until connect().
+    pub fn store_failed(&mut self, batch: &Value) -> Out {
+        self.online = false;
+        for call in batch.as_array().into_iter().flatten() {
+            let id = call.get(1).and_then(Value::as_str).unwrap_or("").to_string();
+            match call.get(0).and_then(Value::as_str) {
+                Some("set_stat") if self.stat_def(&id).is_some() && !self.pending_stats.contains(&id) => {
+                    self.pending_stats.push(id)
+                }
+                Some("set_achievement") if self.unlocked.contains(&id) && !self.pending_unlocks.contains(&id) => {
+                    self.pending_unlocks.push(id)
+                }
+                _ => {}
+            }
+        }
+        self.done("failed")
+    }
+
     /// Testing only: refused offline (a reset is never queued).
     pub fn reset_all(&mut self) -> Out {
         if !self.online {
@@ -878,8 +907,15 @@ impl PlatformService {
         overlay_action(active, screen)
     }
     /// Each frame: the backend's callbacks; Some(active) when the store overlay opened or closed.
+    /// A store that failed late (Backend::take_store_failure) goes back on the queue and the layer offline.
     pub fn update(&mut self) -> Option<bool> {
-        self.rules.backend.update()
+        let overlay = self.rules.backend.update();
+        while let Some(batch) = self.rules.backend.take_store_failure() {
+            eprintln!("[WARN] platform: a store the backend accepted failed later: kept for the next connect");
+            let r = self.rules.store_failed(&batch);
+            self.after(r);
+        }
+        overlay
     }
 }
 

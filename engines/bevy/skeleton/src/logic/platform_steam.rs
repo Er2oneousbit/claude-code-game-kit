@@ -12,9 +12,13 @@
 //           this project's 0.20 (checked 2026-11-18), so the kit calls steamworks directly. The steamworks 0.13 calls
 //           (Client::init, user_stats().achievement(id).set/get, set_stat_i32 / set_stat_f32, store_stats,
 //           reset_all_stats, friends().set_rich_presence / clear_rich_presence, remote_storage().file(name).write,
-//           register_callback(GameOverlayActivated), run_callbacks) are written from its docs and never compiled
-//           here (verify with the feature on). Only store_stats failing counts as a failed store (verify).
+//           register_callback(GameOverlayActivated / UserStatsStored), run_callbacks) are written from its docs and
+//           never compiled here (verify with the feature on). A store UserStatsStored reports failed after
+//           store_stats accepted it goes back to the layer (take_store_failure). Steam starts whether or not
+//           data/achievements.json exists (presence, the overlay and cloud saves need it too).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStatsStored failures reach the layer
+//           (take_store_failure); make_with starts Steam without achievements too; the shell always asks
 // ---------------------------------------------------------------------------
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -46,6 +50,11 @@ pub struct SteamBackend {
     api: Box<dyn SteamApi>,
     /// The overlay's last change, set by the SDK's callback and taken by update().
     pub overlay: Arc<Mutex<Option<bool>>>,
+    /// UserStatsStored results (true: stored) as the SDK's callback reports them; update() matches them to batches.
+    pub stored: Arc<Mutex<Vec<bool>>>,
+    staged: Vec<Value>,
+    inflight: Vec<Value>,
+    failed: Vec<Value>,
 }
 
 impl SteamBackend {
@@ -55,6 +64,10 @@ impl SteamBackend {
             data_dir,
             api,
             overlay: Arc::new(Mutex::new(None)),
+            stored: Arc::new(Mutex::new(Vec::new())),
+            staged: Vec::new(),
+            inflight: Vec::new(),
+            failed: Vec::new(),
         }
     }
 
@@ -102,7 +115,11 @@ impl Backend for SteamBackend {
     fn send(&mut self, call: &Value) -> bool {
         let s = |n: usize| call.get(n).and_then(Value::as_str).unwrap_or("").to_string();
         let n = |i: usize| call.get(i).and_then(Value::as_f64).unwrap_or(0.0);
-        match call[0].as_str().unwrap_or("") {
+        let name = call[0].as_str().unwrap_or("");
+        if name == "set_achievement" || name == "set_stat" {
+            self.staged.push(call.clone());
+        }
+        match name {
             "set_achievement" => {
                 self.api.set_achievement(&s(1));
             }
@@ -113,7 +130,14 @@ impl Backend for SteamBackend {
                     self.api.set_stat_float(&s(1), n(2) as f32);
                 }
             }
-            "store_stats" => return self.api.store_stats(),
+            "store_stats" => {
+                let ok = self.api.store_stats();
+                let batch = std::mem::take(&mut self.staged);
+                if ok {
+                    self.inflight.push(Value::Array(batch));
+                }
+                return ok;
+            }
             "indicate_progress" => {
                 self.api.indicate_progress(&s(1), n(2) as u32, n(3) as u32);
             }
@@ -136,24 +160,57 @@ impl Backend for SteamBackend {
 
     fn update(&mut self) -> Option<bool> {
         self.api.run_callbacks();
+        let results: Vec<bool> = self
+            .stored
+            .lock()
+            .map(|mut r| std::mem::take(&mut *r))
+            .unwrap_or_default();
+        for ok in results {
+            if self.inflight.is_empty() {
+                break;
+            }
+            let batch = self.inflight.remove(0);
+            if !ok {
+                self.failed.push(batch);
+            }
+        }
         self.overlay.lock().ok().and_then(|mut o| o.take())
     }
+
+    fn take_store_failure(&mut self) -> Option<Value> {
+        if self.failed.is_empty() {
+            None
+        } else {
+            Some(self.failed.remove(0))
+        }
+    }
+}
+
+/// The Steam backend when init() gives the Steam calls (the SDK started), whatever defs holds (none is fine), else
+/// None; automated: None. The `steam` feature's make uses it; tests pass fakes.
+pub fn make_with(
+    defs: &Value,
+    data_dir: &Path,
+    automated: bool,
+    init: impl FnOnce() -> Option<Box<dyn SteamApi>>,
+) -> Option<SteamBackend> {
+    if automated {
+        return None;
+    }
+    init().map(|api| SteamBackend::new(defs.clone(), data_dir.to_path_buf(), api))
 }
 
 /// The store backend for this build: Steam's with the `steam` feature when Steam starts, else None (the null
 /// backend). An automated run (dev.py smoke, tests) never asks a store.
 pub fn make(defs: &Value, data_dir: &Path, automated: bool) -> Option<Box<dyn Backend>> {
-    if automated {
-        return None;
-    }
-    steam_sdk::make(defs, data_dir)
+    steam_sdk::make(defs, data_dir, automated)
 }
 
 #[cfg(not(feature = "steam"))]
 mod steam_sdk {
     use super::*;
 
-    pub fn make(_defs: &Value, _data_dir: &Path) -> Option<Box<dyn Backend>> {
+    pub fn make(_defs: &Value, _data_dir: &Path, _automated: bool) -> Option<Box<dyn Backend>> {
         None // built without the `steam` feature: the null backend
     }
 }
@@ -211,19 +268,25 @@ mod steam_sdk {
         }
     }
 
-    pub fn make(defs: &Value, data_dir: &Path) -> Option<Box<dyn Backend>> {
-        let client = match steamworks::Client::init() {
-            Ok(c) => c,
+    pub fn make(defs: &Value, data_dir: &Path, automated: bool) -> Option<Box<dyn Backend>> {
+        let mut started = None;
+        let backend = make_with(defs, data_dir, automated, || match steamworks::Client::init() {
+            Ok(c) => {
+                started = Some(c.clone());
+                Some(Box::new(Steamworks(c)) as Box<dyn SteamApi>)
+            }
             Err(e) => {
                 eprintln!("[WARN] platform: built with Steam, but Steam did not start ({e}): the null backend runs");
-                return None;
+                None
             }
-        };
-        let backend = SteamBackend::new(
-            defs.clone(),
-            data_dir.to_path_buf(),
-            Box::new(Steamworks(client.clone())),
-        );
+        })?;
+        let client = started?;
+        let stored = backend.stored.clone();
+        std::mem::forget(client.register_callback(move |e: steamworks::UserStatsStored| {
+            if let Ok(mut r) = stored.lock() {
+                r.push(e.result.is_ok());
+            }
+        }));
         let overlay = backend.overlay.clone();
         // the handle must live as long as the game: leak it on purpose (one per run)
         std::mem::forget(client.register_callback(move |e: steamworks::GameOverlayActivated| {

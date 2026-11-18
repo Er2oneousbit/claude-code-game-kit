@@ -330,6 +330,71 @@ bool FGameKitPlatformSteamTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitPlatformSteamStartTest, "GameKit.Platform.SteamStart", GameKitPlatformTests::PlatformTestFlags)
+
+bool FGameKitPlatformSteamStartTest::RunTest(const FString& Parameters)
+{
+	using namespace GameKitPlatformTests;
+	// docs/PLATFORM.md section 6: an enabled backend starts whether or not data/achievements.json exists
+	const FString Dir = Scratch();
+	TArray<FString> Log;
+	GameKit::FSteamCalls Calls;
+	Calls.SetRichPresence = [&Log](const FString& K, const FString& V) { Log.Add(K + TEXT(" ") + V); return true; };
+	Calls.GetAchievement = [](const FString&, bool& bOut) { bOut = false; return true; };
+	int32 N = 0;
+	const TSharedRef<FJsonObject> None = GameKit::AchievementsLoad(TOptional<FString>(), N);
+	TUniquePtr<GameKit::FSteamPlatformBackend> Backend = GameKit::MakeSteamBackend(None, Dir, false, [] { return true; }, [&Calls] { return Calls; });
+	TestTrue(TEXT("no achievements file: Steam still starts"), Backend.IsValid());
+	{
+		GameKit::FPlatformService Ps(Dir, TOptional<FString>(), MoveTemp(Backend));
+		TestEqual(TEXT("presence"), Ps.SetPresence(TEXT("status"), TEXT("Menu")), FString(TEXT("ok")));
+		TestTrue(TEXT("presence reaches Steam without achievements"), Log.Num() == 1 && Log[0] == TEXT("status Menu"));
+	}
+	TestFalse(TEXT("Steam did not start: null"), GameKit::MakeSteamBackend(None, Dir, false, [] { return false; }, [&Calls] { return Calls; }).IsValid());
+	TestFalse(TEXT("automated: null"), GameKit::MakeSteamBackend(None, Dir, true, [] { return true; }, [&Calls] { return Calls; }).IsValid());
+	IFileManager::Get().DeleteDirectory(*Dir, false, true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FGameKitPlatformLateStoreTest, "GameKit.Platform.LateStoreFailure", GameKitPlatformTests::PlatformTestFlags)
+
+bool FGameKitPlatformLateStoreTest::RunTest(const FString& Parameters)
+{
+	using namespace GameKitPlatformTests;
+	const FString Dir = Scratch();
+	TArray<FString> Log;
+	GameKit::FSteamCalls Calls;
+	Calls.SetAchievement = [&Log](const FString& Id) { Log.Add(TEXT("SetAchievement ") + Id); return true; };
+	Calls.GetAchievement = [](const FString&, bool& bOut) { bOut = false; return true; };
+	Calls.SetStatInt = [&Log](const FString& Id, int32 V) { Log.Add(FString::Printf(TEXT("SetStat %s %d"), *Id, V)); return true; };
+	Calls.GetStatInt = [](const FString&, int32& Out) { Out = 0; return true; };
+	Calls.StoreStats = [&Log] { Log.Add(TEXT("StoreStats")); return true; };
+	int32 N = 0;
+	const TSharedRef<FJsonObject> Defs = GameKit::AchievementsLoad(FString(Sample), N);
+	TUniquePtr<GameKit::FSteamPlatformBackend> Backend = MakeUnique<GameKit::FSteamPlatformBackend>(Defs, Dir, Calls);
+	GameKit::FSteamPlatformBackend* Steam = Backend.Get();
+	{
+		GameKit::FPlatformService Ps(Dir, FString(Sample), MoveTemp(Backend));
+		TestEqual(TEXT("add"), Ps.AddStat(TEXT("kills"), 12), FString(TEXT("ok")));   // kills_10 unlocks and flushes
+		TestTrue(TEXT("online"), Ps.GetRules().IsOnline());
+		Steam->StatsStored(false);   // UserStatsStored_t: k_EResultFail
+		Ps.Update();
+		TestFalse(TEXT("a late failure takes the layer offline"), Ps.GetRules().IsOnline());
+		const FString D = Diff(MakeObject(Ps.GetRules().State()->GetObjectField(TEXT("pending"))),
+		                       Parse(TEXT("{\"stats\": [\"kills\"], \"unlocks\": [\"kills_10\"], \"cloud\": []}")), 1e-9);
+		TestEqual(TEXT("queued again ") + D, D, FString());
+		Log.Reset();
+		Ps.GetRules().Connect(MakeShared<FJsonObject>());
+		const TArray<FString> Want{TEXT("SetStat kills 12"), TEXT("SetAchievement kills_10"), TEXT("StoreStats")};
+		TestTrue(TEXT("connect sends it again: ") + FString::Join(Log, TEXT(" | ")), Log == Want);
+		Steam->StatsStored(true);
+		Ps.Update();
+		TestTrue(TEXT("a stored batch changes nothing"), Ps.GetRules().IsOnline());
+	}
+	IFileManager::Get().DeleteDirectory(*Dir, false, true);
+	return true;
+}
+
 #endif   // WITH_DEV_AUTOMATION_TESTS
 
 // {{FOOTER}}

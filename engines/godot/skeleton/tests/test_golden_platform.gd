@@ -207,6 +207,7 @@ func test_save_store_calls_saved() -> void:
 class FakeSteam:
 	extends Object
 	signal overlay_toggled(active: bool, user_initiated: bool, app_id: int)
+	signal user_stats_stored(game: int, result: int)
 	var log: Array = []
 	var store_ok: bool = true
 	var achieved: Dictionary = {"first": true}
@@ -240,6 +241,9 @@ class FakeSteam:
 		log.append(["setRichPresence", k, v])
 		return true
 
+	func steamInitEx() -> Dictionary:
+		return {"status": 0, "verbal": "Steamworks active"}
+
 	func run_callbacks() -> void:
 		log.append(["run_callbacks"])
 
@@ -265,6 +269,41 @@ func test_steam_adapter_maps_calls_and_a_refused_store() -> void:
 	_check(seen, [true], "the overlay signal reaches the shell")
 	steam.update()
 	_check(fake.log.back(), ["run_callbacks"], "update runs the callbacks")
+	fake.free()
+
+
+func test_steam_starts_without_achievements() -> void:
+	# docs/PLATFORM.md section 6: an enabled adapter starts Steam whether or not data/achievements.json exists
+	var fake: FakeSteam = FakeSteam.new()
+	var none: Dictionary = PlatformLayer.achievements_load(null)["defs"]
+	var steam: Object = PlatformSteam.make(none, _scratch(), fake)
+	assert_not_null(steam, "no achievements file: Steam still starts (presence, overlay, cloud)")
+	var ps: PlatformLayer.Service = PlatformLayer.Service.new(_scratch(), null, steam)
+	assert_eq(ps.set_presence("status", "Menu"), "ok")
+	_check(fake.log, [["setRichPresence", "status", "Menu"]], "presence reaches Steam without achievements")
+	fake.free()
+
+
+func test_a_late_user_stats_stored_failure_requeues_the_store() -> void:
+	var fake: FakeSteam = FakeSteam.new()
+	var dir: String = _scratch()
+	var defs: Dictionary = PlatformLayer.achievements_load(SAMPLE)["defs"]
+	var steam: PlatformSteam = PlatformSteam.make(defs, dir, fake)
+	var ps: PlatformLayer.Service = PlatformLayer.Service.new(dir, SAMPLE, steam)
+	assert_eq(ps.unlock("first"), "already", "the store reported first as achieved")
+	assert_eq(ps.add_stat("kills", 12), "ok")   # the store had 4: 16, kills_10 unlocks and flushes
+	assert_true(ps.rules.online)
+	_check(ps.rules.pending_unlocks, [], "accepted by storeStats: nothing pending")
+	fake.user_stats_stored.emit(480, 2) # k_EResultFail
+	ps.update()
+	assert_false(ps.rules.online, "a late failure takes the layer offline")
+	_check(ps.rules.state()["pending"], {"stats": ["kills"], "unlocks": ["kills_10"], "cloud": []}, "the batch is queued again")
+	fake.log.clear()
+	ps.rules.connect_remote({})
+	_check(fake.log, [["setStatInt", "kills", 16], ["setAchievement", "kills_10"], ["storeStats"]], "connect sends it again")
+	fake.user_stats_stored.emit(480, 1) # this one succeeded
+	ps.update()
+	assert_true(ps.rules.online)
 	fake.free()
 
 

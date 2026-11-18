@@ -208,13 +208,36 @@ test("the Greenworks adapter maps calls, reports a late store failure and the ov
     const ps = new GP.PlatformService(store, SAMPLE, backend);
     assert.equal(ps.addStat("kills", 12), "ok");
     assert.deepEqual(log, ["setStat kills 16", "activateAchievement kills_10", "storeStats"]);   // the store had 4
-    gw.lastFail("network");
-    assert.equal(backend.storeFailed, true, "a late failure is seen at the next frame");
+    gw.lastFail("network");   // Greenworks' error callback: the store failed after send() accepted it
+    ps.update();
+    assert.equal(ps.platform.online, false, "a late failure takes the layer offline");
+    assert.deepEqual(ps.platform.state().pending, { stats: ["kills"], unlocks: ["kills_10"], cloud: [] }, "queued again");
+    log.length = 0;
+    ps.platform.connect({});
+    assert.deepEqual(log, ["setStat kills 16", "activateAchievement kills_10", "storeStats"], "connect sends it again");
     events["game-overlay-activated"](true);
     assert.equal(backend.update(), true);
     assert.equal(backend.update(), null);
     initOk = false;
     assert.equal(GP.GreenworksBackend.make(gw, defs, store), null, "Steam not running: the null backend");
+});
+
+test("in an NW.js build Greenworks starts Steam with Achievements off (no achievements file)", () => {
+    const world = mzWorld();
+    const presence = [];
+    const gw = {
+        initAPI: () => true, on: () => {}, getStatInt: () => 0, getStatFloat: () => 0,
+        setRichPresence: (k, v) => presence.push(`${k} ${v}`),
+    };
+    world.Utils = { isNwjs: () => true };
+    world.require = (name) => {
+        if (name === "./greenworks") return gw;
+        throw new Error(`no module ${name}`);
+    };
+    const mz = loadPlugin("GamePlatform", world);
+    const G = mz.context.GamePlatform;
+    assert.equal(G.service.active, false, "no achievements: nothing is written");
+    assert.equal(G.service.backend.name, "steam", "docs/PLATFORM.md section 6: Steam starts without achievements");
 });
 
 test("golden values were checked", (t) => {

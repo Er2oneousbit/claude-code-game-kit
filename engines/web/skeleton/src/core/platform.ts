@@ -23,6 +23,8 @@
 //   PlatformService: defs <- data/achievements.json ; state <- platform_state.json ; backend available ->
 //          connect(backend.remote()) ; after every op: write the state file when it changed
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): Platform.storeFailed and PlatformService.update take a
+//           store that failed after it was accepted (a backend's takeStoreFailure) back onto the queue
 // ---------------------------------------------------------------------------
 import { atomicWrite } from "./atomicFile";
 import { isObject, type JsonObject } from "./jsonUtil";
@@ -203,6 +205,9 @@ export interface PlatformBackend {
   send(call: Call): boolean;
   /** Each frame: run the SDK's callbacks (the null backend does nothing). */
   update?(): void;
+  /** A store that failed after send(["store_stats"]) returned true (Steam's UserStatsStored): its set_stat and
+   *  set_achievement calls, oldest first; null when none. */
+  takeStoreFailure?(): Call[] | null;
 }
 
 /** The backend every game runs by default: records every call and keeps what a store would hold. */
@@ -472,6 +477,17 @@ export class Platform {
     return this.done("offline");
   }
 
+  /** A store the backend accepted failed later: the same as a refused store_stats. The batch's stats and unlocks
+   *  are pending again and the layer is offline until connect(). */
+  storeFailed(batch: Call[]): Out {
+    this.online = false;
+    for (const [name, id] of batch) {
+      if (name === "set_stat" && this.statDefs.has(id as string) && !this.pendingStats.includes(id as string)) this.pendingStats.push(id as string);
+      else if (name === "set_achievement" && this.unlocked.includes(id as string) && !this.pendingUnlocks.includes(id as string)) this.pendingUnlocks.push(id as string);
+    }
+    return this.done("failed");
+  }
+
   /** Testing only: refused offline (a reset is never queued). */
   resetAll(): Out {
     if (!this.online) return this.done("offline");
@@ -611,9 +627,13 @@ export class PlatformService {
   overlay(active: boolean, screen: string): "pause" | "none" {
     return overlayAction(active, screen);
   }
-  /** Each frame (the null backend does nothing). */
+  /** Each frame (the null backend does nothing); a store that failed late goes back on the queue, offline. */
   update(): void {
     this.backend.update?.();
+    for (let batch = this.backend.takeStoreFailure?.(); batch; batch = this.backend.takeStoreFailure?.()) {
+      Log.warn("platform", "a store the backend accepted failed later: kept for the next connect");
+      this.after(this.platform.storeFailed(batch));
+    }
   }
 }
 

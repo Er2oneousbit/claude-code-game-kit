@@ -5,6 +5,7 @@
 // Notes   : Ported from tools/golden_vectors.py (achievements_load, Platform, NullBackend, cloud_partition,
 //           overlay_action, platform_state_load). Every FString compare that decides a rule is case-sensitive.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): FPlatformRules::StoreFailed, FPlatformService::Update
 // ---------------------------------------------------------------------------
 #include "GameKitPlatform.h"
 
@@ -893,6 +894,26 @@ namespace GameKit
 		return Done(TEXT("offline"));
 	}
 
+	FPlatformOut FPlatformRules::StoreFailed(const TArray<TSharedPtr<FJsonValue>>& Batch)
+	{
+		bOnline = false;
+		for (const TSharedPtr<FJsonValue>& C : Batch)
+		{
+			const FValues& Call = C->AsArray();
+			const FString Name = Str(Call[0]);
+			const FString Id = Str(Call[1]);
+			if (Same(Name, TEXT("set_stat")) && StatDef(Id).IsValid() && !Has(PendingStats, Id))
+			{
+				PendingStats.Add(Id);
+			}
+			else if (Same(Name, TEXT("set_achievement")) && Has(Unlocked, Id) && !Has(PendingUnlocks, Id))
+			{
+				PendingUnlocks.Add(Id);
+			}
+		}
+		return Done(TEXT("failed"));
+	}
+
 	FPlatformOut FPlatformRules::ResetAll()
 	{
 		if (!bOnline)
@@ -1072,6 +1093,17 @@ namespace GameKit
 		{
 			Problems.Add(FString::Printf(TEXT("%s not written: %s"), PlatformStateFile, *Error));
 		}
+	}
+
+	TOptional<bool> FPlatformService::Update()
+	{
+		const TOptional<bool> Overlay = Backend->Update();
+		for (TOptional<TArray<TSharedPtr<FJsonValue>>> Batch = Backend->TakeStoreFailure(); Batch.IsSet(); Batch = Backend->TakeStoreFailure())
+		{
+			Problems.Add(TEXT("a store the backend accepted failed later: kept for the next connect"));
+			After(Rules.StoreFailed(Batch.GetValue()));
+		}
+		return Overlay;
 	}
 
 	FString FPlatformService::After(const FPlatformOut& R)

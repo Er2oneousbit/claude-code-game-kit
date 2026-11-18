@@ -200,6 +200,25 @@ describe("PlatformService (the shell's half)", () => {
     expect((ps.backend as NullBackend).cloud).toEqual(["save_1.json"]);
   });
 
+  it("an available backend is used without data/achievements.json (presence needs no achievements)", () => {
+    const nb = new NullBackend();
+    const ps = new PlatformService(new MemoryStore(), null, nb);
+    expect(ps.setPresence("status", "Menu")).toBe("ok");
+    expect(nb.calls).toEqual([["set_presence", "status", "Menu"]]);
+  });
+
+  it("a store that fails after it was accepted goes back on the queue, offline", () => {
+    const nb = new NullBackend();
+    const late: Call[][] = [];
+    const backend = Object.assign(nb, { takeStoreFailure: () => late.shift() ?? null });
+    const ps = new PlatformService(new MemoryStore(), SAMPLE, backend);
+    expect(ps.addStat("kills", 12)).toBe("ok"); // kills_10 unlocks and flushes
+    late.push([["set_stat", "kills", 12], ["set_achievement", "kills_10"]]);
+    ps.update();
+    expect(ps.platform.online).toBe(false);
+    expect(ps.platform.state().pending).toEqual({ stats: ["kills"], unlocks: ["kills_10"], cloud: [] });
+  });
+
   it("the overlay pauses only over gameplay", () => {
     const ps = new PlatformService(new MemoryStore(), null);
     expect(ps.overlay(true, "play")).toBe("pause");

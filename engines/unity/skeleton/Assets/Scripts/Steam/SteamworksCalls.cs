@@ -11,6 +11,7 @@
 //           Callback<GameOverlayActivated_t>) (verify against the installed version; not compiled on the kit's test
 //           machine, which has no Steamworks.NET). A smoke run never starts Steam.
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): UserStatsStored_t raises StatsStored
 // ---------------------------------------------------------------------------
 using System;
 using Steamworks;
@@ -23,11 +24,14 @@ namespace {{GAME_SLUG}}.Steam
     public sealed class SteamworksCalls : ISteamCalls
     {
         public event Action<bool> OverlayChanged;
+        public event Action<bool> StatsStored;
         private readonly Callback<GameOverlayActivated_t> _overlay;
+        private readonly Callback<UserStatsStored_t> _stored;
 
         private SteamworksCalls()
         {
             _overlay = Callback<GameOverlayActivated_t>.Create(e => OverlayChanged?.Invoke(e.m_bActive != 0));
+            _stored = Callback<UserStatsStored_t>.Create(e => StatsStored?.Invoke(e.m_eResult == EResult.k_EResultOK));
         }
 
         /// <summary>Registers the factory before the first scene loads, so Shell.StartPlatform finds it.</summary>

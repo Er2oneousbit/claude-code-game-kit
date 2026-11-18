@@ -195,6 +195,37 @@ function suite.test_the_steam_adapter_maps_calls_and_a_refused_store()
   A.eq(steam:update(), nil)
 end
 
+function suite.test_steam_starts_without_achievements()
+  -- docs/PLATFORM.md section 6: an enabled adapter starts Steam whether or not data/achievements.json exists
+  local fake = fake_steam(true)
+  local steam = PlatformSteam.make(Platform.achievements_load(nil), TextStore.memory(), fake)
+  A.truthy(steam, "no achievements file: Steam still starts")
+  local ps = Platform.service(TextStore.memory(), nil, steam)
+  A.eq(ps:set_presence("status", "Menu"), "ok")
+  A.same(fake.log, { "SetRichPresence status Menu" }, 0, "presence reaches Steam without achievements")
+end
+
+function suite.test_a_late_user_stats_stored_failure_requeues_the_store()
+  local fake = fake_steam(true)
+  local store = TextStore.memory()
+  local steam = PlatformSteam.make(Platform.achievements_load(SAMPLE), store, fake)
+  local ps = Platform.service(store, SAMPLE, steam)
+  A.eq(ps:add_stat("kills", 12), "ok")       -- the store had 4: 16, kills_10 unlocks and flushes
+  A.truthy(ps.rules.online)
+  fake.UserStats.OnUserStatsStored({ m_eResult = 2 })   -- k_EResultFail
+  ps:update()
+  A.falsy(ps.rules.online, "a late failure takes the layer offline")
+  local pending = ps.rules:state().pending
+  A.same(pending.stats, { "kills" }, 0, "the stat is queued again")
+  A.same(pending.unlocks, { "kills_10" }, 0, "the unlock is queued again")
+  for i = #fake.log, 1, -1 do fake.log[i] = nil end
+  ps.rules:connect({})
+  A.same(fake.log, { "SetStatInt32 kills 16", "SetAchievement kills_10", "StoreStats" }, 0, "connect sends it again")
+  fake.UserStats.OnUserStatsStored({ m_eResult = 1 })
+  ps:update()
+  A.truthy(ps.rules.online, "a stored batch changes nothing")
+end
+
 function suite.test_the_steam_adapter_is_off_without_steam()
   A.eq(PlatformSteam.make(Platform.achievements_load(SAMPLE), TextStore.memory(), fake_steam(false)), nil,
        "Init false: the null backend")

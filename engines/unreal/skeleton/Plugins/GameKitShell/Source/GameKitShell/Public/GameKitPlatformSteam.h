@@ -6,9 +6,12 @@
 //           Unreal (the engine's "Steamworks" module) when the build turns GAMEKIT_STEAM on.
 // Usage   : GameKit::FSteamCalls Calls = ...;   // tests: lambdas; a Steam build: the SDK
 //           TUniquePtr<GameKit::IPlatformBackend> B = MakeUnique<GameKit::FSteamPlatformBackend>(Defs, DataDir, Calls);
-// Notes   : Only StoreStats returning false counts as a failed store; a later UserStatsStored_t failure is not
-//           seen (verify). The overlay arrives through OverlayChanged() (the SDK's GameOverlayActivated_t).
+// Notes   : A store StoreStats accepted that UserStatsStored_t later reports failed goes back to the layer through
+//           TakeStoreFailure() (its stats and unlocks are queued again). Steam starts whether or not
+//           data/achievements.json exists (MakeSteamBackend; presence, the overlay and cloud saves need it too). The overlay arrives through OverlayChanged() (the SDK's GameOverlayActivated_t).
 // Authored: Written with Claude (Opus 5.5, claude-opus-5-5)
+// Updated : 2026-11-18 with Claude (Opus 5.5, claude-opus-5-5): StatsStored failures reach the layer; MakeSteamBackend
+//           (the start rule: Steam with or without achievements)
 // ---------------------------------------------------------------------------
 #pragma once
 
@@ -48,6 +51,9 @@ namespace GameKit
 		virtual TOptional<bool> Update() override;
 		/** The SDK half reports the overlay here; Update() hands it to the shell once. */
 		void OverlayChanged(bool bActive) { Overlay = bActive; }
+		/** The SDK half reports UserStatsStored_t here (true: k_EResultOK); a failure queues that store's batch. */
+		void StatsStored(bool bOk);
+		virtual TOptional<TArray<TSharedPtr<FJsonValue>>> TakeStoreFailure() override;
 
 	private:
 		bool IsInt(const FString& Id) const;
@@ -55,7 +61,16 @@ namespace GameKit
 		FString DataDir;
 		FSteamCalls Calls;
 		TOptional<bool> Overlay;
+		TArray<TSharedPtr<FJsonValue>> Staged;            // set_stat / set_achievement since the last store_stats
+		TArray<TArray<TSharedPtr<FJsonValue>>> Inflight;  // batches stores accepted, until their UserStatsStored
+		TArray<TArray<TSharedPtr<FJsonValue>>> Failed;    // batches whose UserStatsStored failed
 	};
+
+	/** The Steam backend when Init() succeeds (SteamAPI_Init in a Steam build), whatever Defs holds (none is fine),
+	 *  else null; bAutomated: null. GameKitShellUI's MakePlatformBackend uses it with the SDK; tests pass fakes. */
+	GAMEKITSHELL_API TUniquePtr<FSteamPlatformBackend> MakeSteamBackend(const TSharedRef<FJsonObject>& Defs, const FString& DataDir,
+	                                                                     bool bAutomated, TFunctionRef<bool()> Init,
+	                                                                     TFunctionRef<FSteamCalls()> MakeCalls);
 }
 
 // {{FOOTER}}
